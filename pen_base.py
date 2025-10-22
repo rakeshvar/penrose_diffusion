@@ -145,20 +145,18 @@ class PenroseP3:
             e.B = e.B.conjugate()
             e.C = e.C.conjugate()
 
-#------------------------------------------
-# SVG generation methods for PenroseP3
-#------------------------------------------
-def save_svg(tiling, additional_config, scale, filename):
-    """
-    scale determines the size of the final image.
-    add_config updates the default configuration.
-    """      
 
+#------------------------------------------
+# SVG generation for PenroseP3
+#------------------------------------------
+def save_svg(tiling, additional_config, filename):
     # Default configuration
-    config = {'width': '100%', 'height': '100%',
+    config = {
+            'width': '100%', 
+            'height': '100%',
             'stroke-colour': '#fff',
-            'base-stroke-width': 0.05,
-            'margin': 1.05,
+            'base-stroke-width': 3,
+            'margin': 1.15,
             'tile-opacity': 0.6,
             'random-tile-colours': False,
             'Stile-colour': '#08f',
@@ -203,9 +201,19 @@ def save_svg(tiling, additional_config, scale, filename):
 
     #------------ SVG generation --------------
 
-    xmin = ymin = -scale * config['margin']
-    width =  height = 2*scale * config['margin']
-    viewbox ='{} {} {} {}'.format(xmin, ymin, width, height)
+    xmin = ymin = float('inf')
+    xmax = ymax = float('-inf')
+    for t in tiling.elements:
+        for v in [t.A, t.B, t.C]:
+            xmin = min(xmin, v.real)
+            xmax = max(xmax, v.real)
+            ymin = min(ymin, v.imag)
+            ymax = max(ymax, v.imag)
+    xmin *= config['margin']
+    xmax *= config['margin']
+    ymin *= config['margin']
+    ymax *= config['margin']
+    viewbox ='{} {} {} {}'.format(xmin, ymin, xmax - xmin, ymax - ymin)
 
     svg = ['<?xml version="1.0" encoding="utf-8"?>',
             '<svg width="{}" height="{}" viewBox="{}"'
@@ -214,18 +222,18 @@ def save_svg(tiling, additional_config, scale, filename):
             .format(config['width'], config['height'], viewbox)]
     
     # The tiles' stroke widths ideally scales with ngen as psi**ngen * 
-    stroke_width = str(int(scale**.5) * config['base-stroke-width'])
+    stroke_width = str(config['base-stroke-width'])
 
     svg.append('<g style="stroke:{}; stroke-width: {}; stroke-linejoin: round;">'
             .format(config['stroke-colour'], stroke_width))
     draw_rhombuses = config['draw-rhombuses']
 
-    for T in tiling.elements:
+    for t in tiling.elements:
         if config['draw-tiles']:
-            svg.append('<path fill="{}" fill-opacity="{}" d="{}"/>'.format(get_tile_colour(T), config['tile-opacity'], T.path(rhombus=draw_rhombuses)))
+            svg.append('<path fill="{}" fill-opacity="{}" d="{}"/>'.format(get_tile_colour(t), config['tile-opacity'], t.path(rhombus=draw_rhombuses)))
 
         if config['draw-arcs']:
-            arc1_d, arc2_d = T.arcs(draw_rhombuses)
+            arc1_d, arc2_d = t.arcs(draw_rhombuses)
             svg.append('<path fill="none" stroke="{}" d="{}"/>'.format(config['Aarc-colour'], arc1_d))
             svg.append('<path fill="none" stroke="{}" d="{}"/>'.format(config['Carc-colour'], arc2_d))
 

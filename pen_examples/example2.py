@@ -4,7 +4,7 @@ from pen_base import PenroseP3, Thin, save_svg
 
 # A "sun", with randomly-coloured tiles and including arc paths
 
-scale = 100
+scale = 1000
 config={'draw-arcs': True, 'tile-opacity': 0.6,
         'random-tile-colours': True, 'Aarc-colour': '#f44',
         'Carc-colour': '#44f'}
@@ -28,4 +28,4 @@ tiling = PenroseP3([
     Thin(A5, B, C5)])
 
 tiling.inflate(4)
-save_svg(tiling=tiling, additional_config=config, scale=scale, filename='example2.svg')
+save_svg(tiling=tiling, additional_config=config, filename='example2.svg')

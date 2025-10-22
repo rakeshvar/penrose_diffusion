@@ -4,7 +4,7 @@ from pen_base import PenroseP3, Thin, save_svg
 
 # A "sun"
 
-scale = 100
+scale = 1000
 config={'tile-opacity': 0.9, 'stroke-colour': '#800',
         'Stile-colour': '#f00', 'Ltile-colour': '#ff0'}
 
@@ -27,4 +27,4 @@ tiling = PenroseP3([
     Thin(A5, B, C5)])
 
 tiling.inflate(times=4)
-save_svg(tiling, config, scale*1.1, 'example4.svg')
+save_svg(tiling, config, 'example4.svg')

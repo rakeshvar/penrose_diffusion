@@ -19,4 +19,4 @@ tiling = PenroseP3([Fatt(A, B, C)])
 
 for n in range(7):
     tiling.inflate(times=1)
-    save_svg(tiling=tiling, additional_config=config, scale=scale, filename=f'example1-{n}.svg')
+    save_svg(tiling=tiling, additional_config=config, filename=f'example1-{n}.svg')

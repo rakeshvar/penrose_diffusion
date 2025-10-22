@@ -6,7 +6,7 @@ from pen_base import PenroseP3, Fatt, psi, save_svg
 
 # The Golden ratio
 phi = 1 / psi
-scale = 100
+scale = 1000
 config = {'draw-arcs': True,
           'Aarc-colour': '#ff5e25',
           'Carc-colour': 'none',
@@ -31,5 +31,5 @@ C = [s, s, r, r, C5]
 tiling = PenroseP3([Fatt(*v) for v in zip(A, B, C)])
 tiling.inflate(times=5)
 
-save_svg(tiling, config, 2*scale, 'example3.svg')
+save_svg(tiling, config, 'example3.svg')
 
