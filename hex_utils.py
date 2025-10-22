@@ -6,11 +6,11 @@ def cube_to_xy(q, r, side):
     y = side * (3 / 2 * r)
     return x, y
     
-def hex_centers_xy(hexes, side):
+def hex_centers_xy(cube_coords, side):
     """Convert list of hex cube coordinates to pixel positions"""
     xy_data = []
 
-    for hex_data in hexes:
+    for hex_data in cube_coords:
         if len(hex_data) == 4:
             q, r, s, color = hex_data
         else:
@@ -22,9 +22,10 @@ def hex_centers_xy(hexes, side):
     
     return xy_data
 
-def hex_corner_xy(center_x, center_y, i, side):
+def hex_corner_xy(center_x, center_y, i, side, angle0=0):
     """Get corner position of hexagon"""
-    angle = math.pi / 3 * i - math.pi / 6
+    anglei = math.pi / 3 * i - math.pi / 6
+    angle = anglei + angle0
     x = center_x + side * math.cos(angle)
     y = center_y + side * math.sin(angle)
     return x, y
