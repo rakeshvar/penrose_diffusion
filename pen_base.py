@@ -1,5 +1,5 @@
 import math
-import random
+import cmath
 
 TOL = 1.e-5                       # A small tolerance for comparing floats for equality
 psi = (math.sqrt(5) - 1) / 2      # psi = 1/phi where phi is the Golden ratio, (sqrt(5)+1)/2 = 0.618033988749895
@@ -17,52 +17,50 @@ class Triangle:
         """ Center of the base """
         return (self.A + self.C) / 2
 
-    def path(self, rhombus=True):
-        """ SVG "d" path for the triangle or rhombus. """
-        AB, BC = self.B - self.A, self.C - self.B 
-        xy = lambda v: (v.real, v.imag)
-
-        if rhombus:
-            return 'm{},{} l{},{} l{},{} l{},{}z'.format(*(xy(self.A) + xy(AB) + xy(BC) + xy(-AB)))
-        else:
-            return        'm{},{} l{},{} l{},{}z'.format(*(xy(self.A) + xy(AB) + xy(BC)))
-
-
-    def get_arc_d(self, U, V, W, rhombus):
-        """
-        SVG "d" path for the circular arc between sides UV and UW, joined at half-distance along these sides. 
-        """
-        start = (U + V) / 2
-        r = abs((V - U) / 2)    # arc radius
-
-        if rhombus:
-            end = (U + W) / 2
-        else:
-            UN = V + W - 2*U            # Direction from U to the opposite vertex of the rhombus (base of triangle)
-            end = U + r * UN / abs(UN)  # Ends on the base
-
-        # Ensure we draw the arc for the angular component < 180 deg
-        cross = lambda u, v: u.real*v.imag - u.imag*v.real
-        US, UE = start - U, end - U
-        if cross(US, UE) > 0:
-            start, end = end, start
- 
-        return 'M {} {} A {} {} 0 0 0 {} {}'.format(start.real, start.imag, r, r, end.real, end.imag)
-
-    def arcs(self, rhombus=True):
-        """
-        SVG "d" path for the two circular arcs about vertices A and C. 
-        """
-        D = self.A - self.B + self.C
-        arc_a = self.get_arc_d(self.A, self.B, D, rhombus)      
-        arc_c = self.get_arc_d(self.C, self.B, D, rhombus)      
-        return arc_a, arc_c
-
     def conjugate(self):
         """
         The reflection of this triangle about the x-axis. 
         """
         return self.__class__(self.A.conjugate(), self.B.conjugate(), self.C.conjugate())
+    
+    def reparametrize(self):
+        """
+        Reparametrize the triangle to (center, angle, side length) form.
+        """
+        M = self.centre()
+        MB = self.B - M
+        AC = self.C - self.A
+        angle = cmath.phase(MB) - cmath.phase(AC)
+        angle = (angle + math.pi) % (2 * math.pi) - math.pi
+        side = abs(self.B - self.A)
+        
+        return M, angle, side
+    
+    @classmethod
+    def from_reparametrized(cls, M, angle, side, phi):
+        """
+        Create a triangle from (M, angle, side) parameters
+        
+        Args:
+            M: complex number representing middle of base
+            angle: angle of MB relative to horizontal (in radians)
+            side: length of side AB
+            
+        Returns:
+            Triangle: New triangle object
+        """
+
+        half_base = side * math.sin(phi / 2) 
+        height = side * math.cos(phi / 2)
+        uMB = cmath.exp(1j * angle)          # Direction from M to B
+        uAC = 1j * uMB                       # Perpendicular direction (base direction)
+        
+        B = M + height * uMB
+        A = M - half_base * uAC
+        C = M + half_base * uAC
+        
+        return cls(A, B, C)
+    
 
 class Fatt(Triangle):
     """
@@ -81,6 +79,11 @@ class Fatt(Triangle):
         return [Fatt(D, E, self.A),
                 Thin(E, D, self.B),
                 Fatt(self.C, D, self.B)]
+    
+    @classmethod
+    def from_reparametrized(cls, M, angle, side):
+        return super().from_reparametrized(M, angle, side, 3*math.pi/5)
+
 
 class Thin(Triangle):
     """
@@ -96,6 +99,11 @@ class Thin(Triangle):
         return [Thin(D, self.C, self.A),
                 Fatt(self.C, D, self.B)]
 
+    @classmethod
+    def from_reparametrized(cls, M, angle, side):
+        return super().from_reparametrized(M, angle, side, math.pi/5)
+
+
 class PenroseP3:
     """ P3 Penrose tiling. """
     def __init__(self, initial_tiles):
@@ -108,17 +116,6 @@ class PenroseP3:
             for element in self.elements:
                 new_elements.extend(element.inflate())
             self.elements = new_elements
-
-    def remove_mirror_images(self):
-        """
-        Keep only one of each pair of tiles that are mirror images of each other.
-        """
-        selements = sorted(self.elements, key=lambda e: (e.centre().real, e.centre().imag))
-        self.elements = [selements[0]]
-
-        for i in range(len(selements)-1):
-            if abs(selements[i+1].centre() - selements[i].centre()) > TOL:
-                self.elements.append(selements[i+1])
 
     def add_conjugate_elements(self):
         """ Extend the tiling by reflection about the x-axis. """
@@ -145,103 +142,13 @@ class PenroseP3:
             e.B = e.B.conjugate()
             e.C = e.C.conjugate()
 
+    def remove_mirror_images(self):
+        """
+        Keep only one of each pair of tiles that are mirror images of each other.
+        """
+        selements = sorted(self.elements, key=lambda e: (e.centre().real, e.centre().imag))
+        self.elements = [selements[0]]
 
-#------------------------------------------
-# SVG generation for PenroseP3
-#------------------------------------------
-def save_svg(tiling, additional_config, filename):
-    # Default configuration
-    config = {
-            'width': '100%', 
-            'height': '100%',
-            'stroke-colour': '#fff',
-            'base-stroke-width': 3,
-            'margin': 1.15,
-            'tile-opacity': 0.6,
-            'random-tile-colours': False,
-            'Stile-colour': '#08f',
-            'Ltile-colour': '#0035f3',
-            'Aarc-colour': '#f00',
-            'Carc-colour': '#00f',
-            'draw-tiles': True,
-            'draw-arcs': False,
-            'reflect-x': True,
-            'draw-rhombuses': True,
-            'rotate': 0,
-            'flip-y': False, 'flip-x': False,
-            }
-    config.update(additional_config)
-
-    if config['draw-rhombuses']:
-        tiling.remove_mirror_images()
-
-    if config['reflect-x']:
-        tiling.add_conjugate_elements()
-        tiling.remove_mirror_images()
-
-    if config['rotate'] != 0:
-        tiling.rotate(config['rotate'])
-
-    if config['flip-y']: # After rotation
-        tiling.flip_y()
-
-    if config['flip-x']: # After rotation and flip_y
-        tiling.flip_x()
-
-    def get_tile_colour(e):
-        if config['random-tile-colours']:
-            return '#' + hex(random.randint(0,0xfff))[2:]
-        
-        else:        
-            col = config['Ltile-colour' if isinstance(e, Fatt) else 'Stile-colour']
-            if hasattr(col, '__call__'): # Can be a function or a string
-                return col(e)
-            else:   
-                return col
-
-    #------------ SVG generation --------------
-
-    xmin = ymin = float('inf')
-    xmax = ymax = float('-inf')
-    for t in tiling.elements:
-        for v in [t.A, t.B, t.C]:
-            xmin = min(xmin, v.real)
-            xmax = max(xmax, v.real)
-            ymin = min(ymin, v.imag)
-            ymax = max(ymax, v.imag)
-    xmin *= config['margin']
-    xmax *= config['margin']
-    ymin *= config['margin']
-    ymax *= config['margin']
-    viewbox ='{} {} {} {}'.format(xmin, ymin, xmax - xmin, ymax - ymin)
-
-    svg = ['<?xml version="1.0" encoding="utf-8"?>',
-            '<svg width="{}" height="{}" viewBox="{}"'
-            ' preserveAspectRatio="xMidYMid meet" version="1.1"'
-            ' baseProfile="full" xmlns="http://www.w3.org/2000/svg">'
-            .format(config['width'], config['height'], viewbox)]
-    
-    # The tiles' stroke widths ideally scales with ngen as psi**ngen * 
-    stroke_width = str(config['base-stroke-width'])
-
-    svg.append('<g style="stroke:{}; stroke-width: {}; stroke-linejoin: round;">'
-            .format(config['stroke-colour'], stroke_width))
-    draw_rhombuses = config['draw-rhombuses']
-
-    for t in tiling.elements:
-        if config['draw-tiles']:
-            svg.append('<path fill="{}" fill-opacity="{}" d="{}"/>'.format(get_tile_colour(t), config['tile-opacity'], t.path(rhombus=draw_rhombuses)))
-
-        if config['draw-arcs']:
-            arc1_d, arc2_d = t.arcs(draw_rhombuses)
-            svg.append('<path fill="none" stroke="{}" d="{}"/>'.format(config['Aarc-colour'], arc1_d))
-            svg.append('<path fill="none" stroke="{}" d="{}"/>'.format(config['Carc-colour'], arc2_d))
-
-    svg.append('</g>\n</svg>')
-    svg = '\n'.join(svg)
-
-    with open(filename, 'w') as fo:
-        fo.write(svg)
-
-    print(f'Wrote SVG to {filename}')
-    return svg
+        for i in range(len(selements)-1):
+            if abs(selements[i+1].centre() - selements[i].centre()) > TOL:
+                self.elements.append(selements[i+1])

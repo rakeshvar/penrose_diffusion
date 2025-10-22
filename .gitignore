@@ -27,6 +27,7 @@ out/
 .parcel-cache/
 
 # Python
+.ipynb_checkpoints/
 __pycache__/
 *.py[cod]
 *.pyo
@@ -41,6 +42,15 @@ venv/
 .venv/
 env/
 ENV/
+
+# Image
+*.png
+*.jpg
+*.jpeg
+*.gif
+*.bmp
+*.tiff
+*.svg   
 
 # Logs and runtime
 *.log

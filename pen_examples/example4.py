@@ -11,8 +11,9 @@ config={'tile-opacity': 0.9, 'stroke-colour': '#800',
 theta = math.pi / 5
 alpha = math.cos(theta)
 rot = math.cos(theta) + 1j*math.sin(theta)
-A1 = scale + 0.j
 B = 0 + 0j
+
+A1 = scale + 0.j
 C1 = C2 = A1 * rot
 A2 = A3 = C1 * rot
 C3 = C4 = A3 * rot
@@ -26,5 +27,6 @@ tiling = PenroseP3([
     Thin(A4, B, C4),
     Thin(A5, B, C5)])
 
-tiling.inflate(times=4)
+tiling.add_conjugate_elements()
+tiling.inflate(times=10)
 save_svg(tiling, config, 'example4.svg')
