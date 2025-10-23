@@ -9,13 +9,15 @@ def cross(u, v):
     return u.real*v.imag - u.imag*v.real
 
 
-def path(rhombus):
-    """ SVG "d" path for the rhombus. """
-    AB, BC = rhombus.B - rhombus.A, rhombus.C - rhombus.B 
-    return 'm{},{} l{},{} l{},{} l{},{}z'.format(*(reim(rhombus.A) + reim(AB) + reim(BC) + reim(-AB)))
+def svg_path(rhombus):
+    ax, ay = reim(rhombus.A)
+    bx, by = reim(rhombus.B)
+    cx, cy = reim(rhombus.C)
+    dx, dy = reim(rhombus.D)
+    return f"M{ax},{ay} L{bx},{by} L{cx},{cy} L{dx},{dy} Z"
 
 
-def svg_arc(self, U, V, W):
+def svg_arc(U, V, W):
     """
     SVG "d" path for the circular arc between sides UV and UW, joined at half-distance along these sides. 
     """
@@ -35,14 +37,13 @@ def svg_arcs(rhombus):
     """
     SVG "d" path for the two circular arcs about vertices A and C. 
     """
-    D = rhombus.A - rhombus.B + rhombus.C
-    arc_a = rhombus.svg_arc(rhombus.A, rhombus.B, D)      
-    arc_c = rhombus.svg_arc(rhombus.C, rhombus.B, D)      
+    arc_a = svg_arc(rhombus.A, rhombus.B, rhombus.D)      
+    arc_c = svg_arc(rhombus.C, rhombus.B, rhombus.D)      
     return arc_a, arc_c
 
 
 
-def save_svg(tiling, additional_config, filename):
+def save_svg(tiling, filename, additional_config={}):
     # Default configuration
     config = {
             'stroke-colour': '#ffffff',
@@ -59,7 +60,7 @@ def save_svg(tiling, additional_config, filename):
     tiling.remove_mirror_images() # Just in case
 
     def tile_colour(e):
-        if isinstance(e, Fatt):
+        if e.__class__.__name__ == 'Fatt':
             col = config['Ltile-colour']
         else:
             col = config['Stile-colour']
@@ -85,16 +86,16 @@ def save_svg(tiling, additional_config, filename):
 
     # Build SVG
     svg = ['<?xml version="1.0" encoding="utf-8"?>',
-        f'<svg viewBox="{viewbox}" preserveAspectRatio="xMidYMid meet" version="1.1" baseProfile="full" xmlns="http://www.w3.org/2000/svg">',
+        f'<svg viewBox="{viewbox}" preserveAspectRatio="xMidYMid meet" version="1.1" baseProfile="full" xmlns="http://www.w3.org/2000/svg" style="background-color: black;">',
         f'<g style="stroke:{config['stroke-colour']}; stroke-width: {config['base-stroke-width']}; stroke-linejoin: round;">'
     ]
     
     for t in tiling.elements:
-        dpath = t.path(rhombus=True)
-        svg.append(f'<path fill="{tile_colour(t)}" d="{dpath}"/>')
+        dpath = svg_path(t)
+        svg.append(f'<path fill="{tile_colour(t)}" fill-opacity=".5" d="{dpath}"/>')
 
         if config['draw-arcs']:
-            arc1_d, arc2_d = t.arcs(rhombus=True)
+            arc1_d, arc2_d = svg_arcs(t)
             svg.append(f'<path fill="none" stroke="{config['Aarc-colour']}" d="{arc1_d}"/>')
             svg.append(f'<path fill="none" stroke="{config['Carc-colour']}" d="{arc2_d}"/>')
 

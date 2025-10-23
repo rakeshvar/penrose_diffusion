@@ -1,6 +1,9 @@
 import math
 import cmath
 
+def deg(u):
+    return cmath.phase(u) * 180 / math.pi
+
 TOL = 1.e-5                       # A small tolerance for comparing floats for equality
 psi = (math.sqrt(5) - 1) / 2      # psi = 1/phi where phi is the Golden ratio, (sqrt(5)+1)/2 = 0.618033988749895
 psi2 = 1 - psi                    # psi**2 = 1 - psi = 0.381966011250105
@@ -13,53 +16,50 @@ class Triangle:
         """ A and C are on the base; B is at the 'top'. """
         self.A, self.B, self.C = A, B, C
 
+    @property
+    def D(self):
+        """ The fourth vertex of the rhombus formed by this triangle and its mirror image about the base. """
+        return self.A - self.B + self.C
+
+    @property
     def centre(self):
         """ Center of the base """
         return (self.A + self.C) / 2
 
-    def conjugate(self):
+    def rotate(self, theta):
+        rot = cmath.exp(1j * theta)
+        self.A *= rot
+        self.B *= rot
+        self.C *= rot
+
+    def rotated(self, theta):
+        rot = cmath.exp(1j * theta)
+        return self.__class__(self.A * rot, self.B * rot, self.C * rot)
+
+    def flip_x(self):
         """
         The reflection of this triangle about the x-axis. 
         """
         return self.__class__(self.A.conjugate(), self.B.conjugate(), self.C.conjugate())
     
+    def flip_y(self):
+        """
+        The reflection of this triangle about the y-axis. 
+        """
+        return self.__class__(complex(-self.A.real, self.A.imag),
+                              complex(-self.B.real, self.B.imag),
+                              complex(-self.C.real, self.C.imag))   
+    
     def reparametrize(self):
         """
         Reparametrize the triangle to (center, angle, side length) form.
         """
-        M = self.centre()
+        M = self.centre
         MB = self.B - M
         AC = self.C - self.A
-        angle = cmath.phase(MB) - cmath.phase(AC)
-        angle = (angle + math.pi) % (2 * math.pi) - math.pi
-        side = abs(self.B - self.A)
-        
+        angle = cmath.phase(MB)
+        side = abs(self.B - self.A)        
         return M, angle, side
-    
-    @classmethod
-    def from_reparametrized(cls, M, angle, side, phi):
-        """
-        Create a triangle from (M, angle, side) parameters
-        
-        Args:
-            M: complex number representing middle of base
-            angle: angle of MB relative to horizontal (in radians)
-            side: length of side AB
-            
-        Returns:
-            Triangle: New triangle object
-        """
-
-        half_base = side * math.sin(phi / 2) 
-        height = side * math.cos(phi / 2)
-        uMB = cmath.exp(1j * angle)          # Direction from M to B
-        uAC = 1j * uMB                       # Perpendicular direction (base direction)
-        
-        B = M + height * uMB
-        A = M - half_base * uAC
-        C = M + half_base * uAC
-        
-        return cls(A, B, C)
     
 
 class Fatt(Triangle):
@@ -80,10 +80,6 @@ class Fatt(Triangle):
                 Thin(E, D, self.B),
                 Fatt(self.C, D, self.B)]
     
-    @classmethod
-    def from_reparametrized(cls, M, angle, side):
-        return super().from_reparametrized(M, angle, side, 3*math.pi/5)
-
 
 class Thin(Triangle):
     """
@@ -99,10 +95,6 @@ class Thin(Triangle):
         return [Thin(D, self.C, self.A),
                 Fatt(self.C, D, self.B)]
 
-    @classmethod
-    def from_reparametrized(cls, M, angle, side):
-        return super().from_reparametrized(M, angle, side, math.pi/5)
-
 
 class PenroseP3:
     """ P3 Penrose tiling. """
@@ -117,38 +109,112 @@ class PenroseP3:
                 new_elements.extend(element.inflate())
             self.elements = new_elements
 
-    def add_conjugate_elements(self):
-        """ Extend the tiling by reflection about the x-axis. """
-        self.elements.extend([e.conjugate() for e in self.elements])
-
     def rotate(self, theta):
-        rot = math.cos(theta) + 1j * math.sin(theta)
         for e in self.elements:
-            e.A *= rot
-            e.B *= rot
-            e.C *= rot
-
-    def flip_y(self):
-        """ Flip the figure about the y-axis. """
-        for e in self.elements:
-            e.A = complex(-e.A.real, e.A.imag)
-            e.B = complex(-e.B.real, e.B.imag)
-            e.C = complex(-e.C.real, e.C.imag)
+            e.rotate(theta)
 
     def flip_x(self):
         """ Flip the figure about the x-axis. """
-        for e in self.elements:
-            e.A = e.A.conjugate()
-            e.B = e.B.conjugate()
-            e.C = e.C.conjugate()
+        self.elements = [e.flip_x() for e in self.elements]
+
+    def add_x_flipped(self):
+        """ Extend the tiling by reflection about the x-axis. """
+        self.elements.extend([e.flip_x() for e in self.elements])
+
+    def flip_y(self):
+        self.elements = [e.flip_y() for e in self.elements]
+
+    def add_y_flipped(self):
+        self.elements.extend([e.flip_y() for e in self.elements])
+
 
     def remove_mirror_images(self):
         """
         Keep only one of each pair of tiles that are mirror images of each other.
         """
-        selements = sorted(self.elements, key=lambda e: (e.centre().real, e.centre().imag))
-        self.elements = [selements[0]]
+        seen_centres = set()
+        new_elements = []
+        for t in self.elements:
+            c = t.centre
+            c_key = (round(c.real / TOL) , round(c.imag / TOL))  # Use rounded coordinates as key
+            if c_key not in seen_centres:
+                seen_centres.add(c_key)
+                new_elements.append(t)
+        self.elements = new_elements
+        
 
-        for i in range(len(selements)-1):
-            if abs(selements[i+1].centre() - selements[i].centre()) > TOL:
-                self.elements.append(selements[i+1])
+    def distances_to_the_closest_neighbor(self):
+        """
+        For each tile, compute the distance to the closest neighboring tile.
+        """
+        dists = []
+        for i, t1 in enumerate(self.elements):
+            min_dist = float('inf')
+            c1 = t1.centre
+            for j, t2 in enumerate(self.elements):
+                if i != j:
+                    c2 = t2.centre
+                    dist = abs(c2 - c1)
+                    if dist < min_dist:
+                        min_dist = dist
+            dists.append(min_dist)
+        
+        sorted_dists = sorted(dists)
+        print(sorted_dists[:10])
+        print(sorted_dists[len(sorted_dists)//2:len(sorted_dists)//2+10])
+        print(sorted_dists[-10:])
+        return dists
+
+
+class Rhombus:
+    """
+    M: complex number representing middle of base
+    angle: angle of MB relative to horizontal (in radians)
+    side: length of side AB
+    """
+    def __init__(self, tri:Triangle):
+        m, t, s = tri.reparametrize()
+        self.center = m
+        self.tilt = t  
+        self.side = s
+
+        if isinstance(tri, Thin):
+            self.topangle = math.pi / 5  
+        else:
+            self.topangle = 3 * math.pi / 5
+
+        if False:   # Consistency checks (disabled for performance)        
+            half_base = self.side * math.sin(self.topangle / 2)
+            orig_half_base = abs(tri.C - tri.A) / 2
+            if abs(half_base - orig_half_base) > TOL:
+                raise ValueError("Inconsistent side length and top angle in Rhombus initialization.")
+            
+            height = self.side * math.cos(self.topangle / 2)
+            orig_height = abs(tri.B - tri.centre)
+            if abs(height - orig_height) > TOL:
+                raise ValueError("Inconsistent side length and top angle in Rhombus initialization.")
+
+            uMB = cmath.exp(1j * self.tilt)          # Direction from M to B
+            uAC = 1j * uMB                           # Perpendicular direction (base direction)
+            orig_uAC = (tri.C - tri.A) / abs(tri.C - tri.A)
+            dot_product = (uAC.real * orig_uAC.real + uAC.imag * orig_uAC.imag)
+            if abs(dot_product) - 1 > TOL:
+                raise ValueError(f"Inconsistent base direction in Rhombus initialization. dot_product = {dot_product}")
+    
+    def triangle(self):
+        half_base = self.side * math.sin(self.topangle / 2) 
+        height = self.side * math.cos(self.topangle / 2)
+        uMB = cmath.exp(1j * self.tilt)          # Direction from M to B
+        uAC = -1j * uMB                           # Perpendicular direction (base direction)
+        
+        B = self.center - height * uMB
+        A = self.center - half_base * uAC
+        C = self.center + half_base * uAC
+
+        if self.topangle == math.pi / 5:
+            return Thin(A, B, C)
+        elif self.topangle == 3 * math.pi / 5:
+            return Fatt(A, B, C)
+        else: 
+            raise ValueError("Invalid top angle for Rhombus to Triangle conversion.") 
+

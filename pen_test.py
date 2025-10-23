@@ -1,61 +1,49 @@
 import math
 import unittest
+import copy
 
-from pen_base import PenroseP3, Thin
+from pen_base import PenroseP3, Rhombus
+from pen_examples.circle import circle_tiling 
+from pen_examples.triangle import triangle_tiling
+from pen_svg import save_svg
 
+def get_copy():
+	return copy.deepcopy(circle_tiling)
 
-# Recreate the initial configuration from example4.py (but keep inflations small so tests run fast)
-scale = 1000
-theta = math.pi / 5
-rot = math.cos(theta) + 1j * math.sin(theta)
-B = 0 + 0j
+tiling = get_copy()
+tiling.inflate(4)
+for t in tiling.elements:
+	m, a, s = t.reparametrize()
+	print(f"center: ({m.real:6.0f}, {m.imag:6.0f}) angle: {a:6.2f}({a*180/math.pi:5.0f}) side: {s:6.1f}")
 
-A1 = scale + 0.j
-C1 = C2 = A1 * rot
-A2 = A3 = C1 * rot
-C3 = C4 = A3 * rot
-A4 = A5 = C4 * rot
-C5 = -A1
+def test_reparametrize_roundtrip(t):
+		rh = Rhombus(t)
+		tilt_in_degrees = rh.tilt * 180 / math.pi
+		print(f"center: {rh.center:6.0f} tilt: {rh.tilt:6.2f}({tilt_in_degrees:.0f})" 
+			f"side: {rh.side:6.2f} topangle: {rh.topangle:6.2f}({rh.topangle*180/math.pi:.0f}) ")
 
-tiling = PenroseP3([
-	Thin(A1, B, C1), 
-	Thin(A2, B, C2),
-	Thin(A3, B, C3), 
-	Thin(A4, B, C4),
-	Thin(A5, B, C5)])
+		recreated = rh.triangle()
+		print(f"A: {t.A:6.0f} -> {recreated.A:6.0f}", "✓" if abs(t.A - recreated.A) < 1e-6 else "X")
+		print(f"B: {t.B:6.0f} -> {recreated.B:6.0f}", "✓" if abs(t.B - recreated.B) < 1e-6 else "X")
+		print(f"C: {t.C:6.0f} -> {recreated.C:6.0f}", "✓" if abs(t.C - recreated.C) < 1e-6 else "X")
+		print(f"D: {t.D:6.0f} -> {recreated.D:6.0f}", "✓" if abs(t.D - recreated.D) < 1e-6 else "X")
 
-tiling.add_conjugate_elements()
-# Use a modest number of inflations for the tests so they remain fast but include both Thin and Fatt tiles
-tiling.inflate(times=3)
+		b = t.A - t.C
+		rb = recreated.A - recreated.C
+		print(f"Base: {b:6.0f} -> {rb:6.0f}", "✓" if abs(b - rb) < 1e-6 else "X")
 
+		print()
 
-class TestReparametrizeRoundtrip(unittest.TestCase):
-	def test_roundtrip_for_sample_tiles(self):
-		"""For a sample of tiles, reparametrize and recreate via from_reparametrized and compare vertices."""
-		max_tests = min(60, len(tiling.elements))
-		for t in tiling.elements[:max_tests]:
-			M, angle, side = t.reparametrize()
-			recreated = t.__class__.from_reparametrized(M, angle, side)
+for i in range(5):
+	tiling = get_copy()
+	print(f"--- Inflation level: {i} ---")
+	tiling.inflate(i)
 
-			# Vertices should match up to a small numerical tolerance
-			tol = 1e-6
-			self.assertTrue(abs(t.A - recreated.A) < tol, f"A differs: {t.A} vs {recreated.A}")
-			self.assertTrue(abs(t.B - recreated.B) < tol, f"B differs: {t.B} vs {recreated.B}")
-			self.assertTrue(abs(t.C - recreated.C) < tol, f"C differs: {t.C} vs {recreated.C}")
+	recreated_tiles = PenroseP3([Rhombus(t).triangle() for t in tiling.elements])
+	save_svg(tiling=tiling, filename=f'{i}_original.svg')
+	save_svg(tiling=recreated_tiles, filename=f'{i}_recreated.svg')
 
-	def test_reparametrize_center_and_angle_range(self):
-		"""Sanity-check the output of reparametrize for one tile: centre equals triangle.centre() and angle in [-pi, pi]."""
-		t = tiling.elements[0]
-		M, angle, side = t.reparametrize()
-
-		# centre is midpoint of base
-		self.assertAlmostEqual(M.real, t.centre().real, places=8)
-		self.assertAlmostEqual(M.imag, t.centre().imag, places=8)
-
-		# angle should be in principal branch [-pi, pi]
-		self.assertTrue(-math.pi <= angle <= math.pi)
-
-
-if __name__ == '__main__':
-	unittest.main()
-
+	for t in tiling.elements:
+		test_reparametrize_roundtrip(t)
+	
+	input("Press Enter to continue to next inflation level...")

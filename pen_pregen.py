@@ -24,7 +24,7 @@ tiling = PenroseP3([
     Thin(A4, B, C4),
     Thin(A5, B, C5)]) # All above the x-axis
 
-tiling.add_conjugate_elements() # Reflect to get those below x-axis
+tiling.add_x_flipped() # Reflect to get those below x-axis
 
 tiling.inflate(times=10)
 save_svg(tiling, config, 'example4.svg')
