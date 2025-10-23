@@ -1,20 +1,17 @@
 import cmath
-
-
-def reim(v):
-    return v.real, v.imag
-
-
-def cross(u, v):
-    return u.real*v.imag - u.imag*v.real
-
+import math
+import copy
+from utils import intreim, cross
 
 def svg_path(rhombus):
-    ax, ay = reim(rhombus.A)
-    bx, by = reim(rhombus.B)
-    cx, cy = reim(rhombus.C)
-    dx, dy = reim(rhombus.D)
-    return f"M{ax},{ay} L{bx},{by} L{cx},{cy} L{dx},{dy} Z"
+    vertices = rhombus.vertices
+    ax, ay = intreim(vertices[0])
+    path = f"M{ax},{ay} "
+    for v in vertices[1:]:
+        vx, vy = intreim(v)
+        path += f"L{vx},{vy} "
+    path += "Z"
+    return path
 
 
 def svg_arc(U, V, W):
@@ -37,13 +34,13 @@ def svg_arcs(rhombus):
     """
     SVG "d" path for the two circular arcs about vertices A and C. 
     """
-    arc_a = svg_arc(rhombus.A, rhombus.B, rhombus.D)      
-    arc_c = svg_arc(rhombus.C, rhombus.B, rhombus.D)      
+    A, B, C, D = rhombus.vertices
+    arc_a = svg_arc(A, B, D)      
+    arc_c = svg_arc(C, B, D)      
     return arc_a, arc_c
 
 
-
-def save_svg(tiling, filename, additional_config={}):
+def save_svg(tiling, filename, additional_config={}, target_sice=20):
     # Default configuration
     config = {
             'stroke-colour': '#ffffff',
@@ -53,28 +50,34 @@ def save_svg(tiling, filename, additional_config={}):
             'Ltile-colour': '#0035f3',
             'Aarc-colour': '#ff8000',
             'Carc-colour': '#f0c030',
-            'draw-arcs': False,
+            'draw-arcs': True,
             }
     config.update(additional_config)
     
-    tiling.remove_mirror_images() # Just in case
-
+    if hasattr(tiling, 'remove_mirror_images'):
+        tiling = copy.deepcopy(tiling)
+        tiling.remove_mirror_images() 
+        tiling = tiling.elements
+    
     def tile_colour(e):
-        if e.__class__.__name__ == 'Fatt':
-            col = config['Ltile-colour']
+        if e.__class__.__name__ == 'Fatt' or (hasattr(e, 'topangle') and abs(e.topangle - (3*math.pi/5)) < 1e-6):
+            return config['Ltile-colour']
         else:
-            col = config['Stile-colour']
+            return config['Stile-colour']
 
-        if hasattr(col, '__call__'): # Can be a function or a string
-            return col(e)
-        else:   
-            return col
+    # Scale to target size
+    orig_side = tiling[0].side_length
+    if not (10 < orig_side < 30):  
+        scale_factor = target_sice / orig_side
+        tiling = copy.deepcopy(tiling)
+        for t in tiling:
+            t.scale(scale_factor)
 
     # Determine viewbox size
     xmin = ymin = float('inf')
     xmax = ymax = float('-inf')
-    for t in tiling.elements:
-        for v in [t.A, t.B, t.C]:
+    for t in tiling:
+        for v in t.vertices:
             xmin = min(xmin, v.real)
             xmax = max(xmax, v.real)
             ymin = min(ymin, v.imag)
@@ -90,7 +93,7 @@ def save_svg(tiling, filename, additional_config={}):
         f'<g style="stroke:{config['stroke-colour']}; stroke-width: {config['base-stroke-width']}; stroke-linejoin: round;">'
     ]
     
-    for t in tiling.elements:
+    for t in tiling:
         dpath = svg_path(t)
         svg.append(f'<path fill="{tile_colour(t)}" fill-opacity=".5" d="{dpath}"/>')
 

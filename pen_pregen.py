@@ -1,30 +1,68 @@
 # example4.py
+import copy
 import math
-from pen_base import PenroseP3, Thin, save_svg
 
-# A "sun"
+from utils import deg
+from pen_base import Rhombus, PenroseP3, distances_to_the_closest_neighbor
+from pen_examples.circle import circle_tiling
 
+TOL = 1e-6
 
-piby5 = math.pi / 5
-ejpiby5 = math.cos(piby5) + 1j*math.sin(piby5)
+def get_pen_mother_tiles(target_count):
+    tiling = copy.deepcopy(circle_tiling)
+    print(f"Starting with {len(tiling.elements)} tiles.")
 
-B = 0 + 0j      # Tips at origin
+    # Get at least 16 times the target count to ensure enough tiles 
+    # for random translation and rotation
+    # 2 is for removing mirror images
+    mother_count = 2 * 16 * target_count               
+    while len(tiling.elements) < mother_count:
+        tiling.inflate(1)
+        print(f"Inflated to {len(tiling.elements)} tiles.")
 
-A1 = 1 + 0.j
-C1 = C2 = A1 * ejpiby5
-A2 = A3 = C1 * ejpiby5
-C3 = C4 = A3 * ejpiby5
-A4 = A5 = C4 * ejpiby5
-C5 = -A1
+    rhombus_tiles = tiling.get_rhombus_tiles()
+    # distances_to_the_closest_neighbor(rhombus_tiles)
 
-tiling = PenroseP3([
-    Thin(A1, B, C1), 
-    Thin(A2, B, C2),
-    Thin(A3, B, C3), 
-    Thin(A4, B, C4),
-    Thin(A5, B, C5)]) # All above the x-axis
+    sides = sorted(set(TOL*round(rh.side_length/TOL) for rh in rhombus_tiles))
+    assert len(sides) == 1, f"Expected same tile sizes, got {sides}"
+    side = sides.pop()
 
-tiling.add_x_flipped() # Reflect to get those below x-axis
+    # So that approximately target_count tiles fit in unit area
+    target_side = 1/math.sqrt(target_count)
 
-tiling.inflate(times=10)
-save_svg(tiling, config, 'example4.svg')
+    # Scale tiles accordingly
+    scale_factor = target_side / side
+    for rh in rhombus_tiles:
+        rh.center *= scale_factor
+        rh.side *= scale_factor
+
+    # Calculate and print some tile statistics
+    xmin = min(rh.center.real for rh in rhombus_tiles)
+    xmax = max(rh.center.real for rh in rhombus_tiles)
+    ymin = min(rh.center.imag for rh in rhombus_tiles)
+    ymax = max(rh.center.imag for rh in rhombus_tiles)
+    area = (xmax - xmin) * (ymax - ymin)
+    set_of_tilts = sorted(set(round(deg(rh.tilt)) for rh in rhombus_tiles))
+    print(f"""Tile 
+          Count: {len(rhombus_tiles)}
+          Side: {side:.4f} -> {target_side:.4f}
+          Area: {area:.4f}
+          Tilts: {set_of_tilts}
+          xmin: {xmin:.4f} xmax: {xmax:.4f}
+          ymin: {ymin:.4f} ymax: {ymax:.4f}
+    """) 
+
+    return rhombus_tiles
+
+if __name__ == '__main__':
+    target_count=100
+    mtiles = get_pen_mother_tiles(target_count)
+
+    triangles = PenroseP3([rh.triangle() for rh in mtiles])
+
+    from pen_svg import save_svg
+    save_svg(mtiles, f"mother_tiles_{target_count}.svg")
+
+    tiling = copy.deepcopy(circle_tiling)
+    tiling.inflate(5)
+    save_svg(tiling.elements, f"mother_tiles_{target_count}_orig.svg")

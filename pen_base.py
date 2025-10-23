@@ -1,5 +1,8 @@
 import math
 import cmath
+import copy
+from collections import Counter
+from utils import cross
 
 def deg(u):
     return cmath.phase(u) * 180 / math.pi
@@ -20,12 +23,22 @@ class Triangle:
     def D(self):
         """ The fourth vertex of the rhombus formed by this triangle and its mirror image about the base. """
         return self.A - self.B + self.C
+    
+    @property
+    def vertices(self):
+        """ Return the triangle vertices as a tuple. """
+        return self.A, self.B, self.C, self.D
 
     @property
-    def centre(self):
+    def center(self):
         """ Center of the base """
         return (self.A + self.C) / 2
 
+    @property
+    def side_length(self):
+        """ Length of side AB (= BC = CD = DA). """
+        return abs(self.B - self.A)
+    
     def rotate(self, theta):
         rot = cmath.exp(1j * theta)
         self.A *= rot
@@ -35,6 +48,11 @@ class Triangle:
     def rotated(self, theta):
         rot = cmath.exp(1j * theta)
         return self.__class__(self.A * rot, self.B * rot, self.C * rot)
+    
+    def scale(self, factor):
+        self.A *= factor
+        self.B *= factor
+        self.C *= factor
 
     def flip_x(self):
         """
@@ -54,11 +72,12 @@ class Triangle:
         """
         Reparametrize the triangle to (center, angle, side length) form.
         """
-        M = self.centre
+        M = self.center
         MB = self.B - M
-        AC = self.C - self.A
         angle = cmath.phase(MB)
         side = abs(self.B - self.A)        
+        signa = 1 if cross(MB, self.C - self.A) > 0 else -1
+        side *= signa
         return M, angle, side
     
 
@@ -132,38 +151,24 @@ class PenroseP3:
         """
         Keep only one of each pair of tiles that are mirror images of each other.
         """
-        seen_centres = set()
+        seen_centers = set()
         new_elements = []
         for t in self.elements:
-            c = t.centre
+            c = t.center
             c_key = (round(c.real / TOL) , round(c.imag / TOL))  # Use rounded coordinates as key
-            if c_key not in seen_centres:
-                seen_centres.add(c_key)
+            if c_key not in seen_centers:
+                seen_centers.add(c_key)
                 new_elements.append(t)
         self.elements = new_elements
         
 
-    def distances_to_the_closest_neighbor(self):
+    def get_rhombus_tiles(self):
         """
-        For each tile, compute the distance to the closest neighboring tile.
+        Get the rhombus representations of all tiles in the tiling.
         """
-        dists = []
-        for i, t1 in enumerate(self.elements):
-            min_dist = float('inf')
-            c1 = t1.centre
-            for j, t2 in enumerate(self.elements):
-                if i != j:
-                    c2 = t2.centre
-                    dist = abs(c2 - c1)
-                    if dist < min_dist:
-                        min_dist = dist
-            dists.append(min_dist)
-        
-        sorted_dists = sorted(dists)
-        print(sorted_dists[:10])
-        print(sorted_dists[len(sorted_dists)//2:len(sorted_dists)//2+10])
-        print(sorted_dists[-10:])
-        return dists
+        tiles = copy.deepcopy(self)
+        tiles.remove_mirror_images()
+        return [Rhombus(t) for t in tiles.elements]
 
 
 class Rhombus:
@@ -190,7 +195,7 @@ class Rhombus:
                 raise ValueError("Inconsistent side length and top angle in Rhombus initialization.")
             
             height = self.side * math.cos(self.topangle / 2)
-            orig_height = abs(tri.B - tri.centre)
+            orig_height = abs(tri.B - tri.center)
             if abs(height - orig_height) > TOL:
                 raise ValueError("Inconsistent side length and top angle in Rhombus initialization.")
 
@@ -201,6 +206,10 @@ class Rhombus:
             if abs(dot_product) - 1 > TOL:
                 raise ValueError(f"Inconsistent base direction in Rhombus initialization. dot_product = {dot_product}")
     
+    def scale(self, factor):
+        self.center *= factor
+        self.side *= factor
+
     def triangle(self):
         half_base = self.side * math.sin(self.topangle / 2) 
         height = self.side * math.cos(self.topangle / 2)
@@ -208,8 +217,8 @@ class Rhombus:
         uAC = -1j * uMB                           # Perpendicular direction (base direction)
         
         B = self.center - height * uMB
-        A = self.center - half_base * uAC
-        C = self.center + half_base * uAC
+        A = self.center + half_base * uAC
+        C = self.center - half_base * uAC
 
         if self.topangle == math.pi / 5:
             return Thin(A, B, C)
@@ -217,4 +226,34 @@ class Rhombus:
             return Fatt(A, B, C)
         else: 
             raise ValueError("Invalid top angle for Rhombus to Triangle conversion.") 
+
+    @property
+    def vertices(self):
+        return self.triangle().vertices
+    
+    @property
+    def side_length(self):
+        return abs(self.side)
+
+def distances_to_the_closest_neighbor(elements):
+    """
+    For each tile, compute the distance to the closest neighboring tile.
+    """
+    dists = Counter()
+    for i, t1 in enumerate(elements):
+        min_dist = float('inf')
+        c1 = t1.center
+        for j, t2 in enumerate(elements):
+            if i != j:
+                c2 = t2.center
+                dist = abs(c2 - c1)
+                if dist < min_dist:
+                    min_dist = dist
+        dists[TOL * round(min_dist/TOL)] += 1
+
+    print("Distances to closest neighbor:")
+    for dist in sorted(dists):
+        print(f"  {dist:6.3f}: {dists[dist]}")        
+    
+    return dists
 
