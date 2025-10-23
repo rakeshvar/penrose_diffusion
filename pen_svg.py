@@ -1,22 +1,11 @@
-import cmath
 import math
 import copy
-from utils import intreim, cross
-
-def svg_path(rhombus):
-    vertices = rhombus.vertices
-    ax, ay = intreim(vertices[0])
-    path = f"M{ax},{ay} "
-    for v in vertices[1:]:
-        vx, vy = intreim(v)
-        path += f"L{vx},{vy} "
-    path += "Z"
-    return path
+from utils import cross, svg_path
 
 
 def svg_arc(U, V, W):
     """
-    SVG "d" path for the circular arc between sides UV and UW, joined at half-distance along these sides. 
+    SVG "d" path for the circular arc between sides UV and UW, joined at half-distance along these sides.
     """
     start = (U + V) / 2
     r = abs((V - U) / 2)    # arc radius
@@ -32,15 +21,15 @@ def svg_arc(U, V, W):
 
 def svg_arcs(rhombus):
     """
-    SVG "d" path for the two circular arcs about vertices A and C. 
+    SVG "d" path for the two circular arcs about vertices A and C.
     """
     A, B, C, D = rhombus.vertices
-    arc_a = svg_arc(A, B, D)      
-    arc_c = svg_arc(C, B, D)      
+    arc_a = svg_arc(A, B, D)
+    arc_c = svg_arc(C, B, D)
     return arc_a, arc_c
 
 
-def save_svg(tiling, filename, additional_config={}, target_sice=20):
+def save_svg(tiling, filename, additional_config={}, target_side=20):
     # Default configuration
     config = {
             'stroke-colour': '#ffffff',
@@ -51,24 +40,25 @@ def save_svg(tiling, filename, additional_config={}, target_sice=20):
             'Aarc-colour': '#ff8000',
             'Carc-colour': '#f0c030',
             'draw-arcs': True,
+            'tile-opacity': 0.5,
             }
     config.update(additional_config)
-    
+
     if hasattr(tiling, 'remove_mirror_images'):
         tiling = copy.deepcopy(tiling)
-        tiling.remove_mirror_images() 
+        tiling.remove_mirror_images()
         tiling = tiling.elements
-    
+
     def tile_colour(e):
         if e.__class__.__name__ == 'Fatt' or (hasattr(e, 'topangle') and abs(e.topangle - (3*math.pi/5)) < 1e-6):
             return config['Ltile-colour']
         else:
             return config['Stile-colour']
 
-    # Scale to target size
+    # Scale to target side
     orig_side = tiling[0].side_length
-    if not (10 < orig_side < 30):  
-        scale_factor = target_sice / orig_side
+    if not (.5 < orig_side/target_side < 1.5):
+        scale_factor = target_side / orig_side
         tiling = copy.deepcopy(tiling)
         for t in tiling:
             t.scale(scale_factor)
@@ -90,17 +80,17 @@ def save_svg(tiling, filename, additional_config={}, target_sice=20):
     # Build SVG
     svg = ['<?xml version="1.0" encoding="utf-8"?>',
         f'<svg viewBox="{viewbox}" preserveAspectRatio="xMidYMid meet" version="1.1" baseProfile="full" xmlns="http://www.w3.org/2000/svg" style="background-color: black;">',
-        f'<g style="stroke:{config['stroke-colour']}; stroke-width: {config['base-stroke-width']}; stroke-linejoin: round;">'
+        f'<g style="stroke:{config["stroke-colour"]}; stroke-width: {config["base-stroke-width"]}; stroke-linejoin: round; opacity: {config["tile-opacity"]};">'
     ]
-    
+
     for t in tiling:
         dpath = svg_path(t)
-        svg.append(f'<path fill="{tile_colour(t)}" fill-opacity=".5" d="{dpath}"/>')
+        svg.append(f'<path fill="{tile_colour(t)}" d="{dpath}"/>')
 
         if config['draw-arcs']:
             arc1_d, arc2_d = svg_arcs(t)
-            svg.append(f'<path fill="none" stroke="{config['Aarc-colour']}" d="{arc1_d}"/>')
-            svg.append(f'<path fill="none" stroke="{config['Carc-colour']}" d="{arc2_d}"/>')
+            svg.append(f'<path fill="none" stroke="{config["Aarc-colour"]}" d="{arc1_d}"/>')
+            svg.append(f'<path fill="none" stroke="{config["Carc-colour"]}" d="{arc2_d}"/>')
 
     svg.append('</g>\n</svg>')
     svg = '\n'.join(svg)

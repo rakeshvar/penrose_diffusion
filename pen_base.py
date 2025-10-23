@@ -4,9 +4,6 @@ import copy
 from collections import Counter
 from utils import cross
 
-def deg(u):
-    return cmath.phase(u) * 180 / math.pi
-
 TOL = 1.e-5                       # A small tolerance for comparing floats for equality
 psi = (math.sqrt(5) - 1) / 2      # psi = 1/phi where phi is the Golden ratio, (sqrt(5)+1)/2 = 0.618033988749895
 psi2 = 1 - psi                    # psi**2 = 1 - psi = 0.381966011250105
@@ -23,7 +20,7 @@ class Triangle:
     def D(self):
         """ The fourth vertex of the rhombus formed by this triangle and its mirror image about the base. """
         return self.A - self.B + self.C
-    
+
     @property
     def vertices(self):
         """ Return the triangle vertices as a tuple. """
@@ -38,7 +35,7 @@ class Triangle:
     def side_length(self):
         """ Length of side AB (= BC = CD = DA). """
         return abs(self.B - self.A)
-    
+
     def rotate(self, theta):
         rot = cmath.exp(1j * theta)
         self.A *= rot
@@ -48,7 +45,7 @@ class Triangle:
     def rotated(self, theta):
         rot = cmath.exp(1j * theta)
         return self.__class__(self.A * rot, self.B * rot, self.C * rot)
-    
+
     def scale(self, factor):
         self.A *= factor
         self.B *= factor
@@ -56,18 +53,18 @@ class Triangle:
 
     def flip_x(self):
         """
-        The reflection of this triangle about the x-axis. 
+        The reflection of this triangle about the x-axis.
         """
         return self.__class__(self.A.conjugate(), self.B.conjugate(), self.C.conjugate())
-    
+
     def flip_y(self):
         """
-        The reflection of this triangle about the y-axis. 
+        The reflection of this triangle about the y-axis.
         """
         return self.__class__(complex(-self.A.real, self.A.imag),
                               complex(-self.B.real, self.B.imag),
-                              complex(-self.C.real, self.C.imag))   
-    
+                              complex(-self.C.real, self.C.imag))
+
     def reparametrize(self):
         """
         Reparametrize the triangle to (center, angle, side length) form.
@@ -75,11 +72,11 @@ class Triangle:
         M = self.center
         MB = self.B - M
         angle = cmath.phase(MB)
-        side = abs(self.B - self.A)        
+        side = abs(self.B - self.A)
         signa = 1 if cross(MB, self.C - self.A) > 0 else -1
         side *= signa
         return M, angle, side
-    
+
 
 class Fatt(Triangle):
     """
@@ -98,7 +95,7 @@ class Fatt(Triangle):
         return [Fatt(D, E, self.A),
                 Thin(E, D, self.B),
                 Fatt(self.C, D, self.B)]
-    
+
 
 class Thin(Triangle):
     """
@@ -160,7 +157,7 @@ class PenroseP3:
                 seen_centers.add(c_key)
                 new_elements.append(t)
         self.elements = new_elements
-        
+
 
     def get_rhombus_tiles(self):
         """
@@ -180,20 +177,20 @@ class Rhombus:
     def __init__(self, tri:Triangle):
         m, t, s = tri.reparametrize()
         self.center = m
-        self.tilt = t  
+        self.tilt = t
         self.side = s
 
         if isinstance(tri, Thin):
-            self.topangle = math.pi / 5  
+            self.topangle = math.pi / 5
         else:
             self.topangle = 3 * math.pi / 5
 
-        if False:   # Consistency checks (disabled for performance)        
+        if False:   # Consistency checks (disabled for performance)
             half_base = self.side * math.sin(self.topangle / 2)
             orig_half_base = abs(tri.C - tri.A) / 2
             if abs(half_base - orig_half_base) > TOL:
                 raise ValueError("Inconsistent side length and top angle in Rhombus initialization.")
-            
+
             height = self.side * math.cos(self.topangle / 2)
             orig_height = abs(tri.B - tri.center)
             if abs(height - orig_height) > TOL:
@@ -205,17 +202,17 @@ class Rhombus:
             dot_product = (uAC.real * orig_uAC.real + uAC.imag * orig_uAC.imag)
             if abs(dot_product) - 1 > TOL:
                 raise ValueError(f"Inconsistent base direction in Rhombus initialization. dot_product = {dot_product}")
-    
+
     def scale(self, factor):
         self.center *= factor
         self.side *= factor
 
     def triangle(self):
-        half_base = self.side * math.sin(self.topangle / 2) 
+        half_base = self.side * math.sin(self.topangle / 2)
         height = self.side * math.cos(self.topangle / 2)
         uMB = cmath.exp(1j * self.tilt)          # Direction from M to B
         uAC = -1j * uMB                           # Perpendicular direction (base direction)
-        
+
         B = self.center - height * uMB
         A = self.center + half_base * uAC
         C = self.center - half_base * uAC
@@ -224,13 +221,13 @@ class Rhombus:
             return Thin(A, B, C)
         elif self.topangle == 3 * math.pi / 5:
             return Fatt(A, B, C)
-        else: 
-            raise ValueError("Invalid top angle for Rhombus to Triangle conversion.") 
+        else:
+            raise ValueError("Invalid top angle for Rhombus to Triangle conversion.")
 
     @property
     def vertices(self):
         return self.triangle().vertices
-    
+
     @property
     def side_length(self):
         return abs(self.side)
@@ -253,7 +250,7 @@ def distances_to_the_closest_neighbor(elements):
 
     print("Distances to closest neighbor:")
     for dist in sorted(dists):
-        print(f"  {dist:6.3f}: {dists[dist]}")        
-    
+        print(f"  {dist:6.3f}: {dists[dist]}")
+
     return dists
 

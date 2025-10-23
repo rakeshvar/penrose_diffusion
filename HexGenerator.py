@@ -1,14 +1,11 @@
 import numpy as np
-from hex_rings import *
-from hex_svg import *
-from hex_utils import *
 
 class HexGenerator:
     def __init__(self, max_count, side):
         self.max_count = max_count
         self.side = side
         self.hex_data = get_hex_rings_count(max_count)
-        self.xy_data = hex_centers_xy(self.hex_data, side) 
+        self.xy_data = hex_centers_xy(self.hex_data, side)
 
     def select_points(self, mask, N):
         # Generate random translation and rotation
@@ -17,7 +14,7 @@ class HexGenerator:
 
         # Gather xy positions of hex
         points = np.array([[x/self.side, y/self.side] for x, y, _, _, _, _ in self.xy_data])
-        
+
         # Step 1–2: transform
         c, s = np.cos(alpha), np.sin(alpha)
         R = np.array([[c, -s], [s, c]])

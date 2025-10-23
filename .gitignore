@@ -13,19 +13,6 @@ Icon?
 *.code-workspace
 *.iml
 
-# Node.js
-node_modules/
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
-pnpm-debug.log*
-dist/
-build/
-.next/
-out/
-.cache/
-.parcel-cache/
-
 # Python
 .ipynb_checkpoints/
 __pycache__/
@@ -50,7 +37,7 @@ ENV/
 *.gif
 *.bmp
 *.tiff
-*.svg   
+*.svg
 
 # Logs and runtime
 *.log

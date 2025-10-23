@@ -1,10 +1,8 @@
-# example4.py
 import copy
 import math
 
 from utils import deg
-from pen_base import Rhombus, PenroseP3, distances_to_the_closest_neighbor
-from pen_examples.circle import circle_tiling
+from pen_shapes import circle_tiling
 
 TOL = 1e-6
 
@@ -12,10 +10,10 @@ def get_pen_mother_tiles(target_count):
     tiling = copy.deepcopy(circle_tiling)
     print(f"Starting with {len(tiling.elements)} tiles.")
 
-    # Get at least 16 times the target count to ensure enough tiles 
+    # Get at least 16 times the target count to ensure enough tiles
     # for random translation and rotation
     # 2 is for removing mirror images
-    mother_count = 2 * 16 * target_count               
+    mother_count = 2 * 16 * target_count
     while len(tiling.elements) < mother_count:
         tiling.inflate(1)
         print(f"Inflated to {len(tiling.elements)} tiles.")
@@ -50,19 +48,19 @@ def get_pen_mother_tiles(target_count):
           Tilts: {set_of_tilts}
           xmin: {xmin:.4f} xmax: {xmax:.4f}
           ymin: {ymin:.4f} ymax: {ymax:.4f}
-    """) 
+    """)
 
     return rhombus_tiles
 
 if __name__ == '__main__':
-    target_count=100
-    mtiles = get_pen_mother_tiles(target_count)
-
-    triangles = PenroseP3([rh.triangle() for rh in mtiles])
-
+    import sys
     from pen_svg import save_svg
+
+    target_count=100 if len(sys.argv) < 2 else int(sys.argv[1])
+    mtiles = get_pen_mother_tiles(target_count)
     save_svg(mtiles, f"mother_tiles_{target_count}.svg")
 
+    # Save original tiling for comparison
     tiling = copy.deepcopy(circle_tiling)
     tiling.inflate(5)
     save_svg(tiling.elements, f"mother_tiles_{target_count}_orig.svg")
