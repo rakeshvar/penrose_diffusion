@@ -1,4 +1,5 @@
 import math
+from utils import inscribed_square_halfside
 
 def get_color(q, r, s):
     """
@@ -81,12 +82,30 @@ class HexagonGrid:
             all_hexes.extend(get_hex_ring(degree))
             degree += 1
         return cls(all_hexes)
+    
+    @classmethod
+    def from_halfside(cls, target_hexside, target_halfside):
+        """
+        Generate hexagons that cover a square of half size 'total_halfside'.
+        With hexagons with side 'hex_side'.
+        """
+        degree = 0
+        all_hexes = get_hex_ring(degree)
+        unscaled_halfside = target_halfside * all_hexes[0].side / target_hexside
+        
+        while inscribed_square_halfside(all_hexes) < unscaled_halfside:
+            degree += 1
+            all_hexes.extend(get_hex_ring(degree))
+        return cls(all_hexes)
 
     def __init__(self, hexes):
         self.hexes = hexes
 
     def __iter__(self):
         return iter(self.hexes)
+    
+    def __len__(self):
+        return len(self.hexes)
 
 class HexXYA:
     def __init__(self, hexagon):
@@ -110,6 +129,10 @@ class HexXYA:
         self.x *= factor
         self.y *= factor    
         self.side *= factor
+    
+    @property
+    def center(self):
+        return self.x, self.y
     
     @property
     def vertices(self):

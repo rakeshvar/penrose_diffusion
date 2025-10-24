@@ -1,35 +1,33 @@
-import sys
-from collections import Counter
-from hex_base import *
-from hex_svg import save_svg
 
-def get_hex_mother_tiles(target_count):
-    hexagons = HexagonGrid.from_count(target_count * 2)
+from hex_base import HexagonGrid, HexGrid
+from utils import print_tile_stats, inscribed_square_halfside
+
+def get_hex_mother_tiles(total_halfside, target_hex_side):
+    hexagons = HexagonGrid.from_halfside(target_hex_side, total_halfside)
     hexgrid  = HexGrid(hexagons)
-    print(f"Generated {len(hexgrid)} hexagon mother tiles for target count {target_count}.")
 
-    target_side = 1 / math.sqrt(target_count) #* (3**0.25))
     original_side = hexgrid.side
-    hexgrid.scale(target_side / original_side)
-
-    # Calculate and print some tile statistics
-    xs = [h.x for h in hexgrid]
-    ys = [h.y for h in hexgrid]
-    xmin, xmax = min(xs), max(xs)
-    ymin, ymax = min(ys), max(ys)
-    colors = Counter(h.color for h in hexgrid)
-
-    print(f"""Tile 
-          Count: {len(hexgrid)}
-          Side: {original_side:.4f} -> {target_side:.4f}
-          Colors: {dict(colors)}  
-          xmin: {xmin:.4f} xmax: {xmax:.4f}   
-          ymin: {ymin:.4f} ymax: {ymax:.4f}
-    """)
-
+    hexgrid.scale(target_hex_side / original_side)
+    print_tile_stats(hexgrid)
+    print(f"Hex Side: Original: {original_side} -> Target: {target_hex_side} scale factor: {original_side / target_hex_side}")
+    inscribed_square_halfside(hexgrid)
     return hexgrid
 
 if __name__ == '__main__':
-    target_count=100 if len(sys.argv) < 2 else int(sys.argv[1])
-    mtiles = get_hex_mother_tiles(target_count)
-    save_svg(mtiles, f"hex_mother_tiles_{target_count}.svg")
+    import sys
+    try:
+        halfside = float(sys.argv[1])
+        hex_side = float(sys.argv[2])
+    except:
+        print("Usage: python hex_pregen.py <halfside> <hex_side>")
+        print("Using default values")
+        hex_side = 1/10.
+        halfside = 3.
+    
+    print(f"\thalfside: {halfside}")
+    print(f"\thex_side: {hex_side}")
+
+    mtiles = get_hex_mother_tiles(halfside, hex_side)
+
+    from hex_svg import save_svg
+    save_svg(mtiles, f"hex_mother_tiles_{len(mtiles)}.svg")
