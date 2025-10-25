@@ -1,66 +1,53 @@
 import copy
-import math
 
-from utils import deg
+from utils import deg, print_tile_stats, inscribed_square_halfside
 from pen_shapes import circle_tiling
+from pen_base import PenGrid
 
 TOL = 1e-6
 
-def get_pen_mother_tiles(target_count):
-    tiling = copy.deepcopy(circle_tiling)
-    print(f"Starting with {len(tiling.elements)} tiles.")
+def get_pen_mother_tiles(target_halfside, target_pen_side):
+    trianglegrid = copy.deepcopy(circle_tiling)
+    target_elements = target_halfside / target_pen_side
 
-    # Get at least 16 times the target count to ensure enough tiles
-    # for random translation and rotation
-    # 2 is for removing mirror images
-    mother_count = 2 * 16 * target_count
-    while len(tiling.elements) < mother_count:
-        tiling.inflate(1)
-        print(f"Inflated to {len(tiling.elements)} tiles.")
+    while True:
+        tiss = inscribed_square_halfside(trianglegrid)/target_elements
+        print(f"Target Inscribed side: {tiss:6.1f} Scaled side: {trianglegrid.side:7.1f}")
+        if trianglegrid.side < tiss:
+            break
+        trianglegrid.inflate(1)
 
-    rhombus_tiles = tiling.get_rhombus_tiles()
-    # distances_to_the_closest_neighbor(rhombus_tiles)
+    pengrid = PenGrid(trianglegrid)
 
-    sides = sorted(set(TOL*round(rh.side_length/TOL) for rh in rhombus_tiles))
-    assert len(sides) == 1, f"Expected same tile sizes, got {sides}"
-    side = sides.pop()
+    original_side = pengrid.side
+    pengrid.scale(target_pen_side/original_side)
+    print_tile_stats(pengrid)
+    inscribed_square_halfside(pengrid)
 
-    # So that approximately target_count tiles fit in unit area
-    target_side = 1/math.sqrt(target_count)
+    print(f"Pen Side: Original: {original_side} -> Final: {pengrid.side} scale factor: {original_side / pengrid.side}")
 
-    # Scale tiles accordingly
-    scale_factor = target_side / side
-    for rh in rhombus_tiles:
-        rh.center *= scale_factor
-        rh.side *= scale_factor
-
-    # Calculate and print some tile statistics
-    xmin = min(rh.center.real for rh in rhombus_tiles)
-    xmax = max(rh.center.real for rh in rhombus_tiles)
-    ymin = min(rh.center.imag for rh in rhombus_tiles)
-    ymax = max(rh.center.imag for rh in rhombus_tiles)
-    area = (xmax - xmin) * (ymax - ymin)
-    set_of_tilts = sorted(set(round(deg(rh.tilt)) for rh in rhombus_tiles))
-    print(f"""Tile 
-          Count: {len(rhombus_tiles)}
-          Side: {side:.4f} -> {target_side:.4f}
-          Area: {area:.4f}
-          Tilts: {set_of_tilts}
-          xmin: {xmin:.4f} xmax: {xmax:.4f}
-          ymin: {ymin:.4f} ymax: {ymax:.4f}
-    """)
-
-    return rhombus_tiles
+    return pengrid
 
 if __name__ == '__main__':
     import sys
-    from pen_svg import save_svg
+    try:
+        halfside = float(sys.argv[1])
+        pen_side = float(sys.argv[2])
+    except:
+        print(f"Usage: python {sys.argv[0]} <halfside> <pen_side>")
+        print("Using default values")
+        pen_side = 1/10.
+        halfside = 2.
+    
+    print(f"\thalfside: {halfside}")
+    print(f"\tpen_side: {pen_side}")
 
-    target_count=100 if len(sys.argv) < 2 else int(sys.argv[1])
-    mtiles = get_pen_mother_tiles(target_count)
-    save_svg(mtiles, f"mother_tiles_{target_count}.svg")
+    mtiles = get_pen_mother_tiles(halfside, pen_side)
+
+    from pen_svg import save_svg
+    save_svg(mtiles, f"pen_mother_tiles_{len(mtiles)}.svg")
 
     # Save original tiling for comparison
-    tiling = copy.deepcopy(circle_tiling)
-    tiling.inflate(5)
-    save_svg(tiling.elements, f"mother_tiles_{target_count}_orig.svg")
+    comparisiongrid = copy.deepcopy(circle_tiling)
+    comparisiongrid.inflate(5)
+    save_svg(comparisiongrid, f"pen_mother_tiles_{len(comparisiongrid)}.svg")

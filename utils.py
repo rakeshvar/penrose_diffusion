@@ -2,6 +2,8 @@ import math
 import cmath
 from collections import Counter
 
+TOL = 1e-6
+
 def deg(rad_or_dir):
     if isinstance(rad_or_dir, complex):
         return cmath.phase(rad_or_dir) * 180 / math.pi
@@ -44,8 +46,10 @@ def inscribed_square_halfside(grid):
     Given N points where the first two columns are (x, y),
     rotate by 45°, find the limiting extent, and return diag/sqrt(2).
     """
-    
-    xy = np.array([p.center for p in grid], dtype=float)
+    centers = [h.center for h in grid]
+    if isinstance(centers[0], complex):
+        centers = [reim(c) for c in centers]
+    xy = np.array(centers, dtype=float)
 
     theta = np.deg2rad(45)
     R = np.array([[np.cos(theta), -np.sin(theta)],

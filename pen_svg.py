@@ -1,7 +1,7 @@
 import math
 import copy
 from utils import cross, svg_path
-
+from pen_base import PenGrid, TriangleGrid
 
 def svg_arc(U, V, W):
     """
@@ -29,7 +29,7 @@ def svg_arcs(rhombus):
     return arc_a, arc_c
 
 
-def save_svg(tiling, filename, additional_config={}, target_side=20):
+def save_svg(pengrid: PenGrid|TriangleGrid, filename, additional_config={}, target_side=20):
     # Default configuration
     config = {
             'stroke-colour': '#ffffff',
@@ -44,10 +44,8 @@ def save_svg(tiling, filename, additional_config={}, target_side=20):
             }
     config.update(additional_config)
 
-    if hasattr(tiling, 'remove_mirror_images'):
-        tiling = copy.deepcopy(tiling)
-        tiling.remove_mirror_images()
-        tiling = tiling.elements
+    if isinstance(pengrid, TriangleGrid):
+        pengrid = PenGrid(pengrid)
 
     def tile_colour(e):
         if e.__class__.__name__ == 'Fatt' or (hasattr(e, 'topangle') and abs(e.topangle - (3*math.pi/5)) < 1e-6):
@@ -56,17 +54,17 @@ def save_svg(tiling, filename, additional_config={}, target_side=20):
             return config['Stile-colour']
 
     # Scale to target side
-    orig_side = tiling[0].side_length
+    orig_side = pengrid.side
     if not (.5 < orig_side/target_side < 1.5):
         scale_factor = target_side / orig_side
-        tiling = copy.deepcopy(tiling)
-        for t in tiling:
+        pengrid = copy.deepcopy(pengrid)
+        for t in pengrid:
             t.scale(scale_factor)
 
     # Determine viewbox size
     xmin = ymin = float('inf')
     xmax = ymax = float('-inf')
-    for t in tiling:
+    for t in pengrid:
         for v in t.vertices:
             xmin = min(xmin, v.real)
             xmax = max(xmax, v.real)
@@ -83,7 +81,7 @@ def save_svg(tiling, filename, additional_config={}, target_side=20):
         f'<g style="stroke:{config["stroke-colour"]}; stroke-width: {config["base-stroke-width"]}; stroke-linejoin: round; opacity: {config["tile-opacity"]};">'
     ]
 
-    for t in tiling:
+    for t in pengrid:
         dpath = svg_path(t)
         svg.append(f'<path fill="{tile_colour(t)}" d="{dpath}"/>')
 

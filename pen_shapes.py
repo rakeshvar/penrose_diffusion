@@ -1,7 +1,7 @@
 import math
 from cmath import exp
 
-from pen_base import Fatt, Thin, PenroseP3, psi
+from pen_base import Fatt, Thin, TriangleGrid, psi
 
 two_piby5 = 2 * math.pi / 5
 ej2piby5 = exp(1j * two_piby5)
@@ -17,7 +17,7 @@ A = scale/2 + 0j
 B = -scale / 2 * ej2piby5
 C = -scale/2 / psi + 0j
 
-triangle_tiling = PenroseP3([Fatt(A, B, C)])
+triangle_tiling = TriangleGrid([Fatt(A, B, C)])
 
 #----------------------------------------
 # Star
@@ -27,7 +27,7 @@ B = scale + 0j
 C = scale / psi * ejpiby5
 t = Fatt(A, B, C)
 
-star_tiling = PenroseP3([t.rotated(k * two_piby5) for k in range(5)])
+star_tiling = TriangleGrid([t.rotated(k * two_piby5) for k in range(5)])
 star_tiling.add_x_flipped()
 
 #----------------------------------------
@@ -41,7 +41,7 @@ C3 = C4 = A3 * ejpiby5
 A4 = A5 = C4 * ejpiby5
 C5 = -A1
 
-circle_tiling = PenroseP3([
+circle_tiling = TriangleGrid([
     Thin(A1, B, C1),
     Thin(A2, B, C2),
     Thin(A3, B, C3),

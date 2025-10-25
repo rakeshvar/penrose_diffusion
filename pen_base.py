@@ -77,6 +77,10 @@ class Triangle:
         side *= signa
         return M, angle, side
 
+    @property
+    def side(self):
+        return abs(self.B - self.A)
+
 
 class Fatt(Triangle):
     """
@@ -112,10 +116,13 @@ class Thin(Triangle):
                 Fatt(self.C, D, self.B)]
 
 
-class PenroseP3:
-    """ P3 Penrose tiling. """
+class TriangleGrid:
+    """ P3 Penrose tiling made of two types of triangles. """
     def __init__(self, initial_tiles):
         self.elements = initial_tiles
+    
+    def __iter__(self):
+        return iter(self.elements)
 
     def inflate(self, times=1):
         """ "Inflate" each triangle in the tiling ensemble."""
@@ -143,7 +150,6 @@ class PenroseP3:
     def add_y_flipped(self):
         self.elements.extend([e.flip_y() for e in self.elements])
 
-
     def remove_mirror_images(self):
         """
         Keep only one of each pair of tiles that are mirror images of each other.
@@ -158,15 +164,12 @@ class PenroseP3:
                 new_elements.append(t)
         self.elements = new_elements
 
-
-    def get_rhombus_tiles(self):
-        """
-        Get the rhombus representations of all tiles in the tiling.
-        """
-        tiles = copy.deepcopy(self)
-        tiles.remove_mirror_images()
-        return [Rhombus(t) for t in tiles.elements]
-
+    @property
+    def side(self):
+        return self.elements[0].side
+    
+    def __len__(self):
+        return len(self.elements)
 
 class Rhombus:
     """
@@ -179,33 +182,13 @@ class Rhombus:
         self.center = m
         self.tilt = t
         self.side = s
+        self.type = type(tri)
+        self.color = self.type == Fatt
 
         if isinstance(tri, Thin):
             self.topangle = math.pi / 5
         else:
             self.topangle = 3 * math.pi / 5
-
-        if False:   # Consistency checks (disabled for performance)
-            half_base = self.side * math.sin(self.topangle / 2)
-            orig_half_base = abs(tri.C - tri.A) / 2
-            if abs(half_base - orig_half_base) > TOL:
-                raise ValueError("Inconsistent side length and top angle in Rhombus initialization.")
-
-            height = self.side * math.cos(self.topangle / 2)
-            orig_height = abs(tri.B - tri.center)
-            if abs(height - orig_height) > TOL:
-                raise ValueError("Inconsistent side length and top angle in Rhombus initialization.")
-
-            uMB = cmath.exp(1j * self.tilt)          # Direction from M to B
-            uAC = 1j * uMB                           # Perpendicular direction (base direction)
-            orig_uAC = (tri.C - tri.A) / abs(tri.C - tri.A)
-            dot_product = (uAC.real * orig_uAC.real + uAC.imag * orig_uAC.imag)
-            if abs(dot_product) - 1 > TOL:
-                raise ValueError(f"Inconsistent base direction in Rhombus initialization. dot_product = {dot_product}")
-
-    def scale(self, factor):
-        self.center *= factor
-        self.side *= factor
 
     def triangle(self):
         half_base = self.side * math.sin(self.topangle / 2)
@@ -216,13 +199,18 @@ class Rhombus:
         B = self.center - height * uMB
         A = self.center + half_base * uAC
         C = self.center - half_base * uAC
+        return self.type(A, B, C)
 
-        if self.topangle == math.pi / 5:
-            return Thin(A, B, C)
-        elif self.topangle == 3 * math.pi / 5:
-            return Fatt(A, B, C)
-        else:
-            raise ValueError("Invalid top angle for Rhombus to Triangle conversion.")
+    def scale(self, factor):
+        self.center *= factor
+        self.side *= factor
+
+    def rotate(self, alpha):
+        self.center *= cmath.exp(1j * alpha)
+        self.tilt += alpha
+    
+    def translate(self, dx, dy):
+        self.center += dx + 1j * dy
 
     @property
     def vertices(self):
@@ -232,25 +220,43 @@ class Rhombus:
     def side_length(self):
         return abs(self.side)
 
-def distances_to_the_closest_neighbor(elements):
-    """
-    For each tile, compute the distance to the closest neighboring tile.
-    """
-    dists = Counter()
-    for i, t1 in enumerate(elements):
-        min_dist = float('inf')
-        c1 = t1.center
-        for j, t2 in enumerate(elements):
-            if i != j:
-                c2 = t2.center
-                dist = abs(c2 - c1)
-                if dist < min_dist:
-                    min_dist = dist
-        dists[TOL * round(min_dist/TOL)] += 1
+    @property
+    def angle(self):
+        return self.tilt
+    
+    @property
+    def x(self):
+        return self.center.real
+    
+    @property    
+    def y(self): 
+        return self.center.imag
 
-    print("Distances to closest neighbor:")
-    for dist in sorted(dists):
-        print(f"  {dist:6.3f}: {dists[dist]}")
 
-    return dists
-
+class PenGrid:
+    def __init__(self, triangles):
+        triangles = copy.deepcopy(triangles)
+        triangles.remove_mirror_images()
+        self.rhombuses = [Rhombus(t) for t in triangles]
+    
+    def rotate(self, alpha):
+        for h in self.rhombuses:
+            h.rotate(alpha)
+    
+    def translate(self, dx, dy):
+        for h in self.rhombuses:
+            h.translate(dx, dy)
+    
+    def scale(self, factor):
+        for h in self.rhombuses:
+            h.scale(factor)
+    
+    def __iter__(self):
+        return iter(self.rhombuses)
+    
+    def __len__(self):
+        return len(self.rhombuses)
+    
+    @property
+    def side(self):
+        return abs(self.rhombuses[0].side)
