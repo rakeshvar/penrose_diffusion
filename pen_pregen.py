@@ -1,6 +1,6 @@
 import copy
 
-from utils import deg, print_tile_stats, inscribed_square_halfside
+from utils import print_tile_stats, inscribed_square_halfside
 from pen_shapes import circle_tiling
 from pen_base import PenGrid
 
@@ -38,7 +38,7 @@ if __name__ == '__main__':
         print("Using default values")
         pen_side = 1/10.
         halfside = 2.
-    
+
     print(f"\thalfside: {halfside}")
     print(f"\tpen_side: {pen_side}")
 

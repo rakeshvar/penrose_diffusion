@@ -1,7 +1,6 @@
 import math
 import cmath
 import copy
-from collections import Counter
 from utils import cross
 
 TOL = 1.e-5                       # A small tolerance for comparing floats for equality
@@ -120,7 +119,7 @@ class TriangleGrid:
     """ P3 Penrose tiling made of two types of triangles. """
     def __init__(self, initial_tiles):
         self.elements = initial_tiles
-    
+
     def __iter__(self):
         return iter(self.elements)
 
@@ -167,7 +166,7 @@ class TriangleGrid:
     @property
     def side(self):
         return self.elements[0].side
-    
+
     def __len__(self):
         return len(self.elements)
 
@@ -208,7 +207,7 @@ class Rhombus:
     def rotate(self, alpha):
         self.center *= cmath.exp(1j * alpha)
         self.tilt += alpha
-    
+
     def translate(self, dx, dy):
         self.center += dx + 1j * dy
 
@@ -223,13 +222,13 @@ class Rhombus:
     @property
     def angle(self):
         return self.tilt
-    
+
     @property
     def x(self):
         return self.center.real
-    
-    @property    
-    def y(self): 
+
+    @property
+    def y(self):
         return self.center.imag
 
 
@@ -238,25 +237,25 @@ class PenGrid:
         triangles = copy.deepcopy(triangles)
         triangles.remove_mirror_images()
         self.rhombuses = [Rhombus(t) for t in triangles]
-    
+
     def rotate(self, alpha):
         for h in self.rhombuses:
             h.rotate(alpha)
-    
+
     def translate(self, dx, dy):
         for h in self.rhombuses:
             h.translate(dx, dy)
-    
+
     def scale(self, factor):
         for h in self.rhombuses:
             h.scale(factor)
-    
+
     def __iter__(self):
         return iter(self.rhombuses)
-    
+
     def __len__(self):
         return len(self.rhombuses)
-    
+
     @property
     def side(self):
         return abs(self.rhombuses[0].side)

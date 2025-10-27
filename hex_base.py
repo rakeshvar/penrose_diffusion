@@ -140,6 +140,10 @@ class HexXYA:
         return [(vx + self.x, vy + self.y) for vx, vy in vertices0]
 
 class HexGrid:
+    @classmethod
+    def from_list(cls, hexagons):
+        return cls([HexXYA(h) for h in hexagons])
+
     def __init__(self, hexagons):
         self.hexxyas = [HexXYA(h) for h in hexagons]
     
