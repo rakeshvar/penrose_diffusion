@@ -25,7 +25,7 @@ def save_svg(hexgird, filename, target_side=20):
     xmin = ymin = float('inf')
     xmax = ymax = float('-inf')
     for t in hexgird:
-        for x, y in t.vertices:
+        for y, x in t.vertices:
             xmin = min(xmin, x)
             xmax = max(xmax, x)
             ymin = min(ymin, y)

@@ -233,10 +233,13 @@ class Rhombus:
 
 
 class PenGrid:
-    def __init__(self, triangles):
-        triangles = copy.deepcopy(triangles)
-        triangles.remove_mirror_images()
-        self.rhombuses = [Rhombus(t) for t in triangles]
+    def __init__(self, triangles, from_rhombuses=False):
+        if from_rhombuses:
+            self.rhombuses = triangles
+        else:
+            triangles = copy.deepcopy(triangles)
+            triangles.remove_mirror_images()
+            self.rhombuses = [Rhombus(t) for t in triangles]
 
     def rotate(self, alpha):
         for h in self.rhombuses:

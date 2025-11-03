@@ -1,6 +1,6 @@
 import math
 import copy
-from utils import cross, svg_path
+from utils import cross, svg_path, vertexy
 from pen_base import PenGrid, TriangleGrid
 
 def svg_arc(U, V, W):
@@ -13,10 +13,10 @@ def svg_arc(U, V, W):
 
     # Ensure we draw the arc for the angular component < 180 deg
     US, UE = start - U, end - U
-    if cross(US, UE) > 0:
+    if cross(US, UE) < 0:
         start, end = end, start
 
-    return 'M {} {} A {} {} 0 0 0 {} {}'.format(start.real, start.imag, r, r, end.real, end.imag)
+    return 'M {} {} A {} {} 0 0 0 {} {}'.format(start.imag, start.real, r, r, end.imag, end.real)
 
 
 def svg_arcs(rhombus):
@@ -66,18 +66,24 @@ def save_svg(pengrid: PenGrid|TriangleGrid, filename, additional_config={}, targ
     xmax = ymax = float('-inf')
     for t in pengrid:
         for v in t.vertices:
-            xmin = min(xmin, v.real)
-            xmax = max(xmax, v.real)
-            ymin = min(ymin, v.imag)
-            ymax = max(ymax, v.imag)
+            y, x = vertexy(v)
+            xmin = min(xmin, x)
+            xmax = max(xmax, x)
+            ymin = min(ymin, y)
+            ymax = max(ymax, y)
 
     wd, ht = xmax-xmin, ymax-ymin
     m = config['margin']
-    viewbox = f'{xmin-wd*m} {ymin-ht*m} {wd+2*wd*m} {ht+2*ht*m}'
+    xmin -= m*wd
+    ymin -= m*ht
+    wd += 2*m*wd
+    ht += 2*m*ht
+    viewbox = f'{xmin} {ymin} {wd} {ht}'
 
     # Build SVG
     svg = ['<?xml version="1.0" encoding="utf-8"?>',
-        f'<svg viewBox="{viewbox}" preserveAspectRatio="xMidYMid meet" version="1.1" baseProfile="full" xmlns="http://www.w3.org/2000/svg" style="background-color: black;">',
+        f'<svg viewBox="{viewbox}" preserveAspectRatio="xMidYMid meet" version="1.1" baseProfile="full" xmlns="http://www.w3.org/2000/svg" style="background-color: white;">',
+        f'<rect x="{xmin}" y="{ymin}" width="{wd}" height="{ht}" fill="black"/>',
         f'<g style="stroke:{config["stroke-colour"]}; stroke-width: {config["base-stroke-width"]}; stroke-linejoin: round; opacity: {config["tile-opacity"]};">'
     ]
 
