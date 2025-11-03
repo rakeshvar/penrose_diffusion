@@ -55,6 +55,6 @@ def save_svg(hexgird, filename, target_side=20):
     with open(filename, 'w') as f:
         f.write(svg)
 
-    print(f"Saved SVG to {filename}.")
+    # print(f"Saved SVG to {filename}.")
     return svg
 

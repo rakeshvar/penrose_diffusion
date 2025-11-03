@@ -83,7 +83,7 @@ class ImageSet:
 class Generator:
     def __init__(self, imageset, symmetry, sample_size, tothalfside, unit_side):
         """
-        Build a grid covering square region ([-C, C] \times [-C, C]). C = tothalfside
+        Build a grid covering square region ([-C, C] × [-C, C]). C = tothalfside
         """
         if symmetry == 5:
             self.canvas = get_pen_mother_tiles(tothalfside, unit_side)
@@ -146,14 +146,20 @@ class Generator:
                 return 0
             else:
                 return mask[uu, vv]
+        def scale2hw(x):
+            return x/scaling
+        def scale2C(u):
+            return u*scaling
 
-        x0 = y0 = -self.halfside/2
+        x0 = np.random.uniform(-self.halfside, self.halfside-scale2C(H))
+        y0 = np.random.uniform(-self.halfside, self.halfside-scale2C(W))
+        scaled_unitside = scale2hw(self.unit_side)
         sets = [[], [], [], [], []]
         for i, h in enumerate(self.canvas):
-            u = (h.x-x0) / scaling
-            v = (h.y-y0) / scaling
-            u1, v1 = round(u-self.unit_side), round(v-self.unit_side)
-            u2, v2 = round(u+self.unit_side), round(v-self.unit_side)
+            u = scale2hw(h.x-x0)
+            v = scale2hw(h.y-y0)
+            u1, v1 = round(u-scaled_unitside), round(v-scaled_unitside)
+            u2, v2 = round(u+scaled_unitside), round(v-scaled_unitside)
             k = maskuv(u1, v1) + maskuv(u2, v1) + maskuv(u1, v2) + maskuv(u2, v2)
             sets[k].append(h)
 
@@ -166,13 +172,11 @@ class Generator:
             if len(ret) < self.sample_size:
                 ret.extend(sets[k][:self.sample_size - len(ret)])
 
-        if abs(len(sets[4])-self.sample_size)/self.sample_size > .1:
-            print(f"Chose a {name}({id}) shape:{(H, W)} on: {M} pixels ({M/(H*W):.0%}) scale = {scaling:.3f}")
-            print(f"\tUp   Scaled shape of grid: ±{self.halfside:.2f}->±{self.halfside/scaling:.2f}")
-            print(f"\tDown Scaled shape of mask: {H}->{H*scaling:.2f} {W}->{W*scaling:.2f}")
-            for k in range(5):
-                print(f"{k}: {len(sets[k])}")
-            print(f"{len(ret)} selected")
+        if True:
+            print(f"{name:20s}{id:02d} ({H:3d}, {W:3d}) {M/(H*W):.0%}"
+                  f"\t±{self.halfside:.1f}/{scaling:.3f} = ±{self.halfside/scaling:.0f}"
+                  f"\tmapped_to: ({x0:+.2f}->, {y0:+.2f}) to ({x0+scale2C(H):+.2f}, {y0+scale2C(W):+.2f})"
+                  f"\tsets: ({len(sets[4]):3d}, {len(sets[3]):3d}, {len(sets[2]):3d}, {len(sets[1]):3d}) ⇒ {len(ret):3d}")
 
         return ret, f"{name}-{number_in_class:02d}"
 
@@ -184,8 +188,7 @@ if __name__ == "__main__":
     for i in range(len(imageset)):
         sample, name = generator6.sample()
         sample = HexGrid.from_list(sample)
-        if len(sample) > 0:
-            hex_save_svg(sample, f"data/svgs_hex/{name}.svg")
+        hex_save_svg(sample, f"data/svgs_hex/{name}.svg")
 
     generator5 = Generator(imageset, symmetry=5, sample_size=500, tothalfside=5., unit_side=.1)
     for i in range(len(imageset)):
