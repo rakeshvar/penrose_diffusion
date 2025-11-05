@@ -153,30 +153,32 @@ class Generator:
 
         x0 = np.random.uniform(-self.halfside, self.halfside-scale2C(H))
         y0 = np.random.uniform(-self.halfside, self.halfside-scale2C(W))
-        scaled_unitside = scale2hw(self.unit_side)
+        scaled_unitside = scale2hw(self.unit_side)/2                       # hex: 1.6/2, pen: .76/2 or .97/2
         sets = [[], [], [], [], []]
         for i, h in enumerate(self.canvas):
             u = scale2hw(h.x-x0)
             v = scale2hw(h.y-y0)
             u1, v1 = round(u-scaled_unitside), round(v-scaled_unitside)
-            u2, v2 = round(u+scaled_unitside), round(v-scaled_unitside)
+            u2, v2 = round(u+scaled_unitside), round(v+scaled_unitside)
             k = maskuv(u1, v1) + maskuv(u2, v1) + maskuv(u1, v2) + maskuv(u2, v2)
             sets[k].append(h)
 
         """Point selection
-            * Gather all centers and sort by class (4 → most inside).
+            * Gather all centers and sort by class (4 → fully inside, 0 → fully outside).
             * Collect units until total count = sample size
         """
         ret = []
+        kk = 4
         for k in (4, 3, 2, 1):
             if len(ret) < self.sample_size:
                 ret.extend(sets[k][:self.sample_size - len(ret)])
+                kk = k
 
         if True:
             print(f"{name:20s}{id:02d} ({H:3d}, {W:3d}) {M/(H*W):.0%}"
-                  f"\t±{self.halfside:.1f}/{scaling:.3f} = ±{self.halfside/scaling:.0f}"
+                  f"\t±{self.halfside:.1f}/{scaling:.3f} = ±{self.halfside/scaling:.0f} {self.unit_side}->{scaled_unitside:.1f}"
                   f"\tmapped_to: ({x0:+.2f}->, {y0:+.2f}) to ({x0+scale2C(H):+.2f}, {y0+scale2C(W):+.2f})"
-                  f"\tsets: ({len(sets[4]):3d}, {len(sets[3]):3d}, {len(sets[2]):3d}, {len(sets[1]):3d}) ⇒ {len(ret):3d}")
+                  f"\tsets: ({len(sets[4]):3d}, {len(sets[3]):3d}, {len(sets[2]):3d}, {len(sets[1]):3d}) ⇒ {len(ret):3d} ({kk})")
 
         return ret, f"{name}-{number_in_class:02d}"
 

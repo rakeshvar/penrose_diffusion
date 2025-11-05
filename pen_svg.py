@@ -82,7 +82,7 @@ def save_svg(pengrid: PenGrid|TriangleGrid, filename, additional_config={}, targ
 
     # Build SVG
     svg = ['<?xml version="1.0" encoding="utf-8"?>',
-        f'<svg viewBox="{viewbox}" preserveAspectRatio="xMidYMid meet" version="1.1" baseProfile="full" xmlns="http://www.w3.org/2000/svg" style="background-color: white;">',
+        f'<svg viewBox="{viewbox}" preserveAspectRatio="xMidYMid meet" version="1.1" baseProfile="full" xmlns="http://www.w3.org/2000/svg">',
         f'<rect x="{xmin}" y="{ymin}" width="{wd}" height="{ht}" fill="black"/>',
         f'<g style="stroke:{config["stroke-colour"]}; stroke-width: {config["base-stroke-width"]}; stroke-linejoin: round; opacity: {config["tile-opacity"]};">'
     ]

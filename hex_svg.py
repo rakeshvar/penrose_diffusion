@@ -33,11 +33,16 @@ def save_svg(hexgird, filename, target_side=20):
 
     wd, ht = xmax-xmin, ymax-ymin
     m = config['margin']
-    viewbox = f'{xmin-wd*m} {ymin-ht*m} {wd+2*wd*m} {ht+2*ht*m}'
+    xmin -= m*wd
+    ymin -= m*ht
+    wd += 2*m*wd
+    ht += 2*m*ht
+    viewbox = f'{xmin} {ymin} {wd} {ht}'
 
     # Build SVG
     svg = ['<?xml version="1.0" encoding="utf-8"?>',
-        f'<svg viewBox="{viewbox}" preserveAspectRatio="xMidYMid meet" version="1.1" baseProfile="full" xmlns="http://www.w3.org/2000/svg" style="background-color: black;">',
+        f'<svg viewBox="{viewbox}" preserveAspectRatio="xMidYMid meet" version="1.1" baseProfile="full" xmlns="http://www.w3.org/2000/svg">',
+        f'<rect x="{xmin}" y="{ymin}" width="{wd}" height="{ht}" fill="black"/>',
         f'<g style="stroke:{config["stroke-colour"]}; stroke-width: {config["base-stroke-width"]}; stroke-linejoin: round;">'
     ]
 
