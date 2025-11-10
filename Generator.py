@@ -1,199 +1,165 @@
 import numpy as np
 from PIL import Image
-from pathlib import Path
+from abc import ABC, abstractmethod
+from typing import Optional
 
 from pen_base import PenGrid
 from hex_base import HexGrid
 from pen_pregen import get_pen_mother_tiles
 from hex_pregen import get_hex_mother_tiles
-from utils import inscribed_square_halfside, zealous_crop
+from utils import inscribed_square_halfside
 
 from hex_svg import save_svg as hex_save_svg
 from pen_svg import save_svg as pen_save_svg
 
-class ImageSet:
-    def __init__(self, folder):
-        self.folder = folder
-        self.images = []
-        self.number_in_class = []
-        self.class_name_to_id = dict()
-        self.class_id_to_name = dict()
+from ImageSet import ImageSet
 
-        self.class_ids = []
-        num_classes = 0
+class Generator(ABC):
+    unit_area:float = 1.0
+    rot_range:float = np.pi
 
-        self.num_on = []
-
-        for f in sorted(Path(folder).glob("*.gif")):
-            img = Image.open(f)
-            arr = np.array(img, dtype=np.uint8)
-
-            if False and arr[0,0] + arr[0,-1] + arr[-1,0] + arr[-1,-1] != 0:
-                print(f"{f.name}\t{arr.size:7d}{arr.shape}", end="\t")
-                unique, counts = np.unique(arr, return_counts=True)
-                for val, count in zip(unique, counts):
-                    print(f" {val:4d}: {count:7d} ({count/arr.size*100:.2f}%)", end="\t")
-                print("CHECK" if np.sum(arr==0) + np.sum(arr==1)  + np.sum(arr==255) != arr.size else "", end="\t")
-                print(f"Corner pixels: {arr[0,0]} {arr[0,-1]} {arr[-1,0]} {arr[-1,-1]}")
-
-            arr[arr > 0] = 1                   # Some images have values 255 for ON
-            arr = zealous_crop(arr, margin=5)
-            self.images.append(arr)
-            self.num_on.append(np.sum(arr))
-
-            # Zealous clip the image to remove the sides and keep only the central on part
-
-            class_name, num = f.stem.split("-")
-            if class_name not in self.class_name_to_id:
-                self.class_name_to_id[class_name] = num_classes
-                self.class_id_to_name[num_classes] = class_name
-                num_classes += 1
-
-            self.number_in_class.append(int(num))
-            self.class_ids.append(self.class_name_to_id[class_name])
-
-        self.num_on = np.array(self.num_on)
-        self.num_classes = num_classes
-        self.number_in_class = np.array(self.number_in_class)
-        self.class_ids = np.array(self.class_ids)
-
-        # print(f"Found {len(self.images)} images")
-        # print(f"  Num Classes: {self.num_classes}")
-        # for class_num in range(self.num_classes):
-        #     print(f"    Class {class_num} {self.class_id_to_name[class_num]}: {np.sum(self.class_ids == class_num)}")
-        # input("Press Enter to continue...")
-
-    def __len__(self):
-        return len(self.images)
-
-    def __getitem__(self, idx):
-        id = self.class_ids[idx]
-        name = self.class_id_to_name[id]
-        number_in_class = self.number_in_class[idx]
-        return self.images[idx], id, name, self.num_on[idx], number_in_class
-
-    def __iter__(self):
-        for i in range(len(self)):
-            yield self.get_random_sample()
-
-    def get_random_sample(self):
-        idx = np.random.randint(0, len(self))
-        return self[idx]
-
-class Generator:
-    def __init__(self, imageset, symmetry, sample_size, tothalfside, unit_side):
+    def __init__(self, imageset, sample_size, target_halfside, unit_side):
         """
         Build a grid covering square region ([-C, C] × [-C, C]). C = tothalfside
         """
-        if symmetry == 5:
-            self.canvas = get_pen_mother_tiles(tothalfside, unit_side)
-            pen_save_svg(self.canvas, "pen_canvas.svg")
-        elif symmetry == 6:
-            self.canvas = get_hex_mother_tiles(tothalfside, unit_side)
-            hex_save_svg(self.canvas, "hex_canvas.svg")
-        else:
-            raise ValueError(f"Invalid symmetry: {symmetry}")
+
+        self.canvas = self._get_mother_tiles(target_halfside, unit_side)
+        self.canvas_xy = np.array([(h.x, h.y) for h in self.canvas], dtype=float)
+        self.colors = np.array([h.color for h in self.canvas])
+        self.angles = np.array([h.angle for h in self.canvas])
+        self.sides = np.array([h.side for h in self.canvas]) 
 
         self.imageset = imageset
-        self.symmetry = symmetry
         self.halfside = inscribed_square_halfside(self.canvas)
         self.unit_side = unit_side
         self.sample_size = sample_size
 
-        """* Take the sub-square region ([-C, C]^2).
-        Count how many hex centers fall within it (D*4C**2).
-        The number of hexes per unit area = D
-        """
-        count = 0
-        for h in self.canvas:
-            if abs(h.x) <= self.halfside and abs(h.y) <= self.halfside:
-                count += 1
-        self.density = count / (4 * self.halfside**2)
-        count1 = 0
-        for h in self.canvas:
-            if abs(h.x) <= .5 and abs(h.y) <= .5:
-                count1 += 1
-
-
         print(f"  UnitSide: {self.unit_side}")
-        print(f"  CanvasHalfSide: {self.halfside:.2f} (vs. {tothalfside})")
-        print(f"  Density: {self.density:.3f} (vs. {count1})")
+        print(f"  CanvasHalfSide: {self.halfside:.2f} (vs. {target_halfside})")
+        print(f"  Density: {self.density:.3f}")
         print(f"  Sampling Size: {self.sample_size}")
 
         self.imagesetiter = iter(self.imageset)
 
-    def sample(self):
-        mask, id, name, M, number_in_class = next(self.imagesetiter)
-        H, W = mask.shape
+    @abstractmethod
+    def _get_mother_tiles(self, tothalfside, unit_side):
+        raise NotImplementedError
 
-        # Scale the mask so that, when placed on the grid, roughly sample_size units lie inside it.
-        scaling = np.sqrt(self.sample_size / (M * self.density))
+    @property
+    def area_of_one_unit(self):
+        return self.unit_area * self.unit_side ** 2
+        
+    @property
+    def density(self):
+        return 1./self.area_of_one_unit
+    
+    def get_sample(self):
+        sample = next(self.imagesetiter)
+        H, W = sample.mask.shape
 
-        """ Coverage classification
-        * For each unit center:
-            * Convert its ((x,y)) to mask coordinates ((u,v)) using the scaled mask mapping.
-            * Approximate vertices with four corners ((u1,v1), (u2,v2), (u3,v3), (u4,v4)).
-            * Count how many are “on” → assign **coverage class 0–4** (inside→outside gradient).
-            * Classify the point into **class k = {0..4}** depending on this count.
-                * 4 → deep inside
-                * 3 → near inside edge
-                * 2 → straddling
-                * 1 → just outside
-                * 0 → outside
-        """
-        def maskuv(uu, vv):
-            if uu < 0 or vv < 0 or uu >= H or vv >= W:
-                return 0
-            else:
-                return mask[uu, vv]
-        def scale2hw(x):
-            return x/scaling
-        def scale2C(u):
-            return u*scaling
+        scaling = np.sqrt(self.sample_size / (sample.on * self.density))
+        c2hw = lambda x: x / scaling
+        hw2c = lambda u: u * scaling
+        eqsqhfsd = c2hw(np.sqrt(self.area_of_one_unit)) / 2.0  # Equivalent square half side
 
-        x0 = np.random.uniform(-self.halfside, self.halfside-scale2C(H))
-        y0 = np.random.uniform(-self.halfside, self.halfside-scale2C(W))
-        scaled_unitside = scale2hw(self.unit_side)/2                       # hex: 1.6/2, pen: .76/2 or .97/2
-        sets = [[], [], [], [], []]
-        for i, h in enumerate(self.canvas):
-            u = scale2hw(h.x-x0)
-            v = scale2hw(h.y-y0)
-            u1, v1 = round(u-scaled_unitside), round(v-scaled_unitside)
-            u2, v2 = round(u+scaled_unitside), round(v+scaled_unitside)
-            k = maskuv(u1, v1) + maskuv(u2, v1) + maskuv(u1, v2) + maskuv(u2, v2)
-            sets[k].append(h)
+        coverage = np.zeros(self.canvas_xy.shape[0], dtype=int)
+        def update_coverage(uu, vv):
+            is_in_bounds = (uu >= 0) & (uu < H) & (vv >= 0) & (vv < W)
+            coverage[is_in_bounds] += sample.mask[uu[is_in_bounds], vv[is_in_bounds]]            
 
-        """Point selection
-            * Gather all centers and sort by class (4 → fully inside, 0 → fully outside).
-            * Collect units until total count = sample size
-        """
-        ret = []
-        kk = 4
-        for k in (4, 3, 2, 1):
-            if len(ret) < self.sample_size:
-                ret.extend(sets[k][:self.sample_size - len(ret)])
-                kk = k
+        # Rotate
+        theta = np.random.uniform(-self.rot_range, self.rot_range)
+        rot_mat = np.array([
+            [np.cos(theta), np.sin(theta)],
+            [-np.sin(theta), np.cos(theta)]  # minus sin goes here because we are post multiplying @ rot_mat
+        ])
+        xy_rot = self.canvas_xy @ rot_mat
 
-        if True:
-            print(f"{name:20s}{id:02d} ({H:3d}, {W:3d}) {M/(H*W):.0%}"
-                  f"\t±{self.halfside:.1f}/{scaling:.3f} = ±{self.halfside/scaling:.0f} {self.unit_side}->{scaled_unitside:.1f}"
-                  f"\tmapped_to: ({x0:+.2f}->, {y0:+.2f}) to ({x0+scale2C(H):+.2f}, {y0+scale2C(W):+.2f})"
-                  f"\tsets: ({len(sets[4]):3d}, {len(sets[3]):3d}, {len(sets[2]):3d}, {len(sets[1]):3d}) ⇒ {len(ret):3d} ({kk})")
+        # Translate
+        x0 = np.random.uniform(-self.halfside, self.halfside - hw2c(H))
+        y0 = np.random.uniform(-self.halfside, self.halfside - hw2c(W))
+        new_xy = xy_rot - np.array([x0, y0])
 
-        return ret, f"{name}-{number_in_class:02d}"
+
+        uv = c2hw(new_xy)
+        u = uv[:, 0]
+        v = uv[:, 1]
+
+        # compute corner indices
+        u1 = np.round(u - eqsqhfsd).astype(int)
+        v1 = np.round(v - eqsqhfsd).astype(int)
+        u2 = np.round(u + eqsqhfsd).astype(int)
+        v2 = np.round(v + eqsqhfsd).astype(int)
+        update_coverage(u1, v1)
+        update_coverage(u1, v2)
+        update_coverage(u2, v1)
+        update_coverage(u2, v2)
+    
+        sets_idx = {val: np.flatnonzero(coverage == val) for val in (1, 2, 3, 4)}
+        ret = np.zeros((self.sample_size, 5), dtype=float)
+        taken = 0
+        take_now = 5
+
+        for val in (4, 3, 2, 1):
+            if taken >= self.sample_size:
+                break
+            take_now = val
+            idxs = sets_idx[val]
+            take = idxs[:self.sample_size - taken]
+            if len(take) > 0:
+                ret[taken:taken + len(take), :2] = new_xy[take]
+                ret[taken:taken + len(take), 2] = self.colors[take]
+                ret[taken:taken + len(take), 3] = self.angles[take] + theta
+                ret[taken:taken + len(take), 4] = self.sides[take]
+                taken += len(take)
+
+        name = f"{sample.classname}-{sample.inclassid:02d}"
+        # diagnostics printout
+        if take_now < 2 or taken < self.sample_size:
+            sets_idx = [np.where(coverage == val)[0] for val in range(5)]  # 0..4
+            print(f"{sample.classid:02d} {name:20s} ({H:3d}, {W:3d}) {sample.on/(H*W):.0%}"
+              f"\t±{self.halfside:.1f}/{scaling:.3f} = ±{self.halfside/scaling:.0f} {self.unit_side}->{2*eqsqhfsd:.1f}"
+              f"\tmapped_to: ({x0:+.2f}, {y0:+.2f}) to ({x0+hw2c(H):+.2f}, {y0+hw2c(W):+.2f}) rot={theta:+.2f}({theta*180/np.pi:+.0f}°)"
+              f"\tsets: ({len(sets_idx[4]):3d}, {len(sets_idx[3]):3d}, {len(sets_idx[2]):3d}, {len(sets_idx[1]):3d}) ⇒ {taken:3d} {take_now}")
+
+        # return the actual canvas objects in the same order as original code
+        return ret, name
+
+
+class Generator6(Generator):
+    unit_area = 3. * np.sqrt(3.) / 2.  
+    rot_range = np.pi/6
+
+    def _get_mother_tiles(self, tothalfside, unit_side):
+        canvas = get_hex_mother_tiles(tothalfside, unit_side)
+        hex_save_svg(canvas, "hex_canvas.svg")
+        return canvas
+    
+    
+from pen_base import psi, psi2
+class Generator5(Generator):
+    unit_area = np.sin(np.pi/5) * psi2 + np.sin(2*np.pi/5) * psi
+    rot_range = np.pi/2
+
+    def _get_mother_tiles(self, tothalfside, unit_side):
+        canvas = get_pen_mother_tiles(tothalfside, unit_side)
+        pen_save_svg(canvas, "pen_canvas.svg")
+        return canvas
+    
 
 if __name__ == "__main__":
+    from tqdm import tqdm
     folder = "data/MPEG7"
     imageset = ImageSet(folder)
 
-    generator6 = Generator(imageset, symmetry=6, sample_size=500, tothalfside=5., unit_side=.05)
-    for i in range(len(imageset)):
-        sample, name = generator6.sample()
-        sample = HexGrid.from_list(sample)
-        hex_save_svg(sample, f"data/svgs_hex/{name}.svg")
+    generator6 = Generator6(imageset, sample_size=500, target_halfside=5., unit_side=.05)
+    for i in tqdm(range(len(imageset))):
+        sample_matrix, name = generator6.get_sample()
+        grid = HexGrid(sample_matrix)
+        hex_save_svg(grid, f"data/svgs_hex/{i:04d}_{name}.svg")
 
-    generator5 = Generator(imageset, symmetry=5, sample_size=500, tothalfside=5., unit_side=.1)
-    for i in range(len(imageset)):
-        sample, name = generator5.sample()
-        sample = PenGrid(sample, from_rhombuses=True)
-        pen_save_svg(sample, f"data/svgs_pen/{name}.svg")
+    generator5 = Generator5(imageset, sample_size=500, target_halfside=5., unit_side=.1)
+    for i in tqdm(range(len(imageset))):
+        sample_matrix, name = generator5.get_sample()
+        grid = PenGrid(sample_matrix, from_np=True)
+        pen_save_svg(grid, f"data/svgs_pen/{i:04d}_{name}.svg")

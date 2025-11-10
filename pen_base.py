@@ -176,19 +176,30 @@ class Rhombus:
     angle: angle of MB relative to horizontal (in radians)
     side: length of side AB
     """
-    def __init__(self, tri:Triangle):
-        m, t, s = tri.reparametrize()
-        self.center = m
-        self.tilt = t
-        self.side = s
-        self.type = type(tri)
-        self.color = self.type == Fatt
+    def __init__(self, tri):
+        if isinstance(tri, Triangle):
+            m, t, s = tri.reparametrize()
+            self.center = m
+            self.tilt = t
+            self.side = s
+            self.type = type(tri)
+            self.color = self.type == Fatt
 
-        if isinstance(tri, Thin):
-            self.topangle = math.pi / 5
         else:
-            self.topangle = 3 * math.pi / 5
+            self.center = tri.center
+            self.tilt = tri.tilt
+            self.side = tri.side
+            self.color = tri.color
+            self.type = Fatt if tri.color else Thin 
 
+
+    @property
+    def topangle(self):
+            if self.type == Thin:
+                return math.pi / 5
+            else:
+                return 3 * math.pi / 5
+    
     def triangle(self):
         half_base = self.side * math.sin(self.topangle / 2)
         height = self.side * math.cos(self.topangle / 2)
@@ -231,11 +242,15 @@ class Rhombus:
     def y(self):
         return self.center.imag
 
+from collections import namedtuple
 
 class PenGrid:
-    def __init__(self, triangles, from_rhombuses=False):
+    def __init__(self, triangles, from_rhombuses=False, from_np=False):
         if from_rhombuses:
             self.rhombuses = triangles
+        elif from_np:
+            Rhom = namedtuple('Rhom', ['center', 'color', 'tilt', 'side'])
+            self.rhombuses = [Rhombus(Rhom(complex(t[0], t[1]), t[2], t[3], t[4])) for t in triangles]
         else:
             triangles = copy.deepcopy(triangles)
             triangles.remove_mirror_images()

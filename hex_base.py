@@ -138,15 +138,30 @@ class HexXYA:
     def vertices(self):
         vertices0 = Hexagon(0, 0, 0, self.side, self.angle).vertices
         return [(vx + self.x, vy + self.y) for vx, vy in vertices0]
+    
+    def __str__(self) -> str:
+        return f"HexXYA {self.x:7.2f} {self.y:7.2f} {self.angle:7.2f} ({math.degrees(self.angle):+3.0f}) {self.color} {self.side:.1f}"
+
+import numpy as np
+from collections import namedtuple
 
 class HexGrid:
-    @classmethod
-    def from_list(cls, hexagons):
-        return cls([HexXYA(h) for h in hexagons])
-
     def __init__(self, hexagons):
-        self.hexxyas = [HexXYA(h) for h in hexagons]
-    
+        if isinstance(hexagons, HexagonGrid):
+            self.hexxyas = [HexXYA(h) for h in hexagons]
+        elif isinstance(hexagons, list):
+            if isinstance(hexagons[0], Hexagon):
+                self.hexxyas = [HexXYA(h) for h in hexagons]
+            elif isinstance(hexagons[0], HexXYA):
+                self.hexxyas = hexagons
+            else:
+                raise ValueError(f"Type of list elements not supported: {type(hexagons[0])}")
+        elif isinstance(hexagons, np.ndarray):
+            hextuple = namedtuple('hextuple', ['center', 'color', 'angle', 'side'])
+            self.hexxyas = [HexXYA(hextuple((h[0], h[1]), h[2], h[3], h[4])) for h in hexagons]
+        else:
+            raise ValueError(f"Type of hexagons not supported: {type(hexagons)}")
+
     def rotate(self, alpha):
         for h in self.hexxyas:
             h.rotate(alpha)
