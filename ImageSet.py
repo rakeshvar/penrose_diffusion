@@ -3,7 +3,7 @@ from PIL import Image
 from pathlib import Path
 from collections import namedtuple
 
-from utils import inscribed_square_halfside, zealous_crop
+from utils import zealous_crop
 
 Sample = namedtuple("Sample", ["mask", "classid", "on", "classname", "inclassid"])
 
@@ -28,7 +28,7 @@ class ImageSet:
                 print(f"Corner pixels: {arr[0,0]} {arr[0,-1]} {arr[-1,0]} {arr[-1,-1]}")
 
             arr[arr > 0] = 1                   # Some images have values 255 for ON
-            arr = zealous_crop(arr, margin=5) 
+            arr = zealous_crop(arr, margin=5)
 
             class_name, inclassid = f.stem.split("-")
             if class_name not in self.class_name_to_id:

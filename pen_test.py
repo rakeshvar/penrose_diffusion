@@ -4,7 +4,7 @@ import copy
 from collections import Counter
 from utils import deg, TOL
 
-from pen_base import Triangle, TriangleGrid, Rhombus, PenGrid
+from pen_base import Triangle, TriangleGrid, Rhombus
 from pen_svg import save_svg
 from pen_shapes import circle_tiling
 

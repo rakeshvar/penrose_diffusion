@@ -72,8 +72,9 @@ class Triangle:
         MB = self.B - M
         angle = cmath.phase(MB)
         side = abs(self.B - self.A)
-        signa = 1 if cross(MB, self.C - self.A) > 0 else -1
-        side *= signa
+        if cross(MB, self.C - self.A) < 0:
+            angle += math.pi
+        angle = (angle + math.pi) % (2 * math.pi) - math.pi
         return M, angle, side
 
     @property
@@ -190,7 +191,7 @@ class Rhombus:
             self.tilt = tri.tilt
             self.side = tri.side
             self.color = tri.color
-            self.type = Fatt if tri.color else Thin 
+            self.type = Fatt if tri.color else Thin
 
 
     @property
@@ -199,7 +200,7 @@ class Rhombus:
                 return math.pi / 5
             else:
                 return 3 * math.pi / 5
-    
+
     def triangle(self):
         half_base = self.side * math.sin(self.topangle / 2)
         height = self.side * math.cos(self.topangle / 2)
