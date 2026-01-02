@@ -43,26 +43,15 @@ import numpy as np
 
 def inscribed_square_halfside(grid):
     """
-    Given N points where the first two columns are (x, y),
-    rotate by 45°, find the limiting extent, and return diag/sqrt(2).
+    Given a set of points, it will give the half-side of the smallest inscribed square.
+    The simple appoarch works because the grid is such that the in-circle touches (x_max, 0) or (0, y_max).
     """
-    centers = [h.center for h in grid]
-    if isinstance(centers[0], complex):
-        centers = [reim(c) for c in centers]
-    xy = np.array(centers, dtype=float)
+    try:
+        l1, l2 = [h.center[0] for h in grid], [h.center[1] for h in grid]
+    except:
+        l1, l2 = [h.center.real for h in grid], [h.center.imag for h in grid]
 
-    theta = np.deg2rad(45)
-    R = np.array([[np.cos(theta), -np.sin(theta)],
-                  [np.sin(theta),  np.cos(theta)]])
-    rot_xy = xy @ R.T
-
-    xmin, xmax = rot_xy[:, 0].min(), rot_xy[:, 0].max()
-    ymin, ymax = rot_xy[:, 1].min(), rot_xy[:, 1].max()
-    diag = min(xmax, -xmin, ymax, -ymin)
-
-    s = diag / np.sqrt(2)
-    print(f"Grid size: {len(grid):4d} Inscribed_square_halfside: {s:6.1f}")
-    return s
+    return min(max(map(abs, l1)), max(map(abs, l2))) / math.sqrt(2)
 
 def print_tile_stats(grid):
     # Calculate and print some tile statistics

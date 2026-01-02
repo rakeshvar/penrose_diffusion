@@ -13,7 +13,7 @@ from pen_svg import save_svg as pen_save_svg
 from ImageSet import ImageSet
 
 class Generator(ABC):
-    unit_area:float = 1.0
+    area_with_unit_side:float = 1.0
     rot_range:float = np.pi
 
     def __init__(self, imageset, sample_size, target_halfside, unit_side):
@@ -44,21 +44,25 @@ class Generator(ABC):
         raise NotImplementedError
 
     @property
-    def area_of_one_unit(self):
-        return self.unit_area * self.unit_side ** 2
+    def area_of_one_polygon(self):
+        return self.area_with_unit_side * self.unit_side ** 2
 
     @property
     def density(self):
-        return 1./self.area_of_one_unit
+        return 1./self.area_of_one_polygon
 
-    def get_sample(self):
-        sample = next(self.imagesetiter)
+    def get_sample(self, class_id=None, inclassid=None):
+        if class_id is None:
+            sample = next(self.imagesetiter)
+        else:
+            sample = self.imageset.get_particular_sample(class_id, inclassid) # TODO
+
         H, W = sample.mask.shape
 
         scaling = np.sqrt(self.sample_size / (sample.on * self.density))
         c2hw = lambda x: x / scaling
         hw2c = lambda u: u * scaling
-        eqsqhfsd = c2hw(np.sqrt(self.area_of_one_unit)) / 2.0  # Equivalent square half side
+        eqsqhfsd = c2hw(np.sqrt(self.area_of_one_polygon)) / 2.0  # Equivalent square half side
 
 
         # Rotate Canvas
@@ -95,7 +99,7 @@ class Generator(ABC):
         update_coverage(u + eqsqhfsd, v + eqsqhfsd)
 
         sets_idx = {val: np.flatnonzero(coverage == val) for val in (1, 2, 3, 4)}
-        ret = np.zeros((self.sample_size, 5), dtype=float)
+        ret = np.zeros((self.sample_size, 4), dtype=float)
         taken = 0
         take_now = 5
 
@@ -107,9 +111,8 @@ class Generator(ABC):
             take = idxs[:self.sample_size - taken]
             if len(take) > 0:
                 ret[taken:taken + len(take), :2] = new_xy[take]
-                ret[taken:taken + len(take), 2] = self.colors[take]
-                ret[taken:taken + len(take), 3] = self.angles[take] + theta
-                ret[taken:taken + len(take), 4] = self.sides[take]
+                ret[taken:taken + len(take), 2] = self.angles[take] + theta
+                ret[taken:taken + len(take), 3] = self.colors[take]
                 taken += len(take)
 
         name = f"{sample.classname}-{sample.inclassid:02d}"
@@ -122,11 +125,11 @@ class Generator(ABC):
               f"\tsets: ({len(sets_idx[4]):3d}, {len(sets_idx[3]):3d}, {len(sets_idx[2]):3d}, {len(sets_idx[1]):3d}) ⇒ {taken:3d} {take_now}")
 
         # return the actual canvas objects in the same order as original code
-        return ret, name
+        return {'x':ret, 'y':sample.classid, 'name':name}
 
 
 class Generator6(Generator):
-    unit_area = 3. * np.sqrt(3.) / 2.
+    area_with_unit_side = 3. * np.sqrt(3.) / 2.  # Area of a hexagon with side 1
     rot_range = np.pi/6
 
     def _get_mother_tiles(self, tothalfside, unit_side):
@@ -137,7 +140,7 @@ class Generator6(Generator):
 
 from pen_base import psi, psi2
 class Generator5(Generator):
-    unit_area = np.sin(np.pi/5) * psi2 + np.sin(2*np.pi/5) * psi
+    area_with_unit_side = np.sin(np.pi/5) * psi2 + np.sin(2*np.pi/5) * psi # Weighted average of areas of rhombuses with side 1
     rot_range = np.pi/2
 
     def _get_mother_tiles(self, tothalfside, unit_side):
@@ -155,12 +158,14 @@ if __name__ == "__main__":
 
     generator6 = Generator6(imageset, sample_size=500, target_halfside=5., unit_side=.05)
     for i in tqdm(range(len(imageset))):
-        sample_matrix, name = generator6.get_sample()
-        grid = HexGrid(sample_matrix)
-        hex_save_svg(grid, f"data/svgs_hex/{name}.svg")
+        sample = generator6.get_sample()
+        grid = HexGrid(sample['x'])
+        hex_save_svg(grid, f"data/svgs_hex/{sample['name']}.svg")
+        break
 
     generator5 = Generator5(imageset, sample_size=500, target_halfside=5., unit_side=.1)
     for i in tqdm(range(len(imageset))):
-        sample_matrix, name = generator5.get_sample()
-        grid = PenGrid(sample_matrix, from_np=True)
-        pen_save_svg(grid, f"data/svgs_pen/{name}.svg")
+        sample = generator5.get_sample()
+        grid = PenGrid(sample['x'], from_np=True)
+        pen_save_svg(grid, f"data/svgs_pen/{sample['name']}.svg")
+        break

@@ -16,7 +16,10 @@ def svg_arc(U, V, W):
     if cross(US, UE) < 0:
         start, end = end, start
 
-    return 'M {} {} A {} {} 0 0 0 {} {}'.format(start.imag, start.real, r, r, end.imag, end.real)
+    sr, si = vertexy(start)
+    er, ei = vertexy(end)
+    r = round(r)
+    return f'M {si} {sr} A {r} {r} 0 0 0 {ei} {er}'
 
 
 def svg_arcs(rhombus):

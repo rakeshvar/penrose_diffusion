@@ -1,7 +1,8 @@
 import numpy as np
 from PIL import Image
 from pathlib import Path
-from collections import namedtuple
+from collections import defaultdict, namedtuple
+from tqdm import tqdm
 
 from utils import zealous_crop
 
@@ -15,7 +16,8 @@ class ImageSet:
         num_classes = 0
         self.samples = []
 
-        for f in sorted(Path(folder).glob("*.gif")):
+        print("Loading images...")
+        for f in tqdm(sorted(Path(folder).glob("*.gif"))):
             img = Image.open(f)
             arr = np.array(img, dtype=np.uint8)
 
@@ -42,10 +44,14 @@ class ImageSet:
 
         self.num_classes = num_classes
 
+        self.samples_lookup = defaultdict(dict)
+        for s in self.samples:
+            self.samples_lookup[s.classid][s.inclassid] = s
+
         print(f"Found {len(self.samples)} images")
         print(f"  Num Classes: {self.num_classes}")
         for class_num in range(self.num_classes):
-            print(f"    Class {class_num} {self.class_id_to_name[class_num]}: {len([s for s in self.samples if s.classid == class_num])} samples")
+            print(f"    Class {class_num} {self.class_id_to_name[class_num]}: {len([s.inclassid for s in self.samples if s.classid == class_num])} samples")
 
     def __len__(self):
         return len(self.samples)
@@ -60,4 +66,12 @@ class ImageSet:
     def get_random_sample(self):
         idx = np.random.randint(0, len(self))
         return self[idx]
+    
+    def get_particular_sample(self, class_id, inclassid):   # inclassid is indexed from 1 in the data folder
+        try:
+            return self.samples_lookup[class_id][inclassid+1]
+        except KeyError:
+            print(f"Could not find sample {class_id}-{inclassid+1}")
+            raise KeyError
+
 
