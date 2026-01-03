@@ -246,12 +246,13 @@ class Rhombus:
 from collections import namedtuple
 
 class PenGrid:
-    def __init__(self, triangles, from_rhombuses=False, from_np=False):
+    def __init__(self, triangles, from_rhombuses=False, from_np=False, side=None):
         if from_rhombuses:
             self.rhombuses = triangles
         elif from_np:
+            assert side is not None, "Side must be specified."
             Rhom = namedtuple('Rhom', ['center', 'color', 'tilt', 'side'])
-            self.rhombuses = [Rhombus(Rhom(complex(t[0], t[1]), t[2], t[3], t[4])) for t in triangles]
+            self.rhombuses = [Rhombus(Rhom(complex(t[0], t[1]), t[2], t[3], side)) for t in triangles]
         else:
             triangles = copy.deepcopy(triangles)
             triangles.remove_mirror_images()

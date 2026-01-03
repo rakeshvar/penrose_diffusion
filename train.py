@@ -1,18 +1,25 @@
 import argparse
-import torch
-import torch.nn.functional as F
+import yaml
 from tqdm import tqdm
 from datetime import datetime
 from pathlib import Path
 
-# Custom modules
+import torch
+import torch.nn.functional as F
 from ddim import DDIMDiffusion, TransformerDenoiser
 from dataset_load import GPUTensorLoader
+
+from hex_base import HexGrid
+from pen_base import PenGrid
+from hex_svg import save_svg as hex_save_svg
+from pen_svg import save_svg as pen_save_svg
 
 #--------------------------------------------
 # Argument Parsing
 #--------------------------------------------
 parser = argparse.ArgumentParser(description="Train DDIM Transformer")
+parser.add_argument('-g', '--config', type=str, default='base', 
+                    help='Config to use from configs.yaml (e.g., toy, base, large)')
 parser.add_argument('-d', '--data_path', type=str, default='data/Data_hex_s768_c110.npz', 
                     help='Path to the .npz data file')
 parser.add_argument('-c', '--checkpoint_path', type=str, default=None, 
@@ -30,30 +37,56 @@ else:
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 print(f"Using device: {device}")
 
+if 'hex' in str(data_path):
+    symmetry = 6
+elif 'pen' in str(data_path):
+    symmetry = 5
+else:
+    raise ValueError(f"Could not figure out hexagons or pentagons from {data_path}")
+
+#--------------------------------------------
+# Load Configuration
+#--------------------------------------------
+config_file = 'configs.yaml'
+print(f"Loading config group '{args.config}' from {config_file}...")
+with open(config_file, 'r') as f:
+    all_configs = yaml.safe_load(f)
+
+if args.config not in all_configs:
+    available = list(all_configs.keys())
+    # Filter out anchors if they show up as keys (depends on yaml loader version)
+    available = [k for k in available if not k.startswith('default')] 
+    raise ValueError(f"Group '{args.config}' not found. Available groups: {available}")
+
+config = all_configs[args.config]
+
+model_config = config['model']
+train_config = config['train']
+data_path_str = config['data_path']
+
+#--------------------------------------------
+# Setup
+#--------------------------------------------
+device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+print(f"Using device: {device}")
+
+if args.checkpoint_path:
+    ckpt_path = Path(args.checkpoint_path)
+else:
+    timestamp = datetime.now().strftime("%m%d_%H%M%S")
+    ckpt_path = Path(f"ckpt_{args.group}_{timestamp}.pt")
+    print(f"Checkpoint will save to: {ckpt_path}")
+
 #--------------------------------------------
 # Load Data
 #--------------------------------------------
-BATCH_SZ = 32
-dataloader = GPUTensorLoader(data_path, device, batch_size=BATCH_SZ, shuffle=True)
-
-#--------------------------------------------
-# 3. Hyperparameters & Config
-#--------------------------------------------
-config = {
-    'point_dim': dataloader.point_dim,  # Auto-filled
-    'noise_dim': 3,
-    'num_classes': 70,
-    'class_embed_dim': 256,
-    'time_embed_dim': 256,
-    'd_model': 512,
-    'num_heads': 8,
-    'num_layers': 6,
-    'dropout': 0.1,
-    'max_points': dataloader.num_points, # Auto-filled
-    'lr': 1e-4,
-    'batch_size': BATCH_SZ,
-    'num_timesteps': 1000
-}
+print(f"Loading data from {data_path_str}...")
+dataloader = GPUTensorLoader(
+    Path(data_path_str), 
+    device, 
+    batch_size=train_config['batch_size'], 
+    shuffle=True
+)
 
 #--------------------------------------------
 # 4. Model Initialization
@@ -61,14 +94,11 @@ config = {
 
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
-model = TransformerDenoiser(**{k: v for k, v in config.items() 
-                                if k in ['point_dim', 'noise_dim', 'num_classes', 
-                                        'class_embed_dim', 'time_embed_dim', 'd_model',
-                                        'num_heads', 'num_layers', 'dropout', 'max_points']})
+model = TransformerDenoiser(**model_config)
 model.to(device)
 
-diffusion = DDIMDiffusion(num_timesteps=config['num_timesteps'])
-optimizer = torch.optim.AdamW(model.parameters(), lr=config['lr'])
+diffuser = DDIMDiffusion(num_timesteps=train_config['num_timesteps'])
+optimizer = torch.optim.AdamW(model.parameters(), lr=train_config['lr'])
 
 #--------------------------------------------
 # 5. Resume Logic
@@ -76,43 +106,31 @@ optimizer = torch.optim.AdamW(model.parameters(), lr=config['lr'])
 start_epoch = 0
 
 if ckpt_path.exists():
-    print(f"Found checkpoint at {ckpt_path}. Loading...")
-    try:
-        checkpoint = torch.load(ckpt_path, map_location=device)
-        model.load_state_dict(checkpoint['model_state_dict'])
-        optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
-        start_epoch = checkpoint['epoch'] + 1
-        
-        # Validation
-        if 'config' in checkpoint:
-            saved_pts = checkpoint['config'].get('max_points')
-            if saved_pts != config['max_points']:
-                raise ValueError(f"Checkpoint max_points ({saved_pts}) != Data max_points ({config['max_points']})")
-        
-        print(f"Resuming training from epoch {start_epoch}")
-    except Exception as e:
-        print(f"Error loading checkpoint: {e}")
-        print("Starting fresh training instead.")
+    print(f"Found checkpoint {ckpt_path}. Resuming...")
+    checkpoint = torch.load(ckpt_path, map_location=device)
+    model.load_state_dict(checkpoint['model_state_dict'])
+    optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
+    start_epoch = checkpoint['epoch'] + 1
 else:
     print(f"Starting fresh training. Checkpoints will be saved to {ckpt_path}")
 
 #--------------------------------------------
-# 6. Training Loop
+# Training Step
 #--------------------------------------------
 def train_step(x, y):
     """
     Training step for diffusion model
     """
     model.train()
-    x = x.to(device)
-    class_labels = y.to(device)
     B = x.shape[0]
     
-    t = torch.randint(0, diffusion.num_timesteps, (B,), device=device).long()
+    # Forward pass — Add Noise
+    t = torch.randint(0, diffuser.num_timesteps, (B,), device=device).long()
     noise = torch.randn_like(x[..., :3])
-    x_noisy, noise_target = diffusion.q_sample(x, t, noise)
+    x_noisy, noise_target = diffuser.q_sample(x, t, noise)
     
-    noise_pred = model(x_noisy, t.float() / diffusion.num_timesteps, class_labels)
+    # Predict noise
+    noise_pred = model(x_noisy, t.float() / diffuser.num_timesteps, y)
     loss = F.mse_loss(noise_pred, noise_target)
     
     # Backward pass
@@ -122,43 +140,52 @@ def train_step(x, y):
     
     return loss.item()
 
-batches_per_epoch = 10
+#--------------------------------------------
+# Training Loop
+#--------------------------------------------
 
-for epoch in range(start_epoch, 100):
-    print(f"\nEpoch {epoch}/100")
+total_epochs = start_epoch + train_config['num_epochs']
+
+for epoch in range(start_epoch, total_epochs):
+    print(f"\nEpoch {epoch}/{total_epochs}")
     epoch_loss = 0
-    steps = 0
     
     for i, (x, y) in tqdm(enumerate(dataloader)):
-        if i >= batches_per_epoch:
-            break
-        loss = train_step(x, y)
-        epoch_loss += loss
-        steps += 1
+        epoch_loss += train_step(x, y)
     
-    avg_loss = epoch_loss / steps if steps > 0 else 0
+    avg_loss = epoch_loss / len(dataloader)
     print(f"Average Loss: {avg_loss:.4f}")
-    
-    # --- SAVE CHECKPOINT ---
+
+    #------------
+    # CHECKPOINT 
+    #------------
     checkpoint = {
         'epoch': epoch,
         'model_state_dict': model.state_dict(),
         'optimizer_state_dict': optimizer.state_dict(),
-        'config': config,
+        'config': model_config,
         'loss': avg_loss
     }
     torch.save(checkpoint, ckpt_path)
     print(f"Saved checkpoint -> {ckpt_path}")
     
-    # --- GENERATE SAMPLES ---
-    if epoch % 10 == 0:
-        print("Generating samples...")
-        with torch.no_grad():
-            # Use auto-detected config for sample shape
-            class_labels = torch.randint(0, 70, (4,), device=device)
-            samples = diffusion.sample(
-                model, 
-                shape=(4, config['max_points'], config['point_dim']),
-                class_labels=class_labels,
-                num_steps=50
-            )
+    #--------
+    # Sample
+    #--------
+    SAMPLE_BATCH_SIZE = 2
+    print("Generating samples...")
+    with torch.no_grad():
+        class_labels = torch.randint(0, 70, (SAMPLE_BATCH_SIZE,), device=device)
+        samples = diffuser.sample(
+            model, batch_size=SAMPLE_BATCH_SIZE, num_polygons=dataloader.num_points,
+            class_labels=class_labels, num_steps=50
+        )
+
+        samples = samples.cpu().numpy()
+        for i in range(SAMPLE_BATCH_SIZE):
+            if symmetry == 6:
+                grid = HexGrid(samples[i], side=.01) # TODO: Read from Data
+                hex_save_svg(grid, f"out/{ckpt_path.stem}_ep{epoch}_{i}.svg")
+            else:
+                grid = PenGrid(samples[i], from_np=True, side=.05)
+                pen_save_svg(grid, f"out/{ckpt_path.stem}_ep{epoch}_{i}.svg")

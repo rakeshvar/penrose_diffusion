@@ -111,8 +111,8 @@ class Generator(ABC):
             take = idxs[:self.sample_size - taken]
             if len(take) > 0:
                 ret[taken:taken + len(take), :2] = new_xy[take]
-                ret[taken:taken + len(take), 2] = self.angles[take] + theta
-                ret[taken:taken + len(take), 3] = self.colors[take]
+                ret[taken:taken + len(take), 2] = self.colors[take]
+                ret[taken:taken + len(take), 3] = self.angles[take] + theta
                 taken += len(take)
 
         name = f"{sample.classname}-{sample.inclassid:02d}"
@@ -159,13 +159,11 @@ if __name__ == "__main__":
     generator6 = Generator6(imageset, sample_size=500, target_halfside=5., unit_side=.05)
     for i in tqdm(range(len(imageset))):
         sample = generator6.get_sample()
-        grid = HexGrid(sample['x'])
+        grid = HexGrid(sample['x'], generator6.unit_side)
         hex_save_svg(grid, f"data/svgs_hex/{sample['name']}.svg")
-        break
 
     generator5 = Generator5(imageset, sample_size=500, target_halfside=5., unit_side=.1)
     for i in tqdm(range(len(imageset))):
         sample = generator5.get_sample()
-        grid = PenGrid(sample['x'], from_np=True)
+        grid = PenGrid(sample['x'], from_np=True, side=generator5.unit_side)
         pen_save_svg(grid, f"data/svgs_pen/{sample['name']}.svg")
-        break

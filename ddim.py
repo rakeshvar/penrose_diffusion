@@ -1,3 +1,4 @@
+# pyright: reportIndexIssue=false
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -21,25 +22,20 @@ class SinusoidalPositionalEmbedding(nn.Module):
 class TransformerDenoiser(nn.Module):
     def __init__(
         self,
-        point_dim: int = 4,  # (x, y, angle, color)
-        noise_dim: int = 3,  # only denoise x, y, angle
-        num_classes: int = 70,
-        class_embed_dim: int = 128,
-        time_embed_dim: int = 256,
-        d_model: int = 256,
-        num_heads: int = 8,
-        num_layers: int = 6,
-        dropout: float = 0.1,
-        max_points: int = 512
+        num_classes: int,     # 70
+        class_embed_dim: int, # 128
+        time_embed_dim: int,  # 256
+        d_model: int,         # 256
+        num_heads: int,       # 8
+        num_layers: int,      # 6
+        dropout: float,       # 0.1
     ):
         super().__init__()
         
-        self.point_dim = point_dim
-        self.noise_dim = noise_dim
         self.d_model = d_model
         
         # Input projection - project point features to d_model
-        self.input_proj = nn.Linear(point_dim, d_model)
+        self.input_proj = nn.Linear(4, d_model)
         
         # Time embedding
         self.time_embed = nn.Sequential(
@@ -52,9 +48,6 @@ class TransformerDenoiser(nn.Module):
         # Class embedding (one-hot + linear projection)
         self.class_embed = nn.Embedding(num_classes, class_embed_dim)
         self.class_proj = nn.Linear(class_embed_dim, d_model)
-        
-        # Positional encoding for point order
-        self.pos_embed = nn.Parameter(torch.randn(1, max_points, d_model))
         
         # Transformer layers
         encoder_layer = nn.TransformerEncoderLayer(
@@ -78,7 +71,7 @@ class TransformerDenoiser(nn.Module):
             nn.Dropout(dropout),
             nn.Linear(d_model * 2, d_model),
             nn.SiLU(),
-            nn.Linear(d_model, noise_dim)
+            nn.Linear(d_model, 3)
         )
         
         # Layer norm for output
@@ -208,23 +201,22 @@ class DDIMDiffusion(nn.Module):
         return x_new
     
     @torch.no_grad()
-    def sample(self, model, shape, class_labels, num_steps=50, eta=0.0):
+    def sample(self, model, batch_size, num_polygons, class_labels, num_steps=50, eta=0.0):
         """
         Generate samples using DDIM
         """
         device = next(model.parameters()).device
-        B, N, _ = shape
         
         # Start from pure noise (only for first 3 dimensions)
-        x = torch.randn((B, N, 3), device=device)
-        color = torch.randint(0, 2, (B, N, 1), device=device).float()  # Binary color
+        x = torch.randn((batch_size, num_polygons, 3), device=device)
+        color = torch.randint(0, 2, (batch_size, num_polygons, 1), device=device).float()  # Binary color
         x = torch.cat([x, color], dim=-1)
         
         # Time steps for DDIM
         times = torch.linspace(self.num_timesteps - 1, 0, num_steps + 1, device=device).long()
         
         for i in range(num_steps):
-            t = torch.full((B,), times[i], device=device, dtype=torch.long)
+            t = torch.full((batch_size,), times[i], device=device, dtype=torch.long) # type: ignore
             x = self.p_sample(model, x, t, class_labels, eta)
             
         return x

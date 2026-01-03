@@ -146,7 +146,7 @@ import numpy as np
 from collections import namedtuple
 
 class HexGrid:
-    def __init__(self, hexagons):
+    def __init__(self, hexagons, side=None):
         if isinstance(hexagons, HexagonGrid):
             self.hexxyas = [HexXYA(h) for h in hexagons]
         elif isinstance(hexagons, list):
@@ -157,8 +157,9 @@ class HexGrid:
             else:
                 raise ValueError(f"Type of list elements not supported: {type(hexagons[0])}")
         elif isinstance(hexagons, np.ndarray):
+            assert side is not None, "Side must be specified for numpy array"
             hextuple = namedtuple('hextuple', ['center', 'color', 'angle', 'side'])
-            self.hexxyas = [HexXYA(hextuple((h[0], h[1]), h[2], h[3], h[4])) for h in hexagons]
+            self.hexxyas = [HexXYA(hextuple((h[0], h[1]), h[2], h[3], side)) for h in hexagons]
         else:
             raise ValueError(f"Type of hexagons not supported: {type(hexagons)}")
 
