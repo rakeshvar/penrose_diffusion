@@ -1,0 +1,97 @@
+# configs.yaml
+
+# ---------------------------------------------------------
+# Models 
+# ---------------------------------------------------------
+default_model: &default_model
+  num_classes: 70
+  class_embed_dim: 16
+  time_embed_dim: 32
+  d_model: 64
+  num_heads: 4
+  num_layers: 4
+  dropout: 0.1
+
+small_model: &small_model
+  <<: *default_model      
+  class_embed_dim: 8
+  time_embed_dim: 16 
+  d_model: 32             
+  num_heads: 4             
+  num_layers: 2
+  dropout: 0.            
+
+big_model: &big_model
+  <<: *default_model
+  class_embed_dim: 128
+  time_embed_dim: 256
+  d_model: 256
+  num_heads: 8
+  num_layers: 6
+  dropout: 0.2
+
+#---------------------------------------------------------
+# Training
+#---------------------------------------------------------
+default_train: &default_train
+  lr: 0.0001
+  batch_size: 32
+  num_epochs: 100
+
+#---------------------------------------------------------
+# Data  
+#---------------------------------------------------------
+hex_data: &hex_data
+  path: "data/Data_hex_s768_c110.npz"
+  symmetry: 6
+  side: .05
+  use_only: null
+
+pen_data: &pen_data
+  path: "data/Data_pen_s1024_c???.npz"
+  symmetry: 5
+  side: .1
+  use_only: null
+
+default_data: &default_data
+  <<: *hex_data
+
+# ---------------------------------------------------------
+# EXPERIMENT GROUPS
+# This is what you select via CLI (e.g., -g small)
+# ---------------------------------------------------------
+default:
+  data: 
+    <<: *default_data
+  model:
+    <<: *default_model
+  train:
+    <<: *default_train
+
+# SMALL
+smallhex:
+  data: 
+    <<: *hex_data
+    use_only: 1000
+  model:
+    <<: *small_model
+  train:
+    <<: *default_train    
+    lr: 0.001   
+    batch_size: 64
+    num_epochs: 10           
+
+# LARGE
+largehex:
+  data: 
+    <<: *default_data
+  model:
+    <<: *default_model
+    class_embed_dim: 128
+    time_embed_dim: 256
+    d_model: 256
+    num_heads: 8
+    num_layers: 6
+    dropout: 0.1
+  train:
+    <<: *default_train

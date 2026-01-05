@@ -18,15 +18,47 @@ from pen_svg import save_svg as pen_save_svg
 # Argument Parsing
 #--------------------------------------------
 parser = argparse.ArgumentParser(description="Train DDIM Transformer")
-parser.add_argument('-g', '--config', type=str, default='base', 
-                    help='Config to use from configs.yaml (e.g., toy, base, large)')
-parser.add_argument('-d', '--data_path', type=str, default='data/Data_hex_s768_c110.npz', 
-                    help='Path to the .npz data file')
+parser.add_argument('-g', '--config', type=str, help='Config to use from configs.yaml')
+parser.add_argument('-d', '--data_path', type=str, default=None, help='Path to the .npz data file')
 parser.add_argument('-c', '--checkpoint_path', type=str, default=None, 
                     help='Path to save/load checkpoint. If None, creates a new timestamped file.')
 args = parser.parse_args()
 
-data_path = Path(args.data_path)
+#--------------------------------------------
+# Configure
+#--------------------------------------------
+CONFIG_FILE = 'configs.yaml'
+print(f"Loading config group '{args.config}' from {CONFIG_FILE}...")
+with open(CONFIG_FILE, 'r') as f:
+    all_configs = yaml.safe_load(f)
+
+if args.config not in all_configs:
+    print("Available configs:")
+    for configk, configv in all_configs.items():
+        print(configk)
+        for k, v in configv.items():
+            print(f"\t{k}: {v}")
+
+    available = list(all_configs.keys())
+    # Filter out anchors if they show up as keys (depends on yaml loader version)
+    available = [k for k in available if not k.startswith('default')] 
+    raise ValueError(f"Config '{args.config}' not found. Available configs: {available}")
+
+config = all_configs[args.config]
+for k, v in config.items():
+    print(k)
+    for kk, vv in v.items():
+        print(f"\t{kk}: {vv}")
+
+model_config = config['model']
+train_config = config['train']
+data_config = config['data']
+
+if args.data_path:
+    data_path_str = args.data_path
+else:
+    data_path_str = data_config['path']
+
 if args.checkpoint_path:
     ckpt_path = Path(args.checkpoint_path)
 else:
@@ -34,48 +66,9 @@ else:
     ckpt_path = Path(f"ckpt_{timestamp}.pt")
     print(f"No checkpoint path provided. Will save to: {ckpt_path}")
 
+
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 print(f"Using device: {device}")
-
-if 'hex' in str(data_path):
-    symmetry = 6
-elif 'pen' in str(data_path):
-    symmetry = 5
-else:
-    raise ValueError(f"Could not figure out hexagons or pentagons from {data_path}")
-
-#--------------------------------------------
-# Load Configuration
-#--------------------------------------------
-config_file = 'configs.yaml'
-print(f"Loading config group '{args.config}' from {config_file}...")
-with open(config_file, 'r') as f:
-    all_configs = yaml.safe_load(f)
-
-if args.config not in all_configs:
-    available = list(all_configs.keys())
-    # Filter out anchors if they show up as keys (depends on yaml loader version)
-    available = [k for k in available if not k.startswith('default')] 
-    raise ValueError(f"Group '{args.config}' not found. Available groups: {available}")
-
-config = all_configs[args.config]
-
-model_config = config['model']
-train_config = config['train']
-data_path_str = config['data_path']
-
-#--------------------------------------------
-# Setup
-#--------------------------------------------
-device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-print(f"Using device: {device}")
-
-if args.checkpoint_path:
-    ckpt_path = Path(args.checkpoint_path)
-else:
-    timestamp = datetime.now().strftime("%m%d_%H%M%S")
-    ckpt_path = Path(f"ckpt_{args.group}_{timestamp}.pt")
-    print(f"Checkpoint will save to: {ckpt_path}")
 
 #--------------------------------------------
 # Load Data
@@ -85,23 +78,22 @@ dataloader = GPUTensorLoader(
     Path(data_path_str), 
     device, 
     batch_size=train_config['batch_size'], 
-    shuffle=True
+    shuffle=True,
+    use_only=data_config['use_only']
 )
+print(dataloader)
 
 #--------------------------------------------
-# 4. Model Initialization
+# Model Initialization
 #--------------------------------------------
-
-device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-
 model = TransformerDenoiser(**model_config)
 model.to(device)
 
-diffuser = DDIMDiffusion(num_timesteps=train_config['num_timesteps'])
+diffuser = DDIMDiffusion(num_timesteps=1000) #config['num_timesteps']
 optimizer = torch.optim.AdamW(model.parameters(), lr=train_config['lr'])
 
 #--------------------------------------------
-# 5. Resume Logic
+# Checkpoint Loading
 #--------------------------------------------
 start_epoch = 0
 
@@ -118,9 +110,6 @@ else:
 # Training Step
 #--------------------------------------------
 def train_step(x, y):
-    """
-    Training step for diffusion model
-    """
     model.train()
     B = x.shape[0]
     
@@ -183,7 +172,7 @@ for epoch in range(start_epoch, total_epochs):
 
         samples = samples.cpu().numpy()
         for i in range(SAMPLE_BATCH_SIZE):
-            if symmetry == 6:
+            if data_config['symmetry'] == 6:
                 grid = HexGrid(samples[i], side=.01) # TODO: Read from Data
                 hex_save_svg(grid, f"out/{ckpt_path.stem}_ep{epoch}_{i}.svg")
             else:

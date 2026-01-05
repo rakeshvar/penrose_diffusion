@@ -23,12 +23,12 @@ class TransformerDenoiser(nn.Module):
     def __init__(
         self,
         num_classes: int,     # 70
-        class_embed_dim: int, # 128
-        time_embed_dim: int,  # 256
-        d_model: int,         # 256
-        num_heads: int,       # 8
-        num_layers: int,      # 6
-        dropout: float,       # 0.1
+        class_embed_dim: int,
+        time_embed_dim: int,
+        d_model: int,
+        num_heads: int,
+        num_layers: int,
+        dropout: float,
     ):
         super().__init__()
         

@@ -100,4 +100,3 @@ def zealous_crop(arr, margin=0):
     
     # Crop the array
     return arr[top:bottom+1, left:right+1]
-
