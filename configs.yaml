@@ -43,14 +43,10 @@ default_train: &default_train
 #---------------------------------------------------------
 hex_data: &hex_data
   path: "data/Data_hex_s768_c110.npz"
-  symmetry: 6
-  side: .05
   use_only: null
 
 pen_data: &pen_data
   path: "data/Data_pen_s1024_c???.npz"
-  symmetry: 5
-  side: .1
   use_only: null
 
 default_data: &default_data

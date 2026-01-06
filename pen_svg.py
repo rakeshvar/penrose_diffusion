@@ -53,8 +53,10 @@ def save_svg(pengrid: PenGrid|TriangleGrid, filename, additional_config={}, targ
     def tile_colour(e):
         if e.__class__.__name__ == 'Fatt' or (hasattr(e, 'topangle') and abs(e.topangle - (3*math.pi/5)) < 1e-6):
             return config['Ltile-colour']
-        else:
+        elif e.__class__.__name__ == 'Thin' or (hasattr(e, 'topangle') and abs(e.topangle - (math.pi/5)) < 1e-6):
             return config['Stile-colour']
+        else:
+            raise ValueError(f"Unknown Penrose Tile {e} of type {type(e)}")
 
     # Scale to target side
     orig_side = pengrid.side

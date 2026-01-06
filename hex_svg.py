@@ -7,7 +7,6 @@ def save_svg(hexgird, filename, target_side=20):
     "colors": {
         0: "#D8D388",
         1: "#4ee055",
-        2: "#A34444",
         },
     "margin": 0.05,
     "stroke-colour": "#ffffff",
@@ -48,7 +47,7 @@ def save_svg(hexgird, filename, target_side=20):
 
     # Draw hexagons
     for h in hexgird:
-        fill_color = config["colors"].get(h.color, '#94a3b8')
+        fill_color = config["colors"][h.color]
 
         # Draw hexagon
         path = svg_path(h)

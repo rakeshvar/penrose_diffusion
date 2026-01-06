@@ -12,7 +12,7 @@ class GeneratorIterator(IterableDataset):
     def __iter__(self):
         while True:
             sample = self.generator.get_sample()
-            x = torch.from_numpy(sample['x']).float() 
+            x = torch.from_numpy(sample['x']).float()
             y = torch.tensor(sample['y'], dtype=torch.long)
             yield x, y
 
@@ -25,16 +25,16 @@ def worker_init_fn(worker_id):
     np.random.seed(worker_seed)
     random.seed(worker_seed)
 
-def get_data_loader(sample_size, batch_size):
+def get_data_loader(num_tokens, batch_size):
     folder = "data/MPEG7"
     imageset = ImageSet(folder)
-    generator_instance = Generator6(imageset, sample_size=sample_size, target_halfside=5., unit_side=.05)
+    generator_instance = Generator6(imageset, num_tokens=num_tokens, target_halfside=5., unit_side=.05)
     dataloader = DataLoader(
-            GeneratorIterator(generator_instance), 
+            GeneratorIterator(generator_instance),
             batch_size=batch_size,
             num_workers=4,
-            worker_init_fn=worker_init_fn, 
-            prefetch_factor=2,             
-            pin_memory=True                
+            worker_init_fn=worker_init_fn,
+            prefetch_factor=2,
+            pin_memory=True
         )
     return dataloader

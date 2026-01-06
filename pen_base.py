@@ -251,7 +251,7 @@ class PenGrid:
             self.rhombuses = triangles
         elif from_np:
             assert side is not None, "Side must be specified."
-            Rhom = namedtuple('Rhom', ['center', 'color', 'tilt', 'side'])
+            Rhom = namedtuple('Rhom', ['center', 'tilt', 'color', 'side'])
             self.rhombuses = [Rhombus(Rhom(complex(t[0], t[1]), t[2], t[3], side)) for t in triangles]
         else:
             triangles = copy.deepcopy(triangles)

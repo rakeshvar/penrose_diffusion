@@ -50,8 +50,8 @@ class ImageSet:
 
         print(f"Found {len(self.samples)} images")
         print(f"  Num Classes: {self.num_classes}")
-        for class_num in range(self.num_classes):
-            print(f"    Class {class_num} {self.class_id_to_name[class_num]}: {len([s.inclassid for s in self.samples if s.classid == class_num])} samples")
+        # for class_num in range(self.num_classes):
+        #     print(f"    Class {class_num} {self.class_id_to_name[class_num]}: {len([s.inclassid for s in self.samples if s.classid == class_num])} samples")
 
     def __len__(self):
         return len(self.samples)

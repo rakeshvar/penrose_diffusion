@@ -158,7 +158,7 @@ class HexGrid:
                 raise ValueError(f"Type of list elements not supported: {type(hexagons[0])}")
         elif isinstance(hexagons, np.ndarray):
             assert side is not None, "Side must be specified for numpy array"
-            hextuple = namedtuple('hextuple', ['center', 'color', 'angle', 'side'])
+            hextuple = namedtuple('hextuple', ['center', 'angle', 'color', 'side'])
             self.hexxyas = [HexXYA(hextuple((h[0], h[1]), h[2], h[3], side)) for h in hexagons]
         else:
             raise ValueError(f"Type of hexagons not supported: {type(hexagons)}")

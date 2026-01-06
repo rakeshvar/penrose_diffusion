@@ -23,34 +23,36 @@ class GPUTensorLoader:
         
         print(f"Loading {path.name} into CPU RAM...")
         with np.load(path) as data:
-            cpu_x = torch.from_numpy(data['x'])         # (N, Points, Features)
-            cpu_y = torch.from_numpy(data['y'])
+            xyac = torch.from_numpy(data['xyac'])         # (N, Points, Features)
+            labels = torch.from_numpy(data['labels'])
+            self.symmetry = data['symmetry'].item()
+            self.side = data['side']
 
         # Apply use_only filter if specified
         print(f"Use Only: {use_only}")
         if use_only is not None:
             print(f"Subsetting data: using only first {use_only} samples.")
-            cpu_x = cpu_x[:use_only]
-            cpu_y = cpu_y[:use_only]
+            xyac = xyac[:use_only]
+            labels = labels[:use_only]
 
-        print(f"Moving {cpu_x.shape[0]} samples to {device}...")
+        print(f"Moving {xyac.shape[0]} samples to {device}...")
         
         # Move raw data to GPU once
-        self.x = cpu_x.to(device).to(torch.float32)
-        self.y = cpu_y.to(device).long()
+        self.xyac = xyac.to(device).to(torch.float32)
+        self.labels = labels.to(device).long()
         
-        self.n_samples = self.x.shape[0]
-        self.num_points = self.x.shape[1]
-        self.point_dim = self.x.shape[2]
+        self.n_samples = self.xyac.shape[0]
+        self.num_tokens = self.xyac.shape[1]
+        self.point_dim = self.xyac.shape[2]
         
         # Calculate memory usage for __str__
-        self.mem_mb = (self.x.element_size() * self.x.nelement() + 
-                       self.y.element_size() * self.y.nelement()) / 1e6
+        self.mem_mb = (self.xyac.element_size() * self.xyac.nelement() + 
+                       self.labels.element_size() * self.labels.nelement()) / 1e6
         
-        print(f"Dataset ready on {device}. Shape: {self.x.shape}")
+        print(f"Dataset ready on {device}. Shape: {self.xyac.shape}")
 
     def __iter__(self):
-        """Yields batches of (x, y). Drops the last batch if incomplete."""
+        """Yields batches of (xyac, labels). Drops the last batch if incomplete."""
         if self.shuffle:
             indices = torch.randperm(self.n_samples, device=self.device)
         else:
@@ -71,7 +73,7 @@ class GPUTensorLoader:
             idx = indices[start_idx : start_idx + self.batch_size]
             
             # Slicing pre-loaded GPU tensors is extremely fast
-            yield self.x[idx], self.y[idx]
+            yield self.xyac[idx], self.labels[idx]
 
     def __len__(self):
         """Returns the number of FULL batches per epoch"""
@@ -82,9 +84,11 @@ class GPUTensorLoader:
         return (
             f"=== GPUTensorLoader Info ===\n"
             f"  • Source:     {self.data_path_name}\n"
-            f"  • Device:     {self.device}\n"
-            f"  • Shape:      (N={self.n_samples}, P={self.num_points}, D={self.point_dim})\n"
+            f"  • Symmetry:   {self.symmetry}\n"
+            f"  • Side:       {self.side}\n"
+            f"  • Shape:      (N={self.n_samples}, P={self.num_tokens}, D={self.point_dim})\n"
             f"  • Memory:     ~{self.mem_mb:.2f} MB\n"
+            f"  • Device:     {self.device}\n"
             f"  • Batch Size: {self.batch_size}\n"
             f"  • Batches:    {len(self)} (Full batches only)\n"
             f"  • Shuffle:    {self.shuffle}\n"
