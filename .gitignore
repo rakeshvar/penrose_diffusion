@@ -51,6 +51,7 @@ yarn-debug.log*
 *.tar.gz
 *.egg
 *.whl
+*.npz
 
 # Testing / coverage
 .coverage
