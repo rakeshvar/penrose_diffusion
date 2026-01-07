@@ -51,8 +51,8 @@ def generate_and_save(generator, num_classes, samples_per_class, num_copies, pre
                  num_tokens=generator.num_tokens)
         print(f"Saved!")
 
-    half_num_copies = num_copies // 2
-    save_npz(f"{prefix}_s{num_tokens}_c{half_num_copies}.npz", xyac[:half_num_copies], labels[:half_num_copies])
+    half_total_samples = total_samples // 2
+    save_npz(f"{prefix}_s{num_tokens}_c{num_copies//2}.npz", xyac[:half_total_samples], labels[:half_total_samples])
     save_npz(f"{prefix}_s{num_tokens}_c{num_copies}.npz", xyac, labels)
 
 if __name__ == "__main__":

@@ -20,7 +20,7 @@ from pen_svg import save_svg as pen_save_svg
 parser = argparse.ArgumentParser(description="Train DDIM Transformer")
 parser.add_argument('-g', '--config', type=str, help='Config to use from configs.yaml')
 parser.add_argument('-d', '--data_path', type=str, default=None, help='Path to the .npz data file')
-parser.add_argument('-c', '--checkpoint_path', type=str, default=None, 
+parser.add_argument('-c', '--checkpoint_path', type=str, default=None,
                     help='Path to save/load checkpoint. If None, creates a new timestamped file.')
 args = parser.parse_args()
 
@@ -41,7 +41,7 @@ if args.config not in all_configs:
 
     available = list(all_configs.keys())
     # Filter out anchors if they show up as keys (depends on yaml loader version)
-    available = [k for k in available if not k.startswith('default')] 
+    available = [k for k in available if not k.startswith('default')]
     raise ValueError(f"Config '{args.config}' not found. Available configs: {available}")
 
 config = all_configs[args.config]
@@ -75,9 +75,9 @@ print(f"Using device: {device}")
 #--------------------------------------------
 print(f"Loading data from {data_path_str}...")
 dataloader = GPUTensorLoader(
-    Path(data_path_str), 
-    device, 
-    batch_size=train_config['batch_size'], 
+    Path(data_path_str),
+    device,
+    batch_size=train_config['batch_size'],
     shuffle=True,
     use_only=data_config['use_only']
 )
@@ -112,21 +112,21 @@ else:
 def train_step(xyac, labels):
     model.train()
     B = xyac.shape[0]
-    
+
     # Forward pass — Add Noise
     t = torch.randint(0, diffuser.num_timesteps, (B,), device=device).long()
     noise = torch.randn_like(xyac[..., :3])
     xyac_noisy, noise_target = diffuser.q_sample(xyac, t, noise)
-    
+
     # Predict noise
     noise_pred = model(xyac_noisy, t.float() / diffuser.num_timesteps, labels)
     loss = F.mse_loss(noise_pred, noise_target)
-    
-    # Backward pass
+
+    # Backpropagate
     optimizer.zero_grad()
     loss.backward()
     optimizer.step()
-    
+
     return loss.item()
 
 #--------------------------------------------
@@ -138,15 +138,15 @@ total_epochs = start_epoch + train_config['num_epochs']
 for epoch in range(start_epoch, total_epochs):
     print(f"\nEpoch {epoch}/{total_epochs}")
     epoch_loss = 0
-    
+
     for i, (xyac, labels) in tqdm(enumerate(dataloader)):
         epoch_loss += train_step(xyac, labels)
-    
+
     avg_loss = epoch_loss / len(dataloader)
     print(f"Average Loss: {avg_loss:.4f}")
 
     #------------
-    # CHECKPOINT 
+    # CHECKPOINT
     #------------
     checkpoint = {
         'epoch': epoch,
@@ -157,24 +157,23 @@ for epoch in range(start_epoch, total_epochs):
     }
     torch.save(checkpoint, ckpt_path)
     print(f"Saved checkpoint -> {ckpt_path}")
-    
+
     #--------
     # Sample
     #--------
-    SAMPLE_BATCH_SIZE = 2
-    print("Generating samples...")
+    print("Generating sample...")
     with torch.no_grad():
-        class_labels = torch.randint(0, 70, (SAMPLE_BATCH_SIZE,), device=device)
+        class_labels = torch.tensor([47], device=device)
         samples = diffuser.sample(
-            model, batch_size=SAMPLE_BATCH_SIZE, num_tokens=dataloader.num_tokens,
+            model, batch_size=1, num_tokens=dataloader.num_tokens,
             class_labels=class_labels, symmetry=dataloader.symmetry, num_steps=50
         )
 
         samples = samples.cpu().numpy()
-        for i in range(SAMPLE_BATCH_SIZE):
-            if dataloader.symmetry == 6:
-                grid = HexGrid(samples[i], side=.01) # TODO: Read from Data
-                hex_save_svg(grid, f"out/{ckpt_path.stem}_ep{epoch}_{i}.svg")
-            else:
-                grid = PenGrid(samples[i], from_np=True, side=.05)
-                pen_save_svg(grid, f"out/{ckpt_path.stem}_ep{epoch}_{i}.svg")
+        sample_fpath = f"out/{ckpt_path.stem}_ep{epoch}.svg"
+        if dataloader.symmetry == 6:
+            grid = HexGrid(samples[0], side=dataloader.side)
+            hex_save_svg(grid, sample_fpath)
+        else:
+            grid = PenGrid(samples[0], from_np=True, side=dataloader.side)
+            pen_save_svg(grid, sample_fpath)

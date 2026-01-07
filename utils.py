@@ -4,6 +4,9 @@ from collections import Counter
 
 TOL = 1e-6
 
+def cross(u, v):
+    return u.real*v.imag - u.imag*v.real
+
 def deg(rad_or_dir):
     if isinstance(rad_or_dir, complex):
         return cmath.phase(rad_or_dir) * 180 / math.pi
@@ -13,21 +16,34 @@ def deg(rad_or_dir):
 def reim(v):
     return v.real, v.imag
 
+
 def vertexy(v):
     if isinstance(v, complex):
-        return int(round(v.real)), int(round(v.imag))
+        return v.real, v.imag
     else:
-        return int(round(v[0])), int(round(v[1]))
+        return v[0], v[1]
 
-def cross(u, v):
-    return u.real*v.imag - u.imag*v.real
+def prettxy(v, ndigits=None):
+    x, y = vertexy(v)
 
-def svg_path(polygon):
+    if ndigits is None:
+        return x, y
+
+    if ndigits == 0:
+        return int(round(x)), int(round(y))
+    
+    if ndigits is not None:
+        return format(x, f".{ndigits}f"), format(y, f".{ndigits}f")
+    
+    raise ValueError(f"Unknown value for ndigits: {ndigits}")
+
+def svg_path(polygon, ndigits):
+    # Flip x, y to match image convention
     vertices = polygon.vertices
-    ay, ax = vertexy(vertices[0])
+    ay, ax = prettxy(vertices[0], ndigits=ndigits)
     path = f"M{ax},{ay} "
     for v in vertices[1:]:
-        vy, vx = vertexy(v)          # Flip x, y to match image convention
+        vy, vx = prettxy(v, ndigits=ndigits)
         path += f"L{vx},{vy} "
     path += "Z"
     return path

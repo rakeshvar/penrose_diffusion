@@ -55,7 +55,7 @@ class Generator(ABC):
         if class_id is None:
             sample = next(self.imagesetiter)
         else:
-            sample = self.imageset.get_particular_sample(class_id, inclassid) # TODO
+            sample = self.imageset.get_particular_sample(class_id, inclassid)
 
         H, W = sample.mask.shape
 
@@ -102,6 +102,7 @@ class Generator(ABC):
         xyac = np.zeros((self.num_tokens, 4), dtype=float)
         taken = 0
         take_now = 5
+        offset = np.array([hw2c(H) / 2., hw2c(W) / 2.])
 
         for val in (4, 3, 2, 1):
             if taken >= self.num_tokens:
@@ -110,7 +111,7 @@ class Generator(ABC):
             idxs = sets_idx[val]
             take = idxs[:self.num_tokens - taken]
             if len(take) > 0:
-                xyac[taken:taken + len(take), :2] = new_xy[take]
+                xyac[taken:taken + len(take), :2] = new_xy[take] - offset
                 xyac[taken:taken + len(take), 2] = self.angles[take] + theta
                 xyac[taken:taken + len(take), 3] = self.colors[take]
                 taken += len(take)

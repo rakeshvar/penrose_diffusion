@@ -3,7 +3,7 @@ import copy
 from utils import cross, svg_path, vertexy
 from pen_base import PenGrid, TriangleGrid
 
-def svg_arc(U, V, W):
+def svg_arc(U, V, W, ndigits):
     """
     SVG "d" path for the circular arc between sides UV and UW, joined at half-distance along these sides.
     """
@@ -18,33 +18,30 @@ def svg_arc(U, V, W):
 
     sr, si = vertexy(start)
     er, ei = vertexy(end)
-    r = round(r)
-    return f'M {si} {sr} A {r} {r} 0 0 0 {ei} {er}'
+    return f'M {si:.{ndigits}f} {sr:.{ndigits}f} A {r:.{ndigits}f} {r:.{ndigits}f} 0 0 0 {ei:.{ndigits}f} {er:.{ndigits}f}'
 
 
-def svg_arcs(rhombus):
+def svg_arcs(rhombus, ndigits):
     """
     SVG "d" path for the two circular arcs about vertices A and C.
     """
     A, B, C, D = rhombus.vertices
-    arc_a = svg_arc(A, B, D)
-    arc_c = svg_arc(C, B, D)
+    arc_a = svg_arc(A, B, D, ndigits)
+    arc_c = svg_arc(C, B, D, ndigits)
     return arc_a, arc_c
 
 
-def save_svg(pengrid: PenGrid|TriangleGrid, filename, additional_config={}, target_side=20):
-    # Default configuration
+def save_svg(pengrid: PenGrid|TriangleGrid, filename, additional_config={}, ndigits=3):
     config = {
-            'stroke-colour': '#ffffff',
-            'base-stroke-width': 1,
-            'margin': .05,
-            'Stile-colour': '#0080f0',
-            'Ltile-colour': '#0035f3',
-            'Aarc-colour': '#ff8000',
-            'Carc-colour': '#f0c030',
-            'draw-arcs': True,
-            'tile-opacity': 0.5,
-            }
+    'stroke-colour': '#ffffff',
+    'margin': .05,
+    'Stile-colour': '#0080f0',
+    'Ltile-colour': '#0035f3',
+    'Aarc-colour': '#ff8000',
+    'Carc-colour': '#f0c030',
+    'draw-arcs': True,
+    'tile-opacity': 0.5,
+    }
     config.update(additional_config)
 
     if isinstance(pengrid, TriangleGrid):
@@ -58,13 +55,6 @@ def save_svg(pengrid: PenGrid|TriangleGrid, filename, additional_config={}, targ
         else:
             raise ValueError(f"Unknown Penrose Tile {e} of type {type(e)}")
 
-    # Scale to target side
-    orig_side = pengrid.side
-    if not (.5 < orig_side/target_side < 1.5):
-        scale_factor = target_side / orig_side
-        pengrid = copy.deepcopy(pengrid)
-        for t in pengrid:
-            t.scale(scale_factor)
 
     # Determine viewbox size
     xmin = ymin = float('inf')
@@ -78,26 +68,34 @@ def save_svg(pengrid: PenGrid|TriangleGrid, filename, additional_config={}, targ
             ymax = max(ymax, y)
 
     wd, ht = xmax-xmin, ymax-ymin
+    stats =  f"# {len(pengrid)} hexagons \n"
+    stats += f"# x {xmin:.2f} to {xmax:.2f} ({wd:.2f})\n"
+    stats += f"# y {ymin:.2f} to {ymax:.2f} ({ht:.2f})\n"
+
     m = config['margin']
     xmin -= m*wd
     ymin -= m*ht
     wd += 2*m*wd
     ht += 2*m*ht
-    viewbox = f'{xmin} {ymin} {wd} {ht}'
+    viewbox = f'{xmin:.3f} {ymin:.3f} {wd:.3f} {ht:.3f}'
 
     # Build SVG
-    svg = ['<?xml version="1.0" encoding="utf-8"?>',
-        f'<svg viewBox="{viewbox}" preserveAspectRatio="xMidYMid meet" version="1.1" baseProfile="full" xmlns="http://www.w3.org/2000/svg">',
-        f'<rect x="{xmin}" y="{ymin}" width="{wd}" height="{ht}" fill="black"/>',
-        f'<g style="stroke:{config["stroke-colour"]}; stroke-width: {config["base-stroke-width"]}; stroke-linejoin: round; opacity: {config["tile-opacity"]};">'
-    ]
+    svg = ['<?xml version="1.0" encoding="utf-8"?>']
+    svg.append( '<svg preserveAspectRatio="xMidYMid meet" version="1.1" baseProfile="full" xmlns="http://www.w3.org/2000/svg"')
+    svg.append(f'     width="{1000*wd/ht:.3f}" height="{1000:.3f}"')
+    svg.append(f'     viewBox="{viewbox}">')
+    svg.append(f'<rect x="{xmin:.3f}" y="{ymin:.3f}" width="{wd:.3f}" height="{ht:.3f}" fill="black"/>\n')
+    svg.append(f'<g style="stroke:{config["stroke-colour"]}; stroke-width: {pengrid.side/20:.4f};')
+    svg.append( '   stroke-linejoin: round; vector-effect: non-scaling-stroke;">\n')
+    svg.append(stats)
 
+    # Draw pentagons (rhombuses)
     for t in pengrid:
-        dpath = svg_path(t)
+        dpath = svg_path(t, ndigits=ndigits)
         svg.append(f'<path fill="{tile_colour(t)}" d="{dpath}"/>')
 
         if config['draw-arcs']:
-            arc1_d, arc2_d = svg_arcs(t)
+            arc1_d, arc2_d = svg_arcs(t, ndigits)
             svg.append(f'<path fill="none" stroke="{config["Aarc-colour"]}" d="{arc1_d}"/>')
             svg.append(f'<path fill="none" stroke="{config["Carc-colour"]}" d="{arc2_d}"/>')
 
