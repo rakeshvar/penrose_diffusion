@@ -33,7 +33,7 @@ class TransformerDenoiser(nn.Module):
 
         self.d_model = d_model
 
-        # Input projection - project token features to d_model
+        # Input projection - project tile features to d_model
         self.input_proj = nn.Linear(4, d_model)
 
         # Time embedding
@@ -81,30 +81,30 @@ class TransformerDenoiser(nn.Module):
     def forward(self, xyac, t, class_labels):
         """
         Args:
-            xyac: (B, num_tokens, 4) - noisy tokens [x, y, angle, color]
+            xyac: (B, num_tiles, 4) - noisy tiles [x, y, angle, color]
             t: (B,) - time steps (normalized to [0, 1])
             class_labels: (B,) - class indices (0-69)
         Returns:
-            noise: (B, num_tokens, 3) - predicted noise for [x, y, angle]
+            noise: (B, num_tiles, 3) - predicted noise for [x, y, angle]
         """
-        h = self.input_proj(xyac)  # (B, num_tokens, d_model)
+        h = self.input_proj(xyac)  # (B, num_tiles, d_model)
 
-        # Add time embedding (broadcasted to all tokens)
+        # Add time embedding (broadcasted to all tiles)
         time_emb = self.time_embed(t).unsqueeze(1)  # (B, 1, d_model)
         h = h + time_emb
 
-        # Add class embedding (broadcasted to all tokens)
+        # Add class embedding (broadcasted to all tiles)
         class_emb = self.class_embed(class_labels)  # (B, class_embed_dim)
         class_emb = self.class_proj(class_emb).unsqueeze(1)  # (B, 1, d_model)
         h = h + class_emb
 
         # Apply transformer with unmasked self-attention
-        h = self.transformer(h)  # (B, num_tokens, d_model)
+        h = self.transformer(h)  # (B, num_tiles, d_model)
 
         # Normalize and project to noise
         h = self.norm_out(h)
         h = self.dropout(h)
-        noise_pred = self.output_proj(h)  # (B, num_tokens, 3)
+        noise_pred = self.output_proj(h)  # (B, num_tiles, 3)
 
         return noise_pred
 
@@ -195,16 +195,16 @@ class DDIMDiffusion(nn.Module):
         return xyac_new
 
     @torch.no_grad()
-    def sample(self, model, batch_size, num_tokens, class_labels, symmetry, num_steps=50, eta=0.0):
+    def sample(self, model, batch_size, num_tiles, class_labels, symmetry, num_steps=50, eta=0.0):
         """
         Generate samples using DDIM
         """
         device = next(model.parameters()).device
 
         # Start from pure noise (only for first 3 dimensions)
-        xya = torch.randn((batch_size, num_tokens, 3), device=device)
+        xya = torch.randn((batch_size, num_tiles, 3), device=device)
         prob = {6: 1/3, 5: (3-5**0.5)/2}[symmetry]
-        color = (torch.rand((batch_size, num_tokens, 1), device=device) < prob).float()
+        color = (torch.rand((batch_size, num_tiles, 1), device=device) < prob).float()
         xyac = torch.cat([xya, color], dim=-1)
 
         # Time steps for DDIM

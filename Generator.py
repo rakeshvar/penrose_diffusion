@@ -16,7 +16,7 @@ class Generator(ABC):
     area_with_unit_side:float = 1.0
     rot_range:float = np.pi
 
-    def __init__(self, imageset, num_tokens, target_halfside, unit_side):
+    def __init__(self, imageset, num_tiles, target_halfside, unit_side):
         """
         Build a grid covering square region ([-C, C] × [-C, C]). C = tothalfside
         """
@@ -30,12 +30,12 @@ class Generator(ABC):
         self.imageset = imageset
         self.halfside = inscribed_square_halfside(self.canvas)
         self.unit_side = unit_side
-        self.num_tokens = num_tokens
+        self.num_tiles = num_tiles
 
         print(f"  UnitSide: {self.unit_side}")
         print(f"  CanvasHalfSide: {self.halfside:.2f} (vs. {target_halfside})")
         print(f"  Density: {self.density:.3f}")
-        print(f"  Sampling Size: {self.num_tokens}")
+        print(f"  Sampling Size: {self.num_tiles}")
 
         self.imagesetiter = iter(self.imageset)
 
@@ -59,7 +59,7 @@ class Generator(ABC):
 
         H, W = sample.mask.shape
 
-        scaling = np.sqrt(self.num_tokens / (sample.on * self.density))
+        scaling = np.sqrt(self.num_tiles / (sample.on * self.density))
         c2hw = lambda x: x / scaling
         hw2c = lambda u: u * scaling
         eqsqhfsd = c2hw(np.sqrt(self.area_of_one_polygon)) / 2.0  # Equivalent square half side
@@ -99,17 +99,17 @@ class Generator(ABC):
         update_coverage(u + eqsqhfsd, v + eqsqhfsd)
 
         sets_idx = {val: np.flatnonzero(coverage == val) for val in (1, 2, 3, 4)}
-        xyac = np.zeros((self.num_tokens, 4), dtype=float)
+        xyac = np.zeros((self.num_tiles, 4), dtype=float)
         taken = 0
         take_now = 5
         offset = np.array([hw2c(H) / 2., hw2c(W) / 2.])
 
         for val in (4, 3, 2, 1):
-            if taken >= self.num_tokens:
+            if taken >= self.num_tiles:
                 break
             take_now = val
             idxs = sets_idx[val]
-            take = idxs[:self.num_tokens - taken]
+            take = idxs[:self.num_tiles - taken]
             if len(take) > 0:
                 xyac[taken:taken + len(take), :2] = new_xy[take] - offset
                 xyac[taken:taken + len(take), 2] = self.angles[take] + theta
@@ -118,7 +118,7 @@ class Generator(ABC):
 
         name = f"{sample.classname}-{sample.inclassid:02d}"
         # diagnostics printout
-        if take_now < 2 or taken < self.num_tokens:
+        if take_now < 2 or taken < self.num_tiles:
             sets_idx = [np.where(coverage == val)[0] for val in range(5)]  # 0..4
             print(f"{sample.classid:02d} {name:20s} ({H:3d}, {W:3d}) {sample.on/(H*W):.0%}"
               f"\t±{self.halfside:.1f}/{scaling:.3f} = ±{self.halfside/scaling:.0f} {self.unit_side}->{2*eqsqhfsd:.1f}"
@@ -136,7 +136,7 @@ class Generator6(Generator):
 
     def _get_mother_tiles(self, tothalfside, unit_side):
         canvas = get_hex_mother_tiles(tothalfside, unit_side)
-        hex_save_svg(canvas, "hex_canvas.svg")
+        hex_save_svg(canvas, "images/hex_canvas.svg")
         return canvas
 
 
@@ -148,7 +148,7 @@ class Generator5(Generator):
 
     def _get_mother_tiles(self, tothalfside, unit_side):
         canvas = get_pen_mother_tiles(tothalfside, unit_side)
-        pen_save_svg(canvas, "pen_canvas.svg")
+        pen_save_svg(canvas, "images/pen_canvas.svg")
         return canvas
 
 
@@ -156,19 +156,19 @@ if __name__ == "__main__":
     from tqdm import tqdm
     # tqdm = lambda x: x
 
-    folder = "data/MPEG7"
+    folder = "MPEG7/gifs"
     imageset = ImageSet(folder)
 
-    generator6 = Generator6(imageset, num_tokens=500, target_halfside=5., unit_side=.05)
+    generator6 = Generator6(imageset, num_tiles=500, target_halfside=5., unit_side=.05)
     for i in tqdm(range(len(imageset))):
         sample = generator6.get_sample()
         grid = HexGrid(sample['xyac'], generator6.unit_side)
-        hex_save_svg(grid, f"data/svgs_hex/{sample['name']}.svg")
+        hex_save_svg(grid, f"images/classes_hex/{sample['name']}.svg")
         break
 
-    generator5 = Generator5(imageset, num_tokens=500, target_halfside=5., unit_side=.1)
+    generator5 = Generator5(imageset, num_tiles=500, target_halfside=5., unit_side=.1)
     for i in tqdm(range(len(imageset))):
         sample = generator5.get_sample()
         grid = PenGrid(sample['xyac'], from_np=True, side=generator5.unit_side)
-        pen_save_svg(grid, f"data/svgs_pen/{sample['name']}.svg")
+        pen_save_svg(grid, f"images/classes_pen/{sample['name']}.svg")
         break

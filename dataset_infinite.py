@@ -25,10 +25,10 @@ def worker_init_fn(worker_id):
     np.random.seed(worker_seed)
     random.seed(worker_seed)
 
-def get_data_loader(num_tokens, batch_size):
-    folder = "data/MPEG7"
+def get_data_loader(num_tiles, batch_size):
+    folder = "MPEG7/gifs"
     imageset = ImageSet(folder)
-    generator_instance = Generator6(imageset, num_tokens=num_tokens, target_halfside=5., unit_side=.05)
+    generator_instance = Generator6(imageset, num_tiles=num_tiles, target_halfside=5., unit_side=.05)
     dataloader = DataLoader(
             GeneratorIterator(generator_instance),
             batch_size=batch_size,

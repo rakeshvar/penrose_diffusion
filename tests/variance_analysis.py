@@ -13,7 +13,7 @@ def print_stats(sample, text):
     g_std  = sample.std(axis=0)
     g_var  = sample.var(axis=0)
     
-    print("\n", text, " ", sample.shape[:-1], " tokens")
+    print("\n", text, " ", sample.shape[:-1], " tiles")
     print(f"{'Dim':<10} {'Min':<15} {'Mean':<15} {'Max':<15} {'Std Dev':<15} {'Vari':<15}")
     print("-" * NBAR)
     var_names = ['x', 'y', 'angle', 'color']
