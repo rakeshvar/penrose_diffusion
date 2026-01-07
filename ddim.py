@@ -33,7 +33,7 @@ class TransformerDenoiser(nn.Module):
 
         self.d_model = d_model
 
-        # Input projection - project tile features to d_model
+        # Input projection
         self.input_proj = nn.Linear(4, d_model)
 
         # Time embedding
@@ -158,12 +158,12 @@ class DDIMDiffusion(nn.Module):
         return xyac_noisy, noise
 
     @torch.no_grad()
-    def p_sample(self, model, xyac, t, class_labels, eta=0.0):
+    def p_sample(self, denoiser, xyac, t, class_labels, eta=0.0):
         """
         Reverse diffusion process (DDIM sampling)
         """
         # Predict noise
-        noise_pred = model(xyac, t, class_labels)
+        noise_pred = denoiser(xyac, t, class_labels)
 
         # Only denoise first 3 dimensions
         xyac0_pred = torch.zeros_like(xyac)
@@ -195,11 +195,11 @@ class DDIMDiffusion(nn.Module):
         return xyac_new
 
     @torch.no_grad()
-    def sample(self, model, batch_size, num_tiles, class_labels, symmetry, num_steps=50, eta=0.0):
+    def sample(self, denoiser, batch_size, num_tiles, class_labels, symmetry, num_steps=50, eta=0.0):
         """
         Generate samples using DDIM
         """
-        device = next(model.parameters()).device
+        device = next(denoiser.parameters()).device
 
         # Start from pure noise (only for first 3 dimensions)
         xya = torch.randn((batch_size, num_tiles, 3), device=device)
@@ -212,6 +212,6 @@ class DDIMDiffusion(nn.Module):
 
         for i in range(num_steps):
             t = torch.full((batch_size,), times[i], device=device, dtype=torch.long) # type: ignore
-            xyac = self.p_sample(model, xyac, t, class_labels, eta)
+            xyac = self.p_sample(denoiser, xyac, t, class_labels, eta)
 
         return xyac

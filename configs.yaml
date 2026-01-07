@@ -1,9 +1,9 @@
 # configs.yaml
 
 # ---------------------------------------------------------
-# Models 
+# denoisers 
 # ---------------------------------------------------------
-default_model: &default_model
+default_denoiser: &default_denoiser
   num_classes: 70
   class_embed_dim: 16
   time_embed_dim: 32
@@ -12,8 +12,8 @@ default_model: &default_model
   num_layers: 4
   dropout: 0.1
 
-small_model: &small_model
-  <<: *default_model      
+small_denoiser: &small_denoiser
+  <<: *default_denoiser      
   class_embed_dim: 8
   time_embed_dim: 16 
   d_model: 32             
@@ -21,8 +21,8 @@ small_model: &small_model
   num_layers: 2
   dropout: 0.            
 
-big_model: &big_model
-  <<: *default_model
+big_denoiser: &big_denoiser
+  <<: *default_denoiser
   class_embed_dim: 128
   time_embed_dim: 256
   d_model: 256
@@ -43,15 +43,15 @@ default_train: &default_train
 # This is what you select via CLI (e.g., -g small)
 # ---------------------------------------------------------
 default:
-  model:
-    <<: *default_model
+  denoiser:
+    <<: *default_denoiser
   train:
     <<: *default_train
 
 # SMALL
 smallhex:
-  model:
-    <<: *small_model
+  denoiser:
+    <<: *small_denoiser
   train:
     <<: *default_train    
     lr: 0.001   
@@ -60,8 +60,8 @@ smallhex:
 
 # LARGE
 largehex:
-  model:
-    <<: *default_model
+  denoiser:
+    <<: *default_denoiser
     class_embed_dim: 128
     time_embed_dim: 256
     d_model: 256

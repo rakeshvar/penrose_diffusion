@@ -72,7 +72,7 @@ for k, v in config.items():
     for kk, vv in v.items():
         print(f"\t{kk}: {vv}")
 
-model_config = config['model']
+denoiser_config = config['denoiser']
 train_config = config['train']
 
 #--------------------------------------------
@@ -88,15 +88,15 @@ dataloader = GPUTensorLoader(
 print(dataloader)
 
 #--------------------------------------------
-# Model Initialization
+# Initialization
 #--------------------------------------------
-model = TransformerDenoiser(**model_config)
-model.to(device)
+denoiser = TransformerDenoiser(**denoiser_config)
+denoiser.to(device)
 
-diffuser = DDIMDiffusion(num_timesteps=1000) #config['num_timesteps']
-model.to(device)
+diffuser = DDIMDiffusion(num_timesteps=1000)
+denoiser.to(device)
 
-optimizer = torch.optim.AdamW(model.parameters(), lr=train_config['lr'])
+optimizer = torch.optim.AdamW(denoiser.parameters(), lr=train_config['lr'])
 
 #--------------------------------------------
 # Checkpoint Loading
@@ -104,7 +104,7 @@ optimizer = torch.optim.AdamW(model.parameters(), lr=train_config['lr'])
 start_epoch = 0
 
 if loading_from_checkpoint:
-    model.load_state_dict(checkpoint['model_state_dict'])
+    denoiser.load_state_dict(checkpoint['denoiser_state_dict'])
     optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
     start_epoch = checkpoint['epoch'] + 1
 
@@ -112,7 +112,7 @@ if loading_from_checkpoint:
 # Training Step
 #--------------------------------------------
 def train_step(xyac, labels):
-    model.train()
+    denoiser.train()
     B = xyac.shape[0]
 
     # Forward pass — Add Noise
@@ -121,7 +121,7 @@ def train_step(xyac, labels):
     xyac_noisy, noise_target = diffuser.q_sample(xyac, t, noise)
 
     # Predict noise
-    noise_pred = model(xyac_noisy, t.float() / diffuser.num_timesteps, labels)
+    noise_pred = denoiser(xyac_noisy, t.float() / diffuser.num_timesteps, labels)
     loss = F.mse_loss(noise_pred, noise_target)
 
     # Backpropagate
@@ -152,7 +152,7 @@ for epoch in range(start_epoch, total_epochs):
     #------------
     checkpoint = {
         'epoch': epoch,
-        'model_state_dict': model.state_dict(),
+        'denoiser_state_dict': denoiser.state_dict(),
         'optimizer_state_dict': optimizer.state_dict(),
         'config': config,
         'loss': avg_loss,
@@ -171,7 +171,7 @@ for epoch in range(start_epoch, total_epochs):
     with torch.no_grad():
         class_labels = torch.tensor([47], device=device)
         samples = diffuser.sample(
-            model, batch_size=1, num_tiles=dataloader.num_tiles,
+            denoiser, batch_size=1, num_tiles=dataloader.num_tiles,
             class_labels=class_labels, symmetry=dataloader.symmetry, num_steps=50
         )
 

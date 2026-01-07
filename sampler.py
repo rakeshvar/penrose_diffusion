@@ -32,17 +32,17 @@ for k, v in config.items():
     for kk, vv in v.items():
         print(f"\t{kk}: {vv}")
 
-model_config = config['model']
+denoiser_config = config['denoiser']
 train_config = config['train']
 
 #--------------------------------------------
-# Model Initialization
+# Initialization
 #--------------------------------------------
-model = TransformerDenoiser(**model_config)
-model.to(device)
+denoiser = TransformerDenoiser(**denoiser_config)
+denoiser.to(device)
 
-diffuser = DDIMDiffusion(num_timesteps=1000) 
-model.load_state_dict(checkpoint['model_state_dict'])
+diffuser = DDIMDiffusion(num_timesteps=1000)
+diffuser.load_state_dict(checkpoint['denoiser_state_dict'])
 
 #--------------------------------------------
 # Sample
@@ -52,7 +52,7 @@ def sample(label, xyac, sample_fpath):
     with torch.no_grad():
         class_labels = torch.tensor([label], device=device)
         samples = diffuser.sample(
-            model, batch_size=1, num_tiles=checkpoint['num_tiles'],
+            denoiser, batch_size=1, num_tiles=checkpoint['num_tiles'],
             class_labels=class_labels, symmetry=checkpoint['symmetry'], num_steps=50
         )
 
