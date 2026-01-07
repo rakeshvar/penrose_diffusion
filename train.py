@@ -94,7 +94,7 @@ denoiser = TransformerDenoiser(**denoiser_config)
 denoiser.to(device)
 
 diffuser = DDIMDiffusion(num_timesteps=1000)
-denoiser.to(device)
+diffuser.to(device)
 
 optimizer = torch.optim.AdamW(denoiser.parameters(), lr=train_config['lr'])
 
