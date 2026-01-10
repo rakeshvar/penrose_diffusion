@@ -40,9 +40,9 @@ train_config = config['train']
 #--------------------------------------------
 denoiser = TransformerDenoiser(**denoiser_config)
 denoiser.to(device)
+denoiser.load_state_dict(checkpoint['denoiser_state_dict'])
 
 diffuser = DDIMDiffusion(num_timesteps=1000)
-diffuser.load_state_dict(checkpoint['denoiser_state_dict'])
 
 #--------------------------------------------
 # Sample
@@ -70,6 +70,8 @@ def sample(label, xyac, sample_fpath):
 #--------------------------------------------
 # Main
 #--------------------------------------------
+i = 0
 while True:
-    sample(47, None, f"out/{checkpoint_path.stem}_ep{checkpoint['epoch']}.svg")
+    sample(47, None, f"out/{checkpoint_path.stem}_ep{checkpoint['epoch']}_i{i:02d}.svg")
     input("Press Enter to continue. Ctrl+C to exit...")
+    i += 1

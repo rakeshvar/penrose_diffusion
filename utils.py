@@ -116,3 +116,45 @@ def zealous_crop(arr, margin=0):
     
     # Crop the array
     return arr[top:bottom+1, left:right+1]
+
+
+def pairwise_compare(vals, names, title, diag="both"):
+    n = len(vals)
+    max_name_len = max(len(str(name)) for name in names)
+    max_name_len = max(max_name_len, len(title)) + 4
+
+    def print_border(l, m, r):
+        print(l, end="")
+        for i in range(n+1):
+            print("─" * (max_name_len), end="")
+            if i < n:
+                print(m, end="")
+            else:
+                print(r, end="")
+        print()
+
+    print_border("┌", "┬", "┐")
+
+    print(f"│{title:<{max_name_len}}│", end="")
+    for name in names:
+        print(f"{str(name):>{max_name_len}}│", end="")
+    print()
+
+    print_border("├", "┼", "┤")
+
+    for i in range(n):
+        print(f"│{str(names[i]):<{max_name_len}}│", end="")
+        
+        for j in range(n):
+            if j == i:
+                val = f'({vals[i]:.0f})'
+                print(f"{val:>{max_name_len}}│", end="")
+            else:
+                if (diag == "up" and j > i) or (diag == "down" and j < i) or (diag == "both"):
+                    ratio = vals[i] / vals[j]
+                    print(f"{ratio:>{max_name_len}.2f}│", end="")
+                else:
+                    print(f"{'':>{max_name_len}}│", end="")
+        print()
+
+    print_border("└", "┴", "┘")
