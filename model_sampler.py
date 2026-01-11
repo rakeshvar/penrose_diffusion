@@ -2,8 +2,7 @@ import sys
 from pathlib import Path
 
 import torch
-import torch.nn.functional as F
-from ddim import DDIMDiffusion, TransformerDenoiser
+from model_ddim import DDIMDiffusion, TransformerDenoiser
 
 from hex_base import HexGrid
 from pen_base import PenGrid

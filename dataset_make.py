@@ -1,8 +1,8 @@
 import numpy as np
 from tqdm import tqdm
 
-from Generator import Generator6
-from ImageSet import ImageSet
+from data_generator import Generator6
+from data_imageset import ImageSet
 
 
 def calculate_num_copies_per_sample(num_tiles, target_mb=1024., num_classes=70, samples_per_class=20):
@@ -12,10 +12,10 @@ def calculate_num_copies_per_sample(num_tiles, target_mb=1024., num_classes=70, 
     bytes_per_val = 2    # float16
     cols = 4.5           # 4 features + 1 class label column
     total_base_images = num_classes * samples_per_class
-    
+
     bytes_per_sample = num_tiles * cols * bytes_per_val
     target_bytes = target_mb * (1024**2)
-    
+
     num_copies_per_sample = int(target_bytes / (total_base_images * bytes_per_sample))
     return num_copies_per_sample
 
@@ -25,28 +25,28 @@ def generate_and_save(generator, num_classes, samples_per_class, num_copies, pre
     print(f"\nTotal Samples = {num_classes} classes * {samples_per_class} samples * {num_copies} copies = {total_samples}.")
 
     print(f"xyac: ({total_samples}, {num_tiles}, 4) [float16]")
-    print(f"labels: ({total_samples},) [uint8]")    
+    print(f"labels: ({total_samples},) [uint8]")
     xyac = np.zeros((total_samples, num_tiles, 4), dtype=np.float16)
     labels = np.zeros((total_samples,), dtype=np.uint8)
-    
+
     print("\nFilling data...")
     i = 0
     for _ in tqdm(range(num_copies)):
         for s_id in range(samples_per_class):
             for c_id in range(num_classes):
                 sample_data = generator.get_sample(c_id, s_id)
-                
+
                 xyac[i] = sample_data['xyac'].astype(np.float16)
                 labels[i] = np.uint8(sample_data['label'])
-                
+
                 i += 1
 
     def save_npz(filename, _xyac, _labels):
         print(f"Saving file: {filename} ")
-        np.savez(filename, 
-                 xyac=_xyac, 
-                 labels=_labels, 
-                 symmetry=generator.symmetry, 
+        np.savez(filename,
+                 xyac=_xyac,
+                 labels=_labels,
+                 symmetry=generator.symmetry,
                  side=generator.unit_side,
                  num_tiles=generator.num_tiles)
         print(f"Saved!")
@@ -59,7 +59,7 @@ if __name__ == "__main__":
     import sys
 
     folder = "MPEG7/gifs"
-    imageset = ImageSet(folder)    
+    imageset = ImageSet(folder)
     NUM_CLASSES = imageset.num_classes
     SAMPLES_PER_CLASS = 20
 

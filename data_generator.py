@@ -10,7 +10,7 @@ from utils import inscribed_square_halfside
 from hex_svg import save_svg as hex_save_svg
 from pen_svg import save_svg as pen_save_svg
 
-from ImageSet import ImageSet
+from data_imageset import ImageSet
 
 class Generator(ABC):
     area_with_unit_side:float = 1.0

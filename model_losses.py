@@ -7,44 +7,13 @@ from scipy.optimize import linear_sum_assignment
 import torch
 import torch.nn.functional as F
 from torch_linear_assignment import batch_linear_assignment, assignment_to_indices
+from utils import linear_compare as compare
+from utils import pairwise_compare as compare
 
-
-def pairwise_compare(values, names, metric_name, direction="down"):
-    """
-    Simple utility to print comparison table.
-    direction: "down" means lower is better (Time), "up" means higher is better (Score/Loss)
-    """
-    print(f"\n--- {metric_name} Comparison ---")
-    best_val = min(values) if direction == "down" else max(values)
-    
-    # Header
-    print(f"{'Method':<15} | {'Value':<12} | {'vs Best':<10}")
-    print("-" * 43)
-    
-    for val, name in zip(values, names):
-        if val == best_val:
-            diff_str = "(Best)"
-        else:
-            if direction == "down":
-                diff = (val - best_val) / best_val * 100
-                diff_str = f"+{diff:.1f}%"
-            else:
-                diff = (best_val - val) / best_val * 100
-                diff_str = f"-{diff:.1f}%"
-        
-        # Determine format based on magnitude
-        if abs(val) < 0.01:
-            val_str = f"{val:.2e}"
-        else:
-            val_str = f"{val:.4f}"
-            
-        print(f"{name:<15} | {val_str:<12} | {diff_str:<10}")
-    print("-" * 43)
-    
 # ==========================================
-# 1. Original Classes (Reference)
+# Only use XY to calculate distance
 # ==========================================
-class ScipyPermutationLoss(torch.nn.Module):
+class ScipyPermutationLossXY(torch.nn.Module):
     def __init__(self):
         super().__init__()
 
@@ -95,7 +64,7 @@ class ScipyPermutationLoss(torch.nn.Module):
         return F.mse_loss(pred[..., :3], truth_ordered[..., :3], reduction='sum')
 
 
-class TorchPermutationLoss(torch.nn.Module):
+class TorchPermutationLossXY(torch.nn.Module):
     """
     GPU-accelerated loss that enforces split matching (Color 0<->0, 1<->1).
     Uses dynamic bucketing to handle variable agent counts efficiently on GPU
@@ -146,9 +115,9 @@ class TorchPermutationLoss(torch.nn.Module):
 
 
 # ==========================================
-# 2. New Simplified Classes
+# Use XY, Angle to calculate distance
 # ==========================================
-class ScipyPermutationSimple(torch.nn.Module):
+class ScipyPermutationXYA(torch.nn.Module):
     def __init__(self):
         super().__init__()
 
@@ -195,7 +164,7 @@ class ScipyPermutationSimple(torch.nn.Module):
         return cost_matrix[b_flat, p_flat, t_flat].sum()
 
 
-class TorchPermutationSimple(torch.nn.Module):
+class TorchPermutationXYA(torch.nn.Module):
     def __init__(self):
         super().__init__()
 
@@ -242,30 +211,30 @@ def run_profile():
     MICRO = 10**6
     BATCH_SIZE = 32
     NOISE_MAGNITUDE = 1.
-    N_VALUES = [2**i for i in range(5, 11)] 
+    N_VALUES = [3*2**8 for i in range(4, 9)] 
     
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print(f"Running on: {device}")
     
     # Initialize all 4 losses
-    scipy_orig = ScipyPermutationLoss()
-    scipy_simple = ScipyPermutationSimple()
-    torch_orig = TorchPermutationLoss()
-    torch_simple = TorchPermutationSimple()
+    scipy_xyo = ScipyPermutationLossXY()
+    scipy_xya = ScipyPermutationXYA()
+    torch_xyo = TorchPermutationLossXY()
+    torch_xya = TorchPermutationXYA()
 
-    names = ["Basic", "SpOrig", "TrOrig", "SpSimp", "TrSimp"]
+    # Set seed to reproduce results
+    torch.manual_seed(0)
 
     for N in N_VALUES:
         NONES = N // 3
         NZEROS = N - NONES
         print(f"Running N={N} (NZEROS={NZEROS}, NONES={NONES})")
 
-        # TRUTH is fixed (requires_grad=False)
+        # TRUTH 
         truth = torch.randn(BATCH_SIZE, N, 4, device=device, requires_grad=False)
         truth.data[..., 3] = torch.cat([torch.zeros(BATCH_SIZE, NZEROS), torch.ones(BATCH_SIZE, NONES)], dim=1).to(device)
         
-        # PREDS is trainable (requires_grad=True)
-        # We clone truth, then make it a leaf variable that requires grad
+        # PREDS
         preds_data = truth.clone()
         preds_data[..., :3] += torch.randn(BATCH_SIZE, N, 3, device=device) * NOISE_MAGNITUDE
         preds = preds_data.detach().requires_grad_(True)
@@ -278,38 +247,40 @@ def run_profile():
 
         # 2. Scipy Original
         start = time.perf_counter()
-        loss_so = scipy_orig(preds, truth)
-        loss_so.backward()
+        loss_sp_xyo = scipy_xyo(preds, truth)
+        loss_sp_xyo.backward()
         if device.type == 'cuda': torch.cuda.synchronize()
-        time_so = (time.perf_counter() - start) * MICRO
+        time_sp_xyo = (time.perf_counter() - start) * MICRO
 
         # 3. Scipy Simple
         start = time.perf_counter()
-        loss_ss = scipy_simple(preds, truth)
-        loss_ss.backward()
+        loss_sp_xya = scipy_xya(preds, truth)
+        loss_sp_xya.backward()
         if device.type == 'cuda': torch.cuda.synchronize()
-        time_ss = (time.perf_counter() - start) * MICRO
+        time_sp_xya = (time.perf_counter() - start) * MICRO
 
         # 4. Torch Original
         start = time.perf_counter()
-        loss_to = torch_orig(preds, truth)
-        loss_to.backward()
+        loss_tr_xyo = torch_xyo(preds, truth)
+        loss_tr_xyo.backward()
         if device.type == 'cuda': torch.cuda.synchronize()
-        time_to = (time.perf_counter() - start) * MICRO
+        time_tr_xyo = (time.perf_counter() - start) * MICRO
 
         # 5. Torch Simple
         start = time.perf_counter()
-        loss_ts = torch_simple(preds, truth)
-        loss_ts.backward()
+        loss_tr_xya = torch_xya(preds, truth)
+        loss_tr_xya.backward()
         if device.type == 'cuda': torch.cuda.synchronize()
-        time_ts = (time.perf_counter() - start) * MICRO
+        time_tr_xya = (time.perf_counter() - start) * MICRO
 
-        pairwise_compare(
-            [loss_base, loss_so, loss_to, loss_ss, loss_ts], 
+        names = ["Basic", "Scipy XY-", "Torch XY-", "Scipy XYA", "Torch XYA"]
+
+        compare(
+            [loss_base, loss_sp_xyo, loss_tr_xyo, loss_sp_xya, loss_tr_xya], 
             names, "Loss", "up"
         )
-        pairwise_compare(
-            [time_base, time_so, time_to, time_ss, time_ts], 
+        compare(
+            [time_base, time_sp_xyo, time_tr_xyo, time_sp_xya, time_tr_xya], 
             names, "Time (μs)", "down"
         )
 

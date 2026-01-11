@@ -6,7 +6,7 @@ from pathlib import Path
 
 import torch
 import torch.nn.functional as F
-from ddim import DDIMDiffusion, TransformerDenoiser
+from model_ddim import DDIMDiffusion, TransformerDenoiser
 from dataset_load import GPUTensorLoader
 
 from hex_base import HexGrid

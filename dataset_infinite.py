@@ -1,5 +1,5 @@
-from Generator import Generator6
-from ImageSet import ImageSet
+from data_generator import Generator6
+from data_imageset import ImageSet
 import numpy as np
 import random
 import torch

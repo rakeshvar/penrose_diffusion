@@ -31,10 +31,10 @@ def prettxy(v, ndigits=None):
 
     if ndigits == 0:
         return int(round(x)), int(round(y))
-    
+
     if ndigits is not None:
         return format(x, f".{ndigits}f"), format(y, f".{ndigits}f")
-    
+
     raise ValueError(f"Unknown value for ndigits: {ndigits}")
 
 def svg_path(polygon, ndigits):
@@ -51,8 +51,8 @@ def svg_path(polygon, ndigits):
 
 def display_svg(filename):
     from IPython.display import SVG, display
-    with open(filename, 'r') as f:
-        svg = f.read()
+    with open(filename, 'r') as fp:
+        svg = fp.read()
         display(SVG(svg))
 
 import numpy as np
@@ -87,74 +87,144 @@ def print_tile_stats(grid):
 def zealous_crop(arr, margin=0):
     """
     Remove blank space around the border while maintaining a minimum margin.
-    
+
     Args:
         arr: numpy array of the image (binary after thresholding)
         margin: minimum number of pixels to keep as border around the content
-    
+
     Returns:
         Cropped numpy array with specified margin
     """
     # Find non-empty rows and columns
     non_empty_rows = np.where(arr.any(axis=1))[0]
     non_empty_cols = np.where(arr.any(axis=0))[0]
-    
+
     if non_empty_rows.size == 0 or non_empty_cols.size == 0:
         return arr  # Return original if entirely blank
-    
+
     # Get the content boundaries
     top_content = non_empty_rows[0]
     bottom_content = non_empty_rows[-1]
     left_content = non_empty_cols[0]
     right_content = non_empty_cols[-1]
-    
+
     # Calculate crop boundaries with margin
     top = max(0, top_content - margin)
     bottom = min(arr.shape[0] - 1, bottom_content + margin)
     left = max(0, left_content - margin)
     right = min(arr.shape[1] - 1, right_content + margin)
-    
+
     # Crop the array
     return arr[top:bottom+1, left:right+1]
 
+class TablePrinter:
+    def __init__(self, ncolumns, column_wd):
+        self.n_columns = ncolumns
+        self.max_name_len = column_wd
 
-def pairwise_compare(vals, names, title, diag="both"):
-    n = len(vals)
-    max_name_len = max(len(str(name)) for name in names)
-    max_name_len = max(max_name_len, len(title)) + 4
-
-    def print_border(l, m, r):
+    def border(self, l, m, r):
         print(l, end="")
-        for i in range(n+1):
-            print("─" * (max_name_len), end="")
-            if i < n:
+        for i in range(self.n_columns):
+            print("─" * self.max_name_len, end="")
+            if i < self.n_columns - 1:
                 print(m, end="")
             else:
                 print(r, end="")
         print()
 
-    print_border("┌", "┬", "┐")
+    def top_line(self):
+        self.border("┌", "┬", "┐")
 
-    print(f"│{title:<{max_name_len}}│", end="")
-    for name in names:
-        print(f"{str(name):>{max_name_len}}│", end="")
-    print()
+    def mid_line(self):
+        self.border("├", "┼", "┤")
 
-    print_border("├", "┼", "┤")
+    def bot_line(self):
+        self.border("└", "┴", "┘")
 
-    for i in range(n):
-        print(f"│{str(names[i]):<{max_name_len}}│", end="")
-        
-        for j in range(n):
-            if j == i:
-                val = f'({vals[i]:.0f})'
-                print(f"{val:>{max_name_len}}│", end="")
+    def line(self, *args):
+        print("│", end="")
+        for arg in args:
+            # check if arg is a string and has no digits in it
+            if isinstance(arg, str) and not any(c.isdigit() for c in arg):
+                print(f"{arg:<{self.max_name_len}}│", end="")
             else:
-                if (diag == "up" and j > i) or (diag == "down" and j < i) or (diag == "both"):
-                    ratio = vals[i] / vals[j]
-                    print(f"{ratio:>{max_name_len}.2f}│", end="")
-                else:
-                    print(f"{'':>{max_name_len}}│", end="")
+                print(f"{arg:>{self.max_name_len}}│", end="")
         print()
 
-    print_border("└", "┴", "┘")
+
+
+def pairwise_compare(vals, names, title, diag="both"):
+    """
+    Compares given values to each other and prints a table.
+    diag: "both" prints both above abd below the diagonal,
+          "down" prints only below the diagonal,
+          "up" prints only above the diagonal.
+    """
+    nvals = len(vals)
+    ncolumns = nvals + 1
+    max_name_len = max(len(str(name)) for name in names + [title]) + 2
+
+    table = TablePrinter(ncolumns, max_name_len)
+
+    table.top_line()
+    table.line(title, *names)
+    table.mid_line()
+
+    for i in range(nvals):
+        row_vals = []
+
+        for j in range(nvals):
+            if j == i:
+                val = '(' + f(vals[i]) + ')'
+            else:
+                if (diag == "up" and j > i) or (diag == "down" and j < i) or (diag == "both"):
+                    val = f(vals[i] / vals[j])
+                else:
+                    val = ""
+            row_vals.append(val)
+
+        table.line(names[i], *row_vals)
+
+    table.bot_line()
+
+
+def linear_compare(vals, names, title, diag=None):
+    """
+    Simple utility to print comparison table.
+    """
+    table = TablePrinter(3, 15)
+    table.top_line()
+    table.line(title, "Value", "Best x Factor")
+    table.mid_line()
+
+    best_val = min(vals)
+
+    for val, name in zip(vals, names):
+        if val == best_val:
+            diff_str = "(Best)"
+        else:
+            diff = val / best_val
+            diff_str = "x " + f(diff)
+
+        table.line(name, f(val), diff_str)
+
+    table.bot_line()
+
+def f(v, N:int|str = ""):
+    """
+    Format a value to show not too many decimals.
+    Parameters:
+        v (int or float): The value to format
+        N (int)         : Field width for formatting
+    Returns:
+        str: Formatted string
+    """
+    if isinstance(v, int) or (isinstance(v, float) and v.is_integer()):
+        return f"{v:{N}d}"
+
+    if 0 < v < 2:
+        return f"{v:{N}.2f}"
+    elif 2 <= v < 10:
+        return f"{v:{N}.1f}"
+    else:  # val >= 10
+        return f"{v:{N}.0f}"
