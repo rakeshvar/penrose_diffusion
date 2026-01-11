@@ -7,7 +7,7 @@ from pathlib import Path
 import torch
 import torch.nn.functional as F
 from model_ddim import DDIMDiffusion, TransformerDenoiser
-from dataset_load import GPUTensorLoader
+from dataset_load import DataLoader
 
 from hex_base import HexGrid
 from pen_base import PenGrid
@@ -79,7 +79,7 @@ train_config = config['train']
 # Load Data
 #--------------------------------------------
 print(f"Loading data from {data_path_str}...")
-dataloader = GPUTensorLoader(
+dataloader = DataLoader(
     Path(data_path_str),
     device,
     batch_size=train_config['batch_size'],
@@ -111,18 +111,17 @@ if loading_from_checkpoint:
 #--------------------------------------------
 # Training Step
 #--------------------------------------------
-def train_step(xyac, labels):
+def train_step(xya, colors, labels):
     denoiser.train()
-    B = xyac.shape[0]
+    B = xya.shape[0]
 
     # Forward pass — Add Noise
     t = torch.randint(0, diffuser.num_timesteps, (B,), device=device).long()
-    noise = torch.randn_like(xyac[..., :3])
-    xyac_noisy, noise_target = diffuser.q_sample(xyac, t, noise)
+    xya_noisy, noise = diffuser.q_sample(xya, t)
 
     # Predict noise
-    noise_pred = denoiser(xyac_noisy, t.float() / diffuser.num_timesteps, labels)
-    loss = F.mse_loss(noise_pred, noise_target)
+    noise_pred = denoiser(xya_noisy, colors, t.float() / diffuser.num_timesteps, labels)
+    loss = F.mse_loss(noise_pred, noise)
 
     # Backpropagate
     optimizer.zero_grad()
@@ -141,8 +140,9 @@ for epoch in range(start_epoch, total_epochs):
     print(f"\nEpoch {epoch}/{total_epochs}")
     epoch_loss = 0
 
-    for i, (xyac, labels) in enumerate(tqdm(dataloader)):
-        epoch_loss += train_step(xyac, labels)
+    for i, (xya, colors, labels) in enumerate(tqdm(dataloader)):
+        epoch_loss += train_step(xya, colors, labels)
+        break
 
     avg_loss = epoch_loss / len(dataloader)
     print(f"Average Loss: {avg_loss:.4f}")
@@ -170,16 +170,20 @@ for epoch in range(start_epoch, total_epochs):
     print("Generating sample...")
     with torch.no_grad():
         class_labels = torch.tensor([47], device=device)
-        samples = diffuser.sample(
+        
+        sample_xya, sample_colors = diffuser.sample(
             denoiser, batch_size=1, num_tiles=dataloader.num_tiles,
             class_labels=class_labels, symmetry=dataloader.symmetry, num_steps=50
         )
 
-        samples = samples.cpu().numpy()
+        sample_combined = torch.cat([sample_xya, sample_colors.float()], dim=-1)
+        sample_np = sample_combined.cpu().numpy()
+
         sample_fpath = f"out/{checkpoint_path.stem}_ep{epoch}.svg"
         if dataloader.symmetry == 6:
-            grid = HexGrid(samples[0], side=dataloader.side)
+            grid = HexGrid(sample_np[0], side=dataloader.side)
             hex_save_svg(grid, sample_fpath)
         else:
-            grid = PenGrid(samples[0], from_np=True, side=dataloader.side)
+            grid = PenGrid(sample_np[0], from_np=True, side=dataloader.side)
             pen_save_svg(grid, sample_fpath)
+        print(f"Saved {sample_fpath}")

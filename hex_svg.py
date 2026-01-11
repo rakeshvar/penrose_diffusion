@@ -1,4 +1,3 @@
-import copy
 from utils import svg_path
 
 def save_svg(hexgrid, filename, ndigits=3):

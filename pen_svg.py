@@ -1,5 +1,4 @@
 import math
-import copy
 from utils import cross, svg_path, vertexy
 from pen_base import PenGrid, TriangleGrid
 

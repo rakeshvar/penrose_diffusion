@@ -4,7 +4,7 @@ from abc import ABC, abstractmethod
 import torch
 import torch.nn.functional as F
 
-from model_losses import TorchPermutationXYA
+from model_losses import PermutationLossTorch, PermutationLossScipy
 
 class AbstractTrainer(ABC):
     def __init__(self, denoiser, optimizer, diffuser, device):
@@ -74,7 +74,7 @@ class LSASerial(AbstractTrainer):
         xyac_recovered = xyac_noisy - noise_pred
 
         # LSA Loss
-        loss = TorchPermutationXYA()(xyac_recovered, xyac_noisy)
+        loss = PermutationLossTorch()(xyac_recovered, xyac_noisy)
 
         # Backpropagate
         self.optimizer.zero_grad()
@@ -99,7 +99,7 @@ class LSAParallel(AbstractTrainer):
         xyac_recovered = xyac_noisy - noise_pred
 
         # LSA Loss
-        loss = TorchPermutationXYA()(xyac_recovered, xyac_noisy)
+        loss = PermutationLossTorch()(xyac_recovered, xyac_noisy)
 
         # Backpropagate
         self.optimizer.zero_grad()

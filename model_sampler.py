@@ -2,6 +2,7 @@ import sys
 from pathlib import Path
 
 import torch
+import numpy as np
 from model_ddim import DDIMDiffusion, TransformerDenoiser
 
 from hex_base import HexGrid
@@ -46,16 +47,18 @@ diffuser = DDIMDiffusion(num_timesteps=1000)
 #--------------------------------------------
 # Sample
 #--------------------------------------------
-def sample(label, xyac, sample_fpath):
+def sample(label, sample_fpath):
     print("Generating sample...")
     with torch.no_grad():
         class_labels = torch.tensor([label], device=device)
-        samples = diffuser.sample(
+        xyas, colors = diffuser.sample(
             denoiser, batch_size=1, num_tiles=checkpoint['num_tiles'],
             class_labels=class_labels, symmetry=checkpoint['symmetry'], num_steps=50
         )
 
-        samples = samples.cpu().numpy()
+        xyas = xyas.cpu().numpy()     # (1, 768, 3)
+        colors = colors.cpu().numpy()  # (1, 768)
+        samples = np.concatenate((xyas, colors), axis=-1)
 
         if checkpoint['symmetry'] == 6:
             grid = HexGrid(samples[0], side=checkpoint['side'])
@@ -71,6 +74,7 @@ def sample(label, xyac, sample_fpath):
 #--------------------------------------------
 i = 0
 while True:
-    sample(47, None, f"out/{checkpoint_path.stem}_ep{checkpoint['epoch']}_i{i:02d}.svg")
+    svg_fname = f"out/{checkpoint_path.stem}_ep{checkpoint['epoch']}_i{i:02d}.svg"
+    sample(47, svg_fname)
     input("Press Enter to continue. Ctrl+C to exit...")
     i += 1

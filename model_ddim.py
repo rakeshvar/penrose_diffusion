@@ -34,7 +34,10 @@ class TransformerDenoiser(nn.Module):
         self.d_model = d_model
 
         # Input projection
-        self.input_proj = nn.Linear(4, d_model)
+        self.input_proj = nn.Linear(3, d_model)
+        
+        # Color embedding (Binary: 0 or 1)
+        self.color_embed = nn.Embedding(2, d_model)
 
         # Time embedding
         self.time_embed = nn.Sequential(
@@ -78,19 +81,28 @@ class TransformerDenoiser(nn.Module):
 
         self.dropout = nn.Dropout(dropout)
 
-    def forward(self, xyac, t, class_labels):
+    def forward(self, xya, colors, t, class_labels):
         """
         Args:
-            xyac: (B, num_tiles, 4) - noisy tiles [x, y, angle, color]
+            xya: (B, num_tiles, 3) - noisy tiles [x, y, angle]
+            colors: (B, num_tiles)
             t: (B,) - time steps (normalized to [0, 1])
             class_labels: (B,) - class indices (0-69)
         Returns:
             noise: (B, num_tiles, 3) - predicted noise for [x, y, angle]
         """
-        h = self.input_proj(xyac)  # (B, num_tiles, d_model)
+        h = self.input_proj(xya)  # (B, num_tiles, d_model)
 
-        # Add time embedding (broadcasted to all tiles)
-        time_emb = self.time_embed(t).unsqueeze(1)  # (B, 1, d_model)
+        # 2. Add Color Embedding
+        # Ensure colors are (B, num_tiles) for embedding lookup
+        if colors.dim() == 3: 
+            colors = colors.squeeze(-1) 
+        
+        h_color = self.color_embed(colors) # (B, num_tiles, d_model)
+        h = h + h_color
+
+        # 3. Add Time Embedding
+        time_emb = self.time_embed(t).unsqueeze(1)
         h = h + time_emb
 
         # Add class embedding (broadcasted to all tiles)
@@ -133,66 +145,53 @@ class DDIMDiffusion(nn.Module):
         self.register_buffer('sqrt_one_minus_alphas_cumprod', torch.sqrt(1. - alphas_cumprod))
 
         # Calculations for posterior q(x_{t-1} | x_t, x_0)
-        self.register_buffer('sqrt_recip_alphas_cumprod', torch.sqrt(1. / alphas_cumprod))
-        self.register_buffer('sqrt_recipm1_alphas_cumprod', torch.sqrt(1. / alphas_cumprod - 1))
+        # self.register_buffer('sqrt_recip_alphas_cumprod', torch.sqrt(1. / alphas_cumprod))
+        # self.register_buffer('sqrt_recipm1_alphas_cumprod', torch.sqrt(1. / alphas_cumprod - 1))
 
-    def q_sample(self, xyac_start, t, noise=None):
+    def q_sample(self, xya_start, t, noise=None):
         """
         Forward diffusion process: x_t = sqrt(alpha_cumprod) * x_0 + sqrt(1 - alpha_cumprod) * noise
         """
         if noise is None:
-            noise = torch.randn_like(xyac_start[..., :3])  # Only add noise to x, y, angle
+            noise = torch.randn_like(xya_start)
 
-        sqrt_alphas_cumprod_t = self.sqrt_alphas_cumprod[t].view(-1, 1, 1)
-        sqrt_one_minus_alphas_cumprod_t = self.sqrt_one_minus_alphas_cumprod[t].view(-1, 1, 1)
+        a = self.sqrt_alphas_cumprod[t].view(-1, 1, 1)
+        b = self.sqrt_one_minus_alphas_cumprod[t].view(-1, 1, 1)
 
-        # Only add noise to first 3 dimensions (x, y, angle)
-        xyac_noisy = xyac_start.clone()
-        xyac_noisy[..., :3] = (
-            sqrt_alphas_cumprod_t * xyac_start[..., :3] +
-            sqrt_one_minus_alphas_cumprod_t * noise
-        )
-        # Color stays unchanged
-        xyac_noisy[..., 3:] = xyac_start[..., 3:]
+        xya_noisy = a * xya_start + b * noise
 
-        return xyac_noisy, noise
+        return xya_noisy, noise
 
     @torch.no_grad()
-    def p_sample(self, denoiser, xyac, t, class_labels, eta=0.0):
+    def p_sample(self, denoiser, xya, colors, t, class_labels, eta=0.0):
         """
         Reverse diffusion process (DDIM sampling)
         """
         # Predict noise
-        noise_pred = denoiser(xyac, t, class_labels)
+        noise_pred = denoiser(xya, colors, t, class_labels)
 
-        # Only denoise first 3 dimensions
-        xyac0_pred = torch.zeros_like(xyac)
-        xyac0_pred[..., :3] = (
-            (xyac[..., :3] - self.sqrt_one_minus_alphas_cumprod[t].view(-1, 1, 1) * noise_pred) /
+        # Only denoise geometry (x, y, angle)
+        xya0_pred = (
+            (xya - self.sqrt_one_minus_alphas_cumprod[t].view(-1, 1, 1) * noise_pred) /
             self.sqrt_alphas_cumprod[t].view(-1, 1, 1)
         )
-        xyac0_pred[..., 3:] = xyac[..., 3:]  # Keep color unchanged
 
         # DDIM update
         if t[0] > 0:
             alpha_t = self.alphas_cumprod[t].view(-1, 1, 1)
             alpha_t_prev = self.alphas_cumprod_prev[t].view(-1, 1, 1)
             sigma_t = eta * torch.sqrt((1 - alpha_t_prev) / (1 - alpha_t) * (1 - alpha_t / alpha_t_prev))
+            noise = torch.randn_like(xya) if eta > 0 else 0
 
-            noise = torch.randn_like(xyac[..., :3]) if eta > 0 else 0
-
-            # Update only first 3 dimensions
-            xyac_new = torch.zeros_like(xyac)
-            xyac_new[..., :3] = (
-                torch.sqrt(alpha_t_prev) * xyac0_pred[..., :3] +
+            xya_new = (
+                torch.sqrt(alpha_t_prev) * xya0_pred +
                 torch.sqrt(1 - alpha_t_prev - sigma_t**2) * noise_pred +
                 sigma_t * noise
             )
-            xyac_new[..., 3:] = xyac[..., 3:]  # Keep color unchanged
         else:
-            xyac_new = xyac0_pred
+            xya_new = xya0_pred
 
-        return xyac_new
+        return xya_new
 
     @torch.no_grad()
     def sample(self, denoiser, batch_size, num_tiles, class_labels, symmetry, num_steps=50, eta=0.0):
@@ -204,14 +203,13 @@ class DDIMDiffusion(nn.Module):
         # Start from pure noise (only for first 3 dimensions)
         xya = torch.randn((batch_size, num_tiles, 3), device=device)
         prob = {6: 1/3, 5: (3-5**0.5)/2}[symmetry]
-        color = (torch.rand((batch_size, num_tiles, 1), device=device) < prob).float()
-        xyac = torch.cat([xya, color], dim=-1)
+        colors = (torch.rand((batch_size, num_tiles, 1), device=device) < prob).long()
 
         # Time steps for DDIM
         times = torch.linspace(self.num_timesteps - 1, 0, num_steps + 1, device=device).long()
 
         for i in range(num_steps):
             t = torch.full((batch_size,), times[i], device=device, dtype=torch.long) # type: ignore
-            xyac = self.p_sample(denoiser, xyac, t, class_labels, eta)
+            xya = self.p_sample(denoiser, xya, colors, t, class_labels, eta)
 
-        return xyac
+        return xya, colors

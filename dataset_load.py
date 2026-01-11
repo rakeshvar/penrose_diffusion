@@ -1,9 +1,8 @@
 import numpy as np
 import torch
 from pathlib import Path
-from tqdm import tqdm
 
-class GPUTensorLoader:
+class DataLoader:
     """
     Loads an .npz dataset entirely into GPU memory and yields batches directly.
     Acts as both a Dataset and a DataLoader.
@@ -21,26 +20,26 @@ class GPUTensorLoader:
 
         print(f"Loading {path.name} into CPU RAM...")
         with np.load(path) as data:
-            xyac = torch.from_numpy(data['xyac'])         # (N, Points, Features)
-            labels = torch.from_numpy(data['labels'])
+            xya = torch.from_numpy(data['xya'])         # (N, num_tiles, xya)
+            colors = torch.from_numpy(data['colors'])   # (N, num_tiles, 1)
+            labels = torch.from_numpy(data['labels'])   # (N,)
             self.symmetry = data['symmetry'].item()
             self.side = data['side'].item()
 
-        print(f"Moving {xyac.shape[0]} samples to {device}...")
+        print(f"Moving {xya.shape[0]} samples to {device}...")
 
-        # Move raw data to GPU once
-        self.xyac = xyac.to(device).to(torch.float32)
+        # Move raw data to GPU once if available and convert from float16 to float32
+        self.xya = xya.to(device).to(torch.float32)
+        self.colors = colors.to(device).long()
         self.labels = labels.to(device).long()
 
-        self.n_samples = self.xyac.shape[0]
-        self.num_tiles = self.xyac.shape[1]
-        self.point_dim = self.xyac.shape[2]
+        self.n_samples = self.xya.shape[0]
+        self.num_tiles = self.xya.shape[1]
 
         # Calculate memory usage for __str__
-        self.mem_mb = (self.xyac.element_size() * self.xyac.nelement() +
+        self.mem_mb = (self.xya.element_size() * self.xya.nelement() +
+                       self.colors.element_size() * self.colors.nelement() +
                        self.labels.element_size() * self.labels.nelement()) / 1e6
-
-        print(f"Dataset ready on {device}. Shape: {self.xyac.shape}")
 
     def __iter__(self):
         """Yields batches of (xyac, labels). Drops the last batch if incomplete."""
@@ -54,7 +53,7 @@ class GPUTensorLoader:
         for start_idx in range(0, num_samples, self.batch_size):
             idx = indices[start_idx : start_idx + self.batch_size]
 
-            yield self.xyac[idx], self.labels[idx]
+            yield self.xya[idx], self.colors[idx], self.labels[idx]
 
     def __len__(self):
         """Returns the number of FULL batches per epoch"""
@@ -67,11 +66,12 @@ class GPUTensorLoader:
             f"  • Source:     {self.data_path_name}\n"
             f"  • Symmetry:   {self.symmetry}\n"
             f"  • Side:       {self.side}\n"
-            f"  • Shape:      (N={self.n_samples}, P={self.num_tiles}, D={self.point_dim})\n"
-            f"  • Memory:     ~{self.mem_mb:.2f} MB\n"
+            f"  • Samples:    {self.n_samples}\n"
+            f"  • Tiles:      {self.num_tiles}\n"
+            f"  • Memory:     {self.mem_mb:.2f} MB\n"
             f"  • Device:     {self.device}\n"
             f"  • Batch Size: {self.batch_size}\n"
-            f"  • Batches:    {len(self)} (Full batches only)\n"
+            f"  • Batches:    {len(self)} (Full batches)\n"
             f"  • Shuffle:    {self.shuffle}\n"
             f"============================"
         )
