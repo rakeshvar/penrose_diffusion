@@ -5,11 +5,11 @@ from datetime import datetime
 from pathlib import Path
 
 import torch
-import torch.nn.functional as F
 from model_ddim import DDIMDiffusion, TransformerDenoiser
 from dataset_load import DataLoader
 
 from hex_base import HexGrid
+from model_trainers import LSAParallel, LSASerial, NoisePredictor, XYAPredictor
 from pen_base import PenGrid
 from hex_svg import save_svg as hex_save_svg
 from pen_svg import save_svg as pen_save_svg
@@ -109,26 +109,16 @@ if loading_from_checkpoint:
     start_epoch = checkpoint['epoch'] + 1
 
 #--------------------------------------------
-# Training Step
+# Trainer
 #--------------------------------------------
-def train_step(xya, colors, labels):
-    denoiser.train()
-    B = xya.shape[0]
-
-    # Forward pass — Add Noise
-    t = torch.randint(0, diffuser.num_timesteps, (B,), device=device).long()
-    xya_noisy, noise = diffuser.q_sample(xya, t)
-
-    # Predict noise
-    noise_pred = denoiser(xya_noisy, colors, t.float() / diffuser.num_timesteps, labels)
-    loss = F.mse_loss(noise_pred, noise)
-
-    # Backpropagate
-    optimizer.zero_grad()
-    loss.backward()
-    optimizer.step()
-
-    return loss.item()
+Trainers = {
+    'Noise': NoisePredictor,
+    'XYA': XYAPredictor,
+    'LSAS': LSASerial,
+    'LSAP': LSAParallel,
+}
+Trainer = Trainers[config['train']['trainer']]
+trainer = Trainer(denoiser, diffuser, optimizer, device)
 
 #--------------------------------------------
 # Training Loop
@@ -141,7 +131,7 @@ for epoch in range(start_epoch, total_epochs):
     epoch_loss = 0
 
     for i, (xya, colors, labels) in enumerate(tqdm(dataloader)):
-        epoch_loss += train_step(xya, colors, labels)
+        epoch_loss += trainer(xya, colors, labels)
         break
 
     avg_loss = epoch_loss / len(dataloader)
@@ -170,7 +160,7 @@ for epoch in range(start_epoch, total_epochs):
     print("Generating sample...")
     with torch.no_grad():
         class_labels = torch.tensor([47], device=device)
-        
+
         sample_xya, sample_colors = diffuser.sample(
             denoiser, batch_size=1, num_tiles=dataloader.num_tiles,
             class_labels=class_labels, symmetry=dataloader.symmetry, num_steps=50
