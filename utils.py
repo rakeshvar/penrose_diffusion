@@ -252,12 +252,12 @@ def xysc_to_xyac(xysc, colors=None):
 
 def npz_stats(npz_name):
     with np.load(npz_name) as data:
-        xysc = data['xysc']
-        x = xysc[..., 0].astype(np.float64)
-        y = xysc[..., 1].astype(np.float64)
-        sin = xysc[..., 2].astype(np.float64)
-        cos = xysc[..., 3].astype(np.float64)
-        angle = np.arctan2(sin, cos).astype(np.float64)
+        xya = data['xya']
+        x = xya[..., 0].astype(np.float64)
+        y = xya[..., 1].astype(np.float64)
+        angle = xya[..., 2].astype(np.float64)
+        sin = np.sin(angle).astype(np.float64)
+        cos = np.cos(angle).astype(np.float64)
         colors = data['colors'].astype(np.float64)
 
     tp = TablePrinter(6, 15)
@@ -280,3 +280,11 @@ def npz_stats(npz_name):
     stats(colors, "color")
 
     tp.bot_line()
+
+
+def print_config(config):
+    print("Config:")
+    for k, v in config.items():
+        print(k)
+        for kk, vv in v.items():
+            print(f"\t{kk}: {vv}")

@@ -11,10 +11,10 @@ def calculate_num_copies_per_sample(num_tiles, target_mb=1024., num_classes=70, 
     Calculates how many random augmentations per image are needed  to hit the target file size.
     """
     bytes_per_val = 2    # float16
-    columnss = 4.5         # xysc (float16) + colors (uint8)
+    columns = 3.5         # xya (float16) + colors (uint8)
     total_base_images = num_classes * samples_per_class
 
-    bytes_per_sample = num_tiles * columnss * bytes_per_val
+    bytes_per_sample = num_tiles * columns * bytes_per_val
     target_bytes = target_mb * (1024**2)
 
     num_copies_per_sample = int(target_bytes / (total_base_images * bytes_per_sample))
@@ -25,11 +25,10 @@ def generate_and_save(generator, num_classes, samples_per_class, num_copies, pre
     total_samples = num_classes * samples_per_class * num_copies
     print(f"\nTotal Samples = {num_classes} classes * {samples_per_class} samples * {num_copies} copies = {total_samples}.")
 
-    print(f"xysc: ({total_samples}, {num_tiles}, 4) [float16]")
+    print(f"xya: ({total_samples}, {num_tiles}, 3) [float16]")
     print(f"colors: ({total_samples}, {num_tiles}) [uint8]")
     print(f"labels: ({total_samples},) [uint8]")
-    xy = np.zeros((total_samples, num_tiles, 2), dtype=float)
-    angles = np.zeros((total_samples, num_tiles), dtype=float)
+    xya = np.zeros((total_samples, num_tiles, 3), dtype=np.float16)
     colors = np.zeros((total_samples, num_tiles), dtype=np.uint8)
     labels = np.zeros((total_samples,), dtype=np.uint8)
 
@@ -38,25 +37,19 @@ def generate_and_save(generator, num_classes, samples_per_class, num_copies, pre
     for _ in tqdm(range(num_copies)):
         for s_id in range(samples_per_class):
             for c_id in range(num_classes):
-                sample_data = generator.get_sample(c_id, s_id)
+                sample_data = generator.get_sample(c_id, s_id, rotate_mask=False)
 
                 xyac_i = sample_data['xyac']
-                xy[i] = xyac_i[:, :2]
-                angles[i] = xyac_i[:, 2]
-                colors[i] = xyac_i[:, 3].astype(np.uint8)
-                labels[i] = np.uint8(sample_data['label'])
+                xya[i] = xyac_i[:, :3]
+                colors[i] = xyac_i[:, 3]
+                labels[i] = sample_data['label']
 
                 i += 1
         
-    xysc = np.zeros((total_samples, num_tiles, 4), dtype=np.float16)
-    xysc[..., :2] = xy
-    xysc[..., 2]   = np.sin(angles)
-    xysc[..., 3]   = np.cos(angles)
-
-    def save_npz(filename, _xysc, _colors, _labels):
+    def save_npz(filename, _xya, _colors, _labels):
         print(f"Saving file: {filename} ")
         np.savez(filename,
-                 xysc=_xysc,
+                 xya=_xya,
                  colors=_colors,
                  labels=_labels,
                  symmetry=generator.symmetry,
@@ -66,44 +59,43 @@ def generate_and_save(generator, num_classes, samples_per_class, num_copies, pre
 
     half_total_samples = total_samples // 2
     fhalf = f"{prefix}_t{num_tiles}_c{num_copies//2}.npz"
-    save_npz(fhalf, xysc[:half_total_samples], colors[:half_total_samples], labels[:half_total_samples])
+    save_npz(fhalf, xya[:half_total_samples], colors[:half_total_samples], labels[:half_total_samples])
     
     ffull = f"{prefix}_t{num_tiles}_c{num_copies}.npz"
-    save_npz(ffull, xysc, colors, labels)
+    save_npz(ffull, xya, colors, labels)
 
     return fhalf, ffull
 
 if __name__ == "__main__":
     import sys
     if len(sys.argv) < 2:
-        print(f"Usage: python {sys.argv[0]} [symmetry] [<target_mb>=1024] [<num_tiles>=768]")
+        print(f"Usage: python {sys.argv[0]} symmetry target_mb num_tiles [unit_side]")
         exit(0)
     
-    SYMMETRY = int(sys.argv[1])
 
     folder = "MPEG7/gifs"
     imageset = ImageSet(folder)
     NUM_CLASSES = imageset.num_classes
     SAMPLES_PER_CLASS = 20
 
-    TARGET_SIZE_MB = 1024
-    if len(sys.argv) > 2:
-        TARGET_SIZE_MB = float(sys.argv[2])
-
-    NUM_TILES = 768
-    if len(sys.argv) > 3:
-        NUM_TILES = int(sys.argv[3])
+    SYMMETRY = int(sys.argv[1])
+    TARGET_SIZE_MB = float(sys.argv[2])
+    NUM_TILES = int(sys.argv[3])
+    if len(sys.argv) > 4:
+        UNIT_SIDE = float(sys.argv[4])
+    else:
+        UNIT_SIDE = .05 if SYMMETRY == 6 else .1
 
     num_random_copies = calculate_num_copies_per_sample(NUM_TILES, TARGET_SIZE_MB, NUM_CLASSES, SAMPLES_PER_CLASS)
     print(f"\nnum_random_copies: {num_random_copies}")
 
     if SYMMETRY == 6:
-        gen6 = Generator6(imageset, num_tiles=NUM_TILES, target_halfside=5., unit_side=.05)
+        gen6 = Generator6(imageset, num_tiles=NUM_TILES, target_halfside=5., unit_side=UNIT_SIDE)
         files = generate_and_save(gen6, NUM_CLASSES, SAMPLES_PER_CLASS, num_random_copies, prefix="datasets/hex")
         # 768 with .05 is great
         # 364 (x, y) need to be bigger unit_side ≈ .1 ?
     else:
-        gen5 = Generator5(imageset, num_tiles=500, target_halfside=5., unit_side=.1)
+        gen5 = Generator5(imageset, num_tiles=500, target_halfside=5., unit_side=UNIT_SIDE)
         files = generate_and_save(gen5, NUM_CLASSES, SAMPLES_PER_CLASS, num_random_copies, prefix="datasets/pen")
 
     for f in files:
