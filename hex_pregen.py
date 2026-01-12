@@ -18,12 +18,12 @@ if __name__ == '__main__':
     try:
         halfside = float(sys.argv[1])
         hex_side = float(sys.argv[2])
-    except:
+    except IndexError:
         print("Usage: python hex_pregen.py <halfside> <hex_side>")
         print("Using default values")
         hex_side = 1/10.
         halfside = 3.
-    
+
     print(f"\thalfside: {halfside}")
     print(f"\thex_side: {hex_side}")
 

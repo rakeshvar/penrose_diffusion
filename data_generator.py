@@ -77,7 +77,7 @@ class Generator(ABC):
         new_xy = xy_rot - np.array([x0, y0])
 
         # Rotate Mask
-        thetamask = np.random.uniform(-self.rot_range/3, self.rot_range/3)
+        thetamask = np.random.uniform(-self.rot_range/6, self.rot_range/6)
         ct, st = np.cos(thetamask), np.sin(thetamask)
         rot_mask = np.array([[ct, -st], [st, ct]])
 
@@ -131,7 +131,7 @@ class Generator(ABC):
 
 class Generator6(Generator):
     area_with_unit_side = 3. * np.sqrt(3.) / 2.  # Area of a hexagon with side 1
-    rot_range = np.pi/6
+    rot_range = np.pi
     symmetry = 6
 
     def _get_mother_tiles(self, tothalfside, unit_side):
@@ -143,7 +143,7 @@ class Generator6(Generator):
 from pen_base import psi, psi2
 class Generator5(Generator):
     area_with_unit_side = np.sin(np.pi/5) * psi2 + np.sin(2*np.pi/5) * psi # Weighted average of areas of rhombuses with side 1
-    rot_range = np.pi/2
+    rot_range = np.pi
     symmetry = 5
 
     def _get_mother_tiles(self, tothalfside, unit_side):

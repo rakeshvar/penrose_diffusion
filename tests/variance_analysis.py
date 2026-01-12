@@ -37,7 +37,7 @@ def analyze_dataset(data_path):
 
     # 4. Diffusion Process Check (Variance Preserving?)
     # ---------------------------------------------------------
-    diffuser = DDIMDiffusion(num_timesteps=1000, beta_schedule='linear')
+    diffuser = DDIMDiffusion(num_timesteps=1000)
 
     for i in range(5):
         print("\n" + "="*50)

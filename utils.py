@@ -64,7 +64,7 @@ def inscribed_square_halfside(grid):
     """
     try:
         l1, l2 = [h.center[0] for h in grid], [h.center[1] for h in grid]
-    except:
+    except TypeError:
         l1, l2 = [h.center.real for h in grid], [h.center.imag for h in grid]
 
     return min(max(map(abs, l1)), max(map(abs, l2))) / math.sqrt(2)
@@ -147,6 +147,8 @@ class TablePrinter:
             # check if arg is a string and has no digits in it
             if isinstance(arg, str) and not any(c.isdigit() for c in arg):
                 print(f"{arg:<{self.max_name_len}}│", end="")
+            elif isinstance(arg, float):
+                print(f"{arg:{self.max_name_len}.4f}│", end="")
             else:
                 print(f"{arg:>{self.max_name_len}}│", end="")
         print()
@@ -228,3 +230,53 @@ def f(v, N:int|str = ""):
         return f"{v:{N}.1f}"
     else:  # val >= 10
         return f"{v:{N}.0f}"
+
+
+def xysc_to_xyac(xysc, colors=None):
+    """
+    Convert (x, y, sinθ, cosθ) to (x, y, θ) or (x, y, θ, color).
+    """
+    xysc = xysc.cpu().numpy()
+    s = xysc[..., 2]
+    c = xysc[..., 3]
+    angle = np.arctan2(s, c)
+
+    if colors is None:
+        out = np.stack([xysc[..., 0], xysc[..., 1], angle], axis=-1)
+    else:
+        colors = colors.cpu().numpy()[:, :, 0]
+        out = np.stack([xysc[..., 0], xysc[..., 1], angle, colors], axis=-1)
+
+    return out
+
+
+def npz_stats(npz_name):
+    with np.load(npz_name) as data:
+        xysc = data['xysc']
+        x = xysc[..., 0].astype(np.float64)
+        y = xysc[..., 1].astype(np.float64)
+        sin = xysc[..., 2].astype(np.float64)
+        cos = xysc[..., 3].astype(np.float64)
+        angle = np.arctan2(sin, cos).astype(np.float64)
+        colors = data['colors'].astype(np.float64)
+
+    tp = TablePrinter(6, 15)
+    tp.top_line()
+    tp.line("Var", "Global/Ind.", "min", "mean", "max", "std")
+
+    def stats(v, name):
+        tp.mid_line()
+        tp.line(name, "global", np.min(v), np.mean(v), np.max(v), np.std(v))
+        tp.line(name, "individual avg",
+                np.min(v, axis=-1).mean(), np.mean(v, axis=-1).mean(),
+                np.max(v, axis=-1).mean(), np.std(v, axis=-1).mean())
+
+
+    stats(x, "x")
+    stats(y, "y")
+    stats(sin, "sin")
+    stats(cos, "cos")
+    stats(angle, "angle")
+    stats(colors, "color")
+
+    tp.bot_line()

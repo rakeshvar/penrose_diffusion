@@ -1,6 +1,7 @@
 import numpy as np
 import torch
-from pathlib import Path
+
+from utils import npz_stats
 
 class DataLoader:
     """
@@ -20,29 +21,29 @@ class DataLoader:
 
         print(f"Loading {path.name} into CPU RAM...")
         with np.load(path) as data:
-            xya = torch.from_numpy(data['xya'])         # (N, num_tiles, xya)
+            xysc = torch.from_numpy(data['xysc'])       # (N, num_tiles, xysc)
             colors = torch.from_numpy(data['colors'])   # (N, num_tiles, 1)
             labels = torch.from_numpy(data['labels'])   # (N,)
             self.symmetry = data['symmetry'].item()
             self.side = data['side'].item()
 
-        print(f"Moving {xya.shape[0]} samples to {device}...")
+        print(f"Moving {xysc.shape[0]} samples to {device}...")
 
         # Move raw data to GPU once if available and convert from float16 to float32
-        self.xya = xya.to(device).to(torch.float32)
+        self.xysc = xysc.to(device).to(torch.float32)
         self.colors = colors.to(device).long()
         self.labels = labels.to(device).long()
 
-        self.n_samples = self.xya.shape[0]
-        self.num_tiles = self.xya.shape[1]
+        self.n_samples = self.xysc.shape[0]
+        self.num_tiles = self.xysc.shape[1]
 
         # Calculate memory usage for __str__
-        self.mem_mb = (self.xya.element_size() * self.xya.nelement() +
+        self.mem_mb = (self.xysc.element_size() * self.xysc.nelement() +
                        self.colors.element_size() * self.colors.nelement() +
                        self.labels.element_size() * self.labels.nelement()) / 1e6
 
     def __iter__(self):
-        """Yields batches of (xyac, labels). Drops the last batch if incomplete."""
+        """Yields batches of (xysc, labels). Drops the last batch if incomplete."""
         if self.shuffle:
             indices = torch.randperm(self.n_samples, device=self.device)
         else:
@@ -53,7 +54,7 @@ class DataLoader:
         for start_idx in range(0, num_samples, self.batch_size):
             idx = indices[start_idx : start_idx + self.batch_size]
 
-            yield self.xya[idx], self.colors[idx], self.labels[idx]
+            yield self.xysc[idx], self.colors[idx], self.labels[idx]
 
     def __len__(self):
         """Returns the number of FULL batches per epoch"""
@@ -62,7 +63,7 @@ class DataLoader:
     def __str__(self):
         """Pretty-print dataloader status."""
         return (
-            f"=== GPUTensorLoader Info ===\n"
+            f"=== DataLoader ===\n"
             f"  • Source:     {self.data_path_name}\n"
             f"  • Symmetry:   {self.symmetry}\n"
             f"  • Side:       {self.side}\n"
@@ -73,5 +74,18 @@ class DataLoader:
             f"  • Batch Size: {self.batch_size}\n"
             f"  • Batches:    {len(self)} (Full batches)\n"
             f"  • Shuffle:    {self.shuffle}\n"
-            f"============================"
         )
+
+if __name__ == "__main__":
+    from pathlib import Path
+
+    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+
+    for path in Path(".").rglob("*.npz"):
+        print("#"* 50, "\nOpening: ", path)
+        try:
+            print(DataLoader(path, device, 32, True))
+            npz_stats(path)
+        except KeyError as e:
+            print("Invalid data file. ", e)
+

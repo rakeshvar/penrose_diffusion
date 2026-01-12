@@ -4,20 +4,24 @@ import torch.nn as nn
 import math
 
 class SinusoidalPositionalEmbedding(nn.Module):
-    """Sinusoidal positional embedding for TIME steps"""
+    """Sinusoidal positional embedding for time"""
     def __init__(self, dim):
         super().__init__()
         self.dim = dim
 
-    def forward(self, time):
-        device = time.device
-        half_dim = self.dim // 2
-        emb = math.log(10000) / (half_dim - 1)
-        emb = torch.exp(torch.arange(half_dim, device=device) * -emb)
-        emb = time[:, None] * emb[None, :]
-        emb = torch.cat((torch.sin(emb), torch.cos(emb)), dim=-1)
-        return emb
-
+    def forward(self, t):
+        """
+        t: (B,) integer diffusion timesteps
+        returns: (B, dim) sinusoidal time embedding
+        """
+        device = t.device
+        H = self.dim // 2
+        i = torch.arange(H, device=device)
+        ω = (1000 * math.pi) ** (-i/(H-1))          # Frequency ladder: ωᵢ = C^(-i/H)
+        Φ = t[:, None] * ω[None, :]                 # Phase: Φ[b, i] = t[b] · ω[i]
+        sinΦ, cosΦ = torch.sin(Φ), torch.cos(Φ)     # Embed
+        return torch.cat([sinΦ, cosΦ], dim=-1)
+    
 class TransformerDenoiser(nn.Module):
     def __init__(
         self,
@@ -34,7 +38,7 @@ class TransformerDenoiser(nn.Module):
         self.d_model = d_model
 
         # Input projection
-        self.input_proj = nn.Linear(3, d_model)
+        self.input_proj = nn.Linear(4, d_model)
         
         # Color embedding (Binary: 0 or 1)
         self.color_embed = nn.Embedding(2, d_model)
@@ -66,14 +70,14 @@ class TransformerDenoiser(nn.Module):
             num_layers=num_layers
         )
 
-        # Output projection - predict noise for x, y, angle
+        # Output projection - predict noise for x, y, sin, cos
         self.output_proj = nn.Sequential(
             nn.Linear(d_model, d_model * 2),
             nn.SiLU(),
             nn.Dropout(dropout),
             nn.Linear(d_model * 2, d_model),
             nn.SiLU(),
-            nn.Linear(d_model, 3)
+            nn.Linear(d_model, 4)
         )
 
         # Layer norm for output
@@ -81,24 +85,24 @@ class TransformerDenoiser(nn.Module):
 
         self.dropout = nn.Dropout(dropout)
 
-    def forward(self, xya, colors, t, class_labels):
+    def forward(self, xysc, colors, t, class_labels):
         """
         Args:
-            xya: (B, num_tiles, 3) - noisy tiles [x, y, angle]
-            colors: (B, num_tiles)
-            t: (B,) - time steps (normalized to [0, 1])
+            xysc: (B, N, 4) - noisy tiles [x, y, sin, cos]
+            colors: (B, N)
+            t: (B,) - time steps unnormalized
             class_labels: (B,) - class indices (0-69)
         Returns:
-            noise: (B, num_tiles, 3) - predicted noise for [x, y, angle]
+            noise: (B, N, 3) - predicted noise for [x, y, sin, cos]
         """
-        h = self.input_proj(xya)  # (B, num_tiles, d_model)
+        h = self.input_proj(xysc)                           # B, N, D
 
         # 2. Add Color Embedding
-        # Ensure colors are (B, num_tiles) for embedding lookup
+        # Ensure colors are (B, N) for embedding lookup
         if colors.dim() == 3: 
-            colors = colors.squeeze(-1) 
+            colors = colors.squeeze(-1)                     # B, N
         
-        h_color = self.color_embed(colors) # (B, num_tiles, d_model)
+        h_color = self.color_embed(colors)                  # B, N, D
         h = h + h_color
 
         # 3. Add Time Embedding
@@ -106,30 +110,26 @@ class TransformerDenoiser(nn.Module):
         h = h + time_emb
 
         # Add class embedding (broadcasted to all tiles)
-        class_emb = self.class_embed(class_labels)  # (B, class_embed_dim)
-        class_emb = self.class_proj(class_emb).unsqueeze(1)  # (B, 1, d_model)
+        class_emb = self.class_embed(class_labels)          # B, class_embed_dim
+        class_emb = self.class_proj(class_emb).unsqueeze(1) # B, 1, D
         h = h + class_emb
 
         # Apply transformer with unmasked self-attention
-        h = self.transformer(h)  # (B, num_tiles, d_model)
+        h = self.transformer(h)                             # B, N, D
 
         # Normalize and project to noise
         h = self.norm_out(h)
         h = self.dropout(h)
-        noise_pred = self.output_proj(h)  # (B, num_tiles, 3)
+        noise_pred = self.output_proj(h)                    # B, N, 4
 
         return noise_pred
 
 class DDIMDiffusion(nn.Module):
     """DDIM diffusion process manager"""
-    def __init__(self, num_timesteps=1000, beta_schedule='linear'):
+    def __init__(self, num_timesteps=1000):
         super().__init__()
         self.num_timesteps = num_timesteps
-
-        if beta_schedule == 'linear':
-            betas = torch.linspace(1e-4, 0.02, num_timesteps)
-        else:
-            raise NotImplementedError
+        betas = torch.linspace(1e-5, 0.01, num_timesteps) 
 
         alphas = 1. - betas
         alphas_cumprod = torch.cumprod(alphas, dim=0)
@@ -148,31 +148,31 @@ class DDIMDiffusion(nn.Module):
         # self.register_buffer('sqrt_recip_alphas_cumprod', torch.sqrt(1. / alphas_cumprod))
         # self.register_buffer('sqrt_recipm1_alphas_cumprod', torch.sqrt(1. / alphas_cumprod - 1))
 
-    def q_sample(self, xya_start, t, noise=None):
+    def q_sample(self, xysc_start, t, noise=None):
         """
         Forward diffusion process: x_t = sqrt(alpha_cumprod) * x_0 + sqrt(1 - alpha_cumprod) * noise
         """
         if noise is None:
-            noise = torch.randn_like(xya_start)
+            noise = torch.randn_like(xysc_start)
 
         a = self.sqrt_alphas_cumprod[t].view(-1, 1, 1)
         b = self.sqrt_one_minus_alphas_cumprod[t].view(-1, 1, 1)
 
-        xya_noisy = a * xya_start + b * noise
+        xysc_noisy = a * xysc_start + b * noise
 
-        return xya_noisy, noise
+        return xysc_noisy, noise
 
     @torch.no_grad()
-    def p_sample(self, denoiser, xya, colors, t, class_labels, eta=0.0):
+    def p_sample(self, denoiser, xysc, colors, t, class_labels, eta=0.0):
         """
         Reverse diffusion process (DDIM sampling)
         """
         # Predict noise
-        noise_pred = denoiser(xya, colors, t, class_labels)
+        noise_pred = denoiser(xysc, colors, t, class_labels)
 
         # Only denoise geometry (x, y, angle)
-        xya0_pred = (
-            (xya - self.sqrt_one_minus_alphas_cumprod[t].view(-1, 1, 1) * noise_pred) /
+        xysc0_pred = (
+            (xysc - self.sqrt_one_minus_alphas_cumprod[t].view(-1, 1, 1) * noise_pred) /
             self.sqrt_alphas_cumprod[t].view(-1, 1, 1)
         )
 
@@ -181,35 +181,42 @@ class DDIMDiffusion(nn.Module):
             alpha_t = self.alphas_cumprod[t].view(-1, 1, 1)
             alpha_t_prev = self.alphas_cumprod_prev[t].view(-1, 1, 1)
             sigma_t = eta * torch.sqrt((1 - alpha_t_prev) / (1 - alpha_t) * (1 - alpha_t / alpha_t_prev))
-            noise = torch.randn_like(xya) if eta > 0 else 0
+            noise = torch.randn_like(xysc) if eta > 0 else 0
 
-            xya_new = (
-                torch.sqrt(alpha_t_prev) * xya0_pred +
+            xysc_new = (
+                torch.sqrt(alpha_t_prev) * xysc0_pred +
                 torch.sqrt(1 - alpha_t_prev - sigma_t**2) * noise_pred +
                 sigma_t * noise
             )
         else:
-            xya_new = xya0_pred
+            xysc_new = xysc0_pred
 
-        return xya_new
+        # Circle Project
+        s = xysc_new[..., 2]
+        c = xysc_new[..., 3]
+        r = torch.sqrt(s*s + c*c + 1e-8)
+        xysc_new[..., 2] = s / r
+        xysc_new[..., 3] = c / r
+
+        return xysc_new
 
     @torch.no_grad()
-    def sample(self, denoiser, batch_size, num_tiles, class_labels, symmetry, num_steps=50, eta=0.0):
+    def sample(self, denoiser, batch_size, mum_tiles_, class_labels, symmetry, num_steps=50, eta=0.0):
         """
         Generate samples using DDIM
         """
         device = next(denoiser.parameters()).device
 
-        # Start from pure noise (only for first 3 dimensions)
-        xya = torch.randn((batch_size, num_tiles, 3), device=device)
+        # Start from pure noise (only for first 4 dimensions)
+        xysc = torch.randn((batch_size, mum_tiles_, 4), device=device)
         prob = {6: 1/3, 5: (3-5**0.5)/2}[symmetry]
-        colors = (torch.rand((batch_size, num_tiles, 1), device=device) < prob).long()
+        colors = (torch.rand((batch_size, mum_tiles_, 1), device=device) < prob).long()
 
         # Time steps for DDIM
         times = torch.linspace(self.num_timesteps - 1, 0, num_steps + 1, device=device).long()
 
         for i in range(num_steps):
             t = torch.full((batch_size,), times[i], device=device, dtype=torch.long) # type: ignore
-            xya = self.p_sample(denoiser, xya, colors, t, class_labels, eta)
+            xysc = self.p_sample(denoiser, xysc, colors, t, class_labels, eta)
 
-        return xya, colors
+        return xysc, colors

@@ -20,16 +20,16 @@ class AbstractTrainer(ABC):
 
 
 class NoisePredictor(AbstractTrainer):
-    def __call__(self, xya, colors, labels):
+    def __call__(self, xysc, colors, labels):
         self.denoiser.train()
-        B = xya.shape[0]
+        B = xysc.shape[0]
 
         # Forward pass — Add Noise
         t = torch.randint(0, self.diffuser.num_timesteps, (B,), device=self.device).long()
-        xya_noisy, noise = self.diffuser.q_sample(xya, t)
+        xysc_noisy, noise = self.diffuser.q_sample(xysc, t)
 
         # Predict noise
-        noise_pred = self.denoiser(xya_noisy, colors, t.float(), labels)
+        noise_pred = self.denoiser(xysc_noisy, colors, t.float(), labels)
         loss = F.mse_loss(noise, noise_pred)
 
         # Backpropagate
@@ -41,17 +41,17 @@ class NoisePredictor(AbstractTrainer):
 
 
 class XYAPredictor(AbstractTrainer):
-    def __call__(self, xya, colors, labels):
+    def __call__(self, xysc, colors, labels):
         self.denoiser.train()
-        B = xya.shape[0]
+        B = xysc.shape[0]
 
         # Forward pass
         t = torch.randint(0, self.diffuser.num_timesteps, (B,), device=self.device).long()
-        xya_noisy, noise = self.diffuser.q_sample(xya, t)
+        xysc_noisy, noise = self.diffuser.q_sample(xysc, t)
 
         # Predict noise
-        xya_pred = self.denoiser(xya_noisy, colors, t.float(), labels)
-        loss = F.mse_loss(xya, xya_pred)
+        xysc_pred = self.denoiser(xysc_noisy, colors, t.float(), labels)
+        loss = F.mse_loss(xysc, xysc_pred)
 
         # Backpropagate
         self.optimizer.zero_grad()
@@ -66,20 +66,20 @@ class LSASerial(AbstractTrainer):
         super().__init__(*args, **kwargs)
         self.lossfn = PermutationLossTorch()
 
-    def __call__(self, xya, colors, labels):
+    def __call__(self, xysc, colors, labels):
         self.denoiser.train()
-        B = xya.shape[0]
+        B = xysc.shape[0]
 
         # Forward pass
         t = torch.randint(0, self.diffuser.num_timesteps, (B,), device=self.device).long()
-        xya_noisy, noise = self.diffuser.q_sample(xya, t)
+        xysc_noisy, noise = self.diffuser.q_sample(xysc, t)
 
         # Predict noise
-        noise_pred = self.denoiser(xya_noisy, colors, t.float(), labels)
-        xya_recovered = xya_noisy - noise_pred
+        noise_pred = self.denoiser(xysc_noisy, colors, t.float(), labels)
+        xysc_recovered = xysc_noisy - noise_pred
 
         # LSA Loss
-        loss = self.lossfn(xya, xya_recovered, colors)
+        loss = self.lossfn(xysc, xysc_recovered, colors)
 
         # Backpropagate
         self.optimizer.zero_grad()
@@ -94,23 +94,23 @@ class LSAParallel(AbstractTrainer):
         super().__init__(*args, **kwargs)
         self.orderfn = PermutationOnlyScipy()
 
-    def __call__(self, xya, colors, labels):
+    def __call__(self, xysc, colors, labels):
         self.denoiser.train()
-        B = xya.shape[0]
+        B = xysc.shape[0]
 
         # Forward pass
         t = torch.randint(0, self.diffuser.num_timesteps, (B,), device=self.device).long()
-        xya_noisy, noise = self.diffuser.q_sample(xya, t)
+        xysc_noisy, noise = self.diffuser.q_sample(xysc, t)
 
         # Predict noise
-        noise_pred = self.denoiser(xya_noisy, colors, t.float(), labels)
-        xya_recovered = xya_noisy - noise_pred
+        noise_pred = self.denoiser(xysc_noisy, colors, t.float(), labels)
+        xysc_recovered = xysc_noisy - noise_pred
 
         # Reorder
-        bi, pi, ti = self.orderfn(xya, xya_noisy, colors)
+        bi, pi, ti = self.orderfn(xysc, xysc_noisy, colors)
 
         # LSA Loss
-        loss = F.mse_loss(xya[bi, ti], xya_recovered[bi, pi])
+        loss = F.mse_loss(xysc[bi, ti], xysc_recovered[bi, pi])
 
         # Backpropagate
         self.optimizer.zero_grad()

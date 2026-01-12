@@ -33,7 +33,7 @@ if __name__ == '__main__':
     try:
         halfside = float(sys.argv[1])
         pen_side = float(sys.argv[2])
-    except:
+    except IndexError:
         print(f"Usage: python {sys.argv[0]} <halfside> <pen_side>")
         print("Using default values")
         pen_side = 1/10.

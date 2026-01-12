@@ -184,7 +184,7 @@ class Rhombus:
             self.tilt = t
             self.side = s
             self.type = type(tri)
-            self.color = self.type == Fatt
+            self.color = self.type == Thin
 
         else:
             self.center = tri.center

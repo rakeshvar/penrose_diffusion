@@ -30,7 +30,7 @@ def svg_arcs(rhombus, ndigits):
     return arc_a, arc_c
 
 
-def save_svg(pengrid: PenGrid|TriangleGrid, filename, additional_config={}, ndigits=3):
+def save_svg(pengrid: PenGrid|TriangleGrid, filename, additional_config=None, ndigits=3):
     config = {
     'stroke-colour': '#ffffff',
     'margin': .05,
@@ -41,7 +41,8 @@ def save_svg(pengrid: PenGrid|TriangleGrid, filename, additional_config={}, ndig
     'draw-arcs': True,
     'tile-opacity': 0.5,
     }
-    config.update(additional_config)
+    if additional_config is not None:
+        config.update(additional_config)
 
     if isinstance(pengrid, TriangleGrid):
         pengrid = PenGrid(pengrid)

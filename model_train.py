@@ -13,6 +13,10 @@ from model_trainers import LSAParallel, LSASerial, NoisePredictor, XYAPredictor
 from pen_base import PenGrid
 from hex_svg import save_svg as hex_save_svg
 from pen_svg import save_svg as pen_save_svg
+from utils import xysc_to_xyac
+
+import warnings
+warnings.filterwarnings("ignore", message="enable_nested_tensor is True")
 
 #--------------------------------------------
 # Argument Parsing
@@ -130,9 +134,8 @@ for epoch in range(start_epoch, total_epochs):
     print(f"\nEpoch {epoch}/{total_epochs}")
     epoch_loss = 0
 
-    for i, (xya, colors, labels) in enumerate(tqdm(dataloader)):
-        epoch_loss += trainer(xya, colors, labels)
-        break
+    for i, (xysc, colors, labels) in enumerate(tqdm(dataloader)):
+        epoch_loss += trainer(xysc, colors, labels)
 
     avg_loss = epoch_loss / len(dataloader)
     print(f"Average Loss: {avg_loss:.4f}")
@@ -161,19 +164,18 @@ for epoch in range(start_epoch, total_epochs):
     with torch.no_grad():
         class_labels = torch.tensor([47], device=device)
 
-        sample_xya, sample_colors = diffuser.sample(
-            denoiser, batch_size=1, num_tiles=dataloader.num_tiles,
+        xysc, colors = diffuser.sample(
+            denoiser, batch_size=1, mum_tiles_=dataloader.num_tiles,
             class_labels=class_labels, symmetry=dataloader.symmetry, num_steps=50
         )
 
-        sample_combined = torch.cat([sample_xya, sample_colors.float()], dim=-1)
-        sample_np = sample_combined.cpu().numpy()
+        xyac = xysc_to_xyac(xysc, colors)
 
         sample_fpath = f"out/{checkpoint_path.stem}_ep{epoch}.svg"
         if dataloader.symmetry == 6:
-            grid = HexGrid(sample_np[0], side=dataloader.side)
+            grid = HexGrid(xyac[0], side=dataloader.side)
             hex_save_svg(grid, sample_fpath)
         else:
-            grid = PenGrid(sample_np[0], from_np=True, side=dataloader.side)
+            grid = PenGrid(xyac[0], from_np=True, side=dataloader.side)
             pen_save_svg(grid, sample_fpath)
         print(f"Saved {sample_fpath}")

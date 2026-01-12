@@ -2,13 +2,13 @@ import sys
 from pathlib import Path
 
 import torch
-import numpy as np
 from model_ddim import DDIMDiffusion, TransformerDenoiser
 
 from hex_base import HexGrid
 from pen_base import PenGrid
 from hex_svg import save_svg as hex_save_svg
 from pen_svg import save_svg as pen_save_svg
+from utils import xysc_to_xyac
 
 #--------------------------------------------
 # Argument Parsing
@@ -51,14 +51,12 @@ def sample(label, sample_fpath):
     print("Generating sample...")
     with torch.no_grad():
         class_labels = torch.tensor([label], device=device)
-        xyas, colors = diffuser.sample(
-            denoiser, batch_size=1, num_tiles=checkpoint['num_tiles'],
+        xysc, colors = diffuser.sample(
+            denoiser, batch_size=1, mum_tiles_=checkpoint['num_tiles'],
             class_labels=class_labels, symmetry=checkpoint['symmetry'], num_steps=50
         )
 
-        xyas = xyas.cpu().numpy()     # (1, 768, 3)
-        colors = colors.cpu().numpy()  # (1, 768)
-        samples = np.concatenate((xyas, colors), axis=-1)
+        samples = xysc_to_xyac(xysc, colors)
 
         if checkpoint['symmetry'] == 6:
             grid = HexGrid(samples[0], side=checkpoint['side'])
