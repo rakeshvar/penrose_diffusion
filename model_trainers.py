@@ -1,16 +1,16 @@
-
-from abc import ABC
+from abc import ABC, abstractmethod
 
 import torch
 import torch.nn.functional as F
 
-from model_ddim import DDIMDiffusion, TransformerDenoiser
+from model_ddim import DDIMDiffuser, TransformerDenoiser
 from model_losses import PermutationLossTorch, PermutationOnlyScipy
+
 
 class AbstractTrainer(ABC):
     def __init__(self,
                  denoiser: TransformerDenoiser,
-                 diffuser: DDIMDiffusion,
+                 diffuser: DDIMDiffuser,
                  optimizer,
                  device):
         self.denoiser = denoiser
@@ -18,47 +18,41 @@ class AbstractTrainer(ABC):
         self.diffuser = diffuser
         self.device = device
 
+    def __call__(self, xysc_0, colors, labels):
+        self.denoiser.train()
+        B = xysc_0.shape[0]
+
+        # Forward pass - Add Noise
+        t = torch.randint(0, self.diffuser.num_timesteps, (B,), device=self.device).long()
+        xysc_t, noise = self.diffuser.q_sample(xysc_0, t)
+
+        # Predict noise/sample
+        prediction = self.denoiser(xysc_t, colors, t.float(), labels)
+
+        # Compute loss (subclass-specific)
+        loss = self.compute_loss(xysc_0, xysc_t, noise, prediction, colors, t) # type: ignore
+
+        # Backpropagate
+        self.optimizer.zero_grad()
+        loss.backward()
+        self.optimizer.step()
+        return loss.item()
+
 
 class NoisePredictor(AbstractTrainer):
-    def __call__(self, xysc, colors, labels):
-        self.denoiser.train()
-        B = xysc.shape[0]
-
-        # Forward pass — Add Noise
-        t = torch.randint(0, self.diffuser.num_timesteps, (B,), device=self.device).long()
-        xysc_noisy, noise = self.diffuser.q_sample(xysc, t)
-
-        # Predict noise
-        noise_pred = self.denoiser(xysc_noisy, colors, t.float(), labels)
-        loss = F.mse_loss(noise, noise_pred)
-
-        # Backpropagate
-        self.optimizer.zero_grad()
-        loss.backward()
-        self.optimizer.step()
-
-        return loss.item()
+    def compute_loss(self, xysc0, xysc_t, noise, noise_pred, colors, t):
+        # L2 Loss on noise
+        return F.mse_loss(noise, noise_pred)
 
 
-class XYAPredictor(AbstractTrainer):
-    def __call__(self, xysc, colors, labels):
-        self.denoiser.train()
-        B = xysc.shape[0]
+class SamplePredictor(AbstractTrainer):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.denoiser.predict = 'sample'  # Important
 
-        # Forward pass
-        t = torch.randint(0, self.diffuser.num_timesteps, (B,), device=self.device).long()
-        xysc_noisy, noise = self.diffuser.q_sample(xysc, t)
-
-        # Predict noise
-        xysc_pred = self.denoiser(xysc_noisy, colors, t.float(), labels)
-        loss = F.mse_loss(xysc, xysc_pred)
-
-        # Backpropagate
-        self.optimizer.zero_grad()
-        loss.backward()
-        self.optimizer.step()
-
-        return loss.item()
+    def compute_loss(self, xysc, xysc_t, noise, xysc_pred, colors, t):
+        # L2 Loss on sample (prediction is sample)
+        return F.mse_loss(xysc, xysc_pred)
 
 
 class LSASerial(AbstractTrainer):
@@ -66,27 +60,12 @@ class LSASerial(AbstractTrainer):
         super().__init__(*args, **kwargs)
         self.lossfn = PermutationLossTorch()
 
-    def __call__(self, xysc, colors, labels):
-        self.denoiser.train()
-        B = xysc.shape[0]
-
-        # Forward pass
-        t = torch.randint(0, self.diffuser.num_timesteps, (B,), device=self.device).long()
-        xysc_noisy, noise = self.diffuser.q_sample(xysc, t)
-
-        # Predict noise
-        noise_pred = self.denoiser(xysc_noisy, colors, t.float(), labels)
-        xysc_recovered = xysc_noisy - noise_pred
-
+    def compute_loss(self, xysc, xysc_t, noise, noise_pred, colors, t):
+        # Recover sample from noise prediction
+        xysc_recovered = self.diffuser.recover_xysc(xysc_t, t, noise_pred)
+        
         # LSA Loss
-        loss = self.lossfn(xysc, xysc_recovered, colors)
-
-        # Backpropagate
-        self.optimizer.zero_grad()
-        loss.backward()
-        self.optimizer.step()
-
-        return loss.item()
+        return self.lossfn(xysc, xysc_recovered, colors)
 
 
 class LSAParallel(AbstractTrainer):
@@ -94,28 +73,12 @@ class LSAParallel(AbstractTrainer):
         super().__init__(*args, **kwargs)
         self.orderfn = PermutationOnlyScipy()
 
-    def __call__(self, xysc, colors, labels):
-        self.denoiser.train()
-        B = xysc.shape[0]
+    def compute_loss(self, xysc, xysc_t, noise, noise_pred, colors, t):
+        # Recover sample from noise prediction
+        xysc_recovered = self.diffuser.recover_xysc(xysc_t, t, noise_pred)
 
-        # Forward pass
-        t = torch.randint(0, self.diffuser.num_timesteps, (B,), device=self.device).long()
-        xysc_noisy, noise = self.diffuser.q_sample(xysc, t)
+        # Reorder using scipy-based assignment
+        bi, ti, pi = self.orderfn(xysc, xysc_t, colors)
 
-        # Predict noise
-        noise_pred = self.denoiser(xysc_noisy, colors, t.float(), labels)
-        xysc_recovered = xysc_noisy - noise_pred
-
-        # Reorder
-        bi, pi, ti = self.orderfn(xysc, xysc_noisy, colors)
-
-        # LSA Loss
-        loss = F.mse_loss(xysc[bi, ti], xysc_recovered[bi, pi])
-
-        # Backpropagate
-        self.optimizer.zero_grad()
-        loss.backward()
-        self.optimizer.step()
-
-        return loss.item()
-
+        # L2 Loss on reordered xysc
+        return F.mse_loss(xysc[bi, ti], xysc_recovered[bi, pi])

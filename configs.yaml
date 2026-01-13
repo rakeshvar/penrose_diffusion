@@ -50,7 +50,7 @@ default:
     <<: *default_train
 
 # SMALL
-smallhex:
+small:
   denoiser:
     <<: *small_denoiser
   train:
@@ -60,14 +60,8 @@ smallhex:
     num_epochs: 10           
 
 # LARGE
-largehex:
+large:
   denoiser:
-    <<: *default_denoiser
-    class_embed_dim: 128
-    time_embed_dim: 256
-    d_model: 256
-    num_heads: 8
-    num_layers: 6
-    dropout: 0.1
+    <<: *big_denoiser
   train:
     <<: *default_train

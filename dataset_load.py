@@ -14,14 +14,16 @@ class DataLoader:
 
         print(f"Loading {path.name} into CPU RAM...")
         with np.load(path) as data:
-            xya = torch.from_numpy(data['xya'])         # (N, num_tiles, xya)
-            colors = torch.from_numpy(data['colors'])   # (N, num_tiles, 1)
-            labels = torch.from_numpy(data['labels'])   # (N,)
+            xya = torch.from_numpy(data['xya'])           # (M, N, xya)
+            colors = torch.from_numpy(data['colors'])     # (M, N)
+            labels = torch.from_numpy(data['labels'])     # (M,)
             self.symmetry = data['symmetry'].item()
             self.side = data['side'].item()
+            self.num_classes = data['num_classes'].item()
+            self.class_lookup = data['class_lookup'].item()
 
-        xy_means = xya[..., :2].mean(dim=1, keepdim=True) # (N, 1, 2)
-        xya[..., :2] -= xy_means.to(xya.dtype)
+        xy_means = xya[..., :2].mean(dim=1, keepdim=True) # (M, 1, 2)
+        xya[..., :2] -= xy_means
 
         print(f"Moving {xya.shape[0]} samples to {device}...")
         self.xya = xya.to(device).float()

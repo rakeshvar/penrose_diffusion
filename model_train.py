@@ -1,3 +1,4 @@
+import random
 import sys
 import yaml
 from tqdm import tqdm
@@ -7,8 +8,8 @@ from pathlib import Path
 import torch
 from dataset_load import DataLoader
 from model_augment import GeometryAugment
-from model_ddim import DDIMDiffusion, TransformerDenoiser
-from model_trainers import LSAParallel, LSASerial, NoisePredictor, XYAPredictor
+from model_ddim import DDIMDiffuser, TransformerDenoiser
+from model_trainers import LSAParallel, LSASerial, NoisePredictor, SamplePredictor
 
 from hex_base import HexGrid
 from pen_base import PenGrid
@@ -112,10 +113,10 @@ print(dataloader)
 denoiser = TransformerDenoiser(**denoiser_config)
 denoiser.to(device)
 
-diffuser = DDIMDiffusion(num_timesteps=1000)
+diffuser = DDIMDiffuser(num_timesteps=1000)
 diffuser.to(device)
 
-augmenter = GeometryAugment(rot_range=3.14159, translate_range=0.0)
+augmenter = GeometryAugment()
 augmenter.to(device)
 
 optimizer = torch.optim.AdamW(denoiser.parameters(), lr=train_config['lr'])
@@ -135,7 +136,7 @@ if loading_from_checkpoint:
 #--------------------------------------------
 Trainers = {
     'Noise': NoisePredictor,
-    'XYA': XYAPredictor,
+    'Sample': SamplePredictor,
     'LSAS': LSASerial,
     'LSAP': LSAParallel,
 }
@@ -171,26 +172,31 @@ for epoch in range(start_epoch, total_epochs):
         'symmetry': dataloader.symmetry,
         'num_tiles': dataloader.num_tiles,
         'side': dataloader.side,
+        'num_classes': dataloader.num_classes,
+        'class_lookup': dataloader.class_lookup
     }
 
-    save_to = checkpoint_path.parent / f"{checkpoint_path.stem}_e{epoch:02d}.pt"
+    save_to = checkpoint_path.parent / f"{checkpoint_path.stem}_e{epoch:03d}.pt"
     torch.save(checkpoint, save_to)
     print(f"Saved {save_to}")
 
     # Sample
     #--------
     print("Generating sample...")
+    denoiser.eval()
     with torch.no_grad():
-        class_labels = torch.tensor([47], device=device)
+        label = random.randint(0, dataloader.num_classes - 1)
+        class_labels = torch.tensor([label], device=device)
+        class_name = dataloader.class_lookup[label]
 
         xysc, colors = diffuser.sample(
-            denoiser, batch_size=1, mum_tiles_=dataloader.num_tiles,
+            denoiser, batch_size=1, num_tiles=dataloader.num_tiles,
             class_labels=class_labels, symmetry=dataloader.symmetry, num_steps=50
         )
 
         xyac = xysc_to_xyac(xysc, colors)
 
-        sample_fpath = samples_dir / f"{checkpoint_path.stem}_ep{epoch:02d}.svg"
+        sample_fpath = samples_dir / f"{checkpoint_path.stem}_ep{epoch:03d}.svg"
         if dataloader.symmetry == 6:
             grid = HexGrid(xyac[0], side=dataloader.side)
             hex_save_svg(grid, sample_fpath)
@@ -198,3 +204,4 @@ for epoch in range(start_epoch, total_epochs):
             grid = PenGrid(xyac[0], from_np=True, side=dataloader.side)
             pen_save_svg(grid, sample_fpath)
         print(f"Saved {sample_fpath}")
+    denoiser.train()

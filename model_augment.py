@@ -18,9 +18,9 @@ class GeometryAugment(nn.Module):
         Args:
             xya: (B, N, 3) Tensor containing [x, y, angle] (can be float16)
         Returns:
-            xysc: (B, N, 4) Transformed tensor [x, y, sin, cos] (float32)
+            xysc: (B, N, 4) Transformed tensor [x, y, sin, cos]
         """
-        B, = xya.shape[0]
+        B = xya.shape[0]
         device = xya.device
 
         x = xya[..., 0]
