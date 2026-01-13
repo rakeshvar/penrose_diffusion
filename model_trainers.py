@@ -2,6 +2,7 @@ from abc import ABC, abstractmethod
 
 import torch
 import torch.nn.functional as F
+import compatibility as compat
 
 from model_ddim import DDIMDiffuser, TransformerDenoiser
 from model_losses import PermutationLossTorch, PermutationOnlyScipy
@@ -35,7 +36,10 @@ class AbstractTrainer(ABC):
         # Backpropagate
         self.optimizer.zero_grad()
         loss.backward()
-        self.optimizer.step()
+        
+        # Universal Step (TPU/GPU)
+        compat.optimizer_step(self.optimizer)
+        
         return loss.item()
 
 
