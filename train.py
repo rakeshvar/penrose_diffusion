@@ -156,6 +156,8 @@ for epoch in range(start_epoch, total_epochs):
     for i, (xya, colors, labels) in enumerate(tqdm(dataloader)):
         xysc = augmenter(xya)
         epoch_loss += trainer(xysc, colors, labels)
+        if not loading_from_checkpoint and config_name == 'toy':
+            break
 
     avg_loss = epoch_loss / len(dataloader)
     print(f"Average Loss: {avg_loss:.4f}")

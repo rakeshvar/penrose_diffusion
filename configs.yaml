@@ -49,6 +49,13 @@ default:
   train:
     <<: *default_train
 
+toy:
+  denoiser:
+    <<: *small_denoiser
+  train:
+    <<: *default_train
+    num_epochs: 10
+    
 # SMALL
 small:
   denoiser:

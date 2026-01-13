@@ -13,7 +13,7 @@ class DataLoader:
         self.data_path_name = path.name
 
         print(f"Loading {path.name} into CPU RAM...")
-        with np.load(path) as data:
+        with np.load(path, allow_pickle=True) as data:
             xya = torch.from_numpy(data['xya'])           # (M, N, xya)
             colors = torch.from_numpy(data['colors'])     # (M, N)
             labels = torch.from_numpy(data['labels'])     # (M,)
