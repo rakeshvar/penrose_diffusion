@@ -61,7 +61,7 @@ def generate_and_save(generator, samples_per_class, num_copies, prefix):
                               generator.imageset.class_id_to_name )
         print(f"Saved!")
 
-    ffull = f"{prefix}_t{num_tiles}_c{num_copies}.npz"
+    ffull = f"{prefix}_t{num_tiles:03d}_c{num_copies:02d}_u{round(100*generator.unit_side):02d}.npz"
     save_npz(ffull, xya, colors, labels)
 
     return ffull
@@ -69,7 +69,7 @@ def generate_and_save(generator, samples_per_class, num_copies, prefix):
 if __name__ == "__main__":
     import sys
     if len(sys.argv) < 2:
-        print(f"Usage: python {sys.argv[0]} symmetry target_mb num_tiles [unit_side]")
+        print(f"Usage: python {sys.argv[0]} symmetry num_tiles num_copies [unit_side]")
         exit(0)
     
 
@@ -78,24 +78,27 @@ if __name__ == "__main__":
     SAMPLES_PER_CLASS = 20
 
     SYMMETRY = int(sys.argv[1])
-    TARGET_SIZE_MB = float(sys.argv[2])
-    NUM_TILES = int(sys.argv[3])
+    NUM_TILES = int(sys.argv[2])
+    NUM_COPIES = int(sys.argv[3])
+
     if len(sys.argv) > 4:
         UNIT_SIDE = float(sys.argv[4])
-    else:
-        UNIT_SIDE = .05 if SYMMETRY == 6 else .1
+    else:                               # Aiming for a std of 1. for x, y
+        if SYMMETRY == 6:
+            UNIT_SIDE = .18 * (96/NUM_TILES)**.5
+        else:
+            UNIT_SIDE = .1 * (512/NUM_TILES)**.5
+    UNIT_SIDE = round(UNIT_SIDE, 2)
 
-    num_random_copies = calculate_num_copies_per_sample(NUM_TILES, TARGET_SIZE_MB, imageset.num_classes, SAMPLES_PER_CLASS)
-    print(f"\nnum_random_copies: {num_random_copies}")
+    print(f"SYMMETRY: {SYMMETRY} \nNUM_TILES: {NUM_TILES} \nNUM_COPIES: {NUM_COPIES} \nUNIT_SIDE: {UNIT_SIDE}")
+
 
     if SYMMETRY == 6:
         gen6 = Generator6(imageset, num_tiles=NUM_TILES, target_halfside=5., unit_side=UNIT_SIDE)
-        file = generate_and_save(gen6, SAMPLES_PER_CLASS, num_random_copies, prefix="datasets/hex")
-        # 768 with .05 is great
-        # 364 (x, y) need to be bigger unit_side ≈ .1 ?
+        file = generate_and_save(gen6, SAMPLES_PER_CLASS, NUM_COPIES, prefix="datasets/hex")
     else:
         gen5 = Generator5(imageset, num_tiles=500, target_halfside=5., unit_side=UNIT_SIDE)
-        file = generate_and_save(gen5, SAMPLES_PER_CLASS, num_random_copies, prefix="datasets/pen")
+        file = generate_and_save(gen5, SAMPLES_PER_CLASS, NUM_COPIES, prefix="datasets/pen")
 
     npz_stats(file)
 
