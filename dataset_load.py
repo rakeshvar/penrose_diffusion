@@ -52,7 +52,6 @@ class MyDataset(Dataset):
             f"  • Tiles:      {self.num_tiles}\n"
             f"  • Memory:     {self.mem_mb:.2f} MB\n"
             f"  • Batches:    {len(self)} (Full batches)\n"
-            f"  • Class Lookup: {self.class_lookup}\n"
         )
 
 if __name__ == "__main__":

@@ -6,7 +6,6 @@ import torch
 from torch.utils.data.distributed import DistributedSampler
 
 try:
-    import google.colab
     from google.colab import drive
     IS_COLAB = True
 except ImportError:

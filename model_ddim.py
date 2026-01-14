@@ -131,7 +131,7 @@ class DDIMDiffuser(nn.Module):
     def __init__(self, num_timesteps=1000):
         super().__init__()
         self.num_timesteps = num_timesteps
-        β = torch.linspace(1e-5, 0.01, num_timesteps).view(-1, 1, 1)
+        β = torch.linspace(1e-5, 0.001, num_timesteps).view(-1, 1, 1)
         α = 1 - β
         ᾱ = torch.cumprod(α, dim=0)
         ᾱtm1 = torch.cat([torch.tensor([[[1.]]]), ᾱ[:-1]])
