@@ -5,7 +5,6 @@ import torch.nn.functional as F
 import compatibility as compat
 
 from model_ddim import DDIMDiffuser, TransformerDenoiser
-from model_losses import PermutationLossTorch
 
 
 class AbstractTrainer(ABC):
@@ -58,6 +57,61 @@ class SamplePredictor(AbstractTrainer):
         # L2 Loss on sample (prediction is sample)
         return F.mse_loss(xysc_0, xysc_0_hat)
 
+#------------------------------------------------------------------------------
+# LSASerial
+#------------------------------------------------------------------------------
+
+try:
+    from torch_linear_assignment import batch_linear_assignment, assignment_to_indices
+except ModuleNotFoundError:
+    pass
+
+# !pip install -v torch-linear-assignment
+class PermutationLossTorch(torch.nn.Module):
+    def __init__(self):
+        super().__init__()
+        try:
+            print(batch_linear_assignment)
+        except:
+            raise Exception("Please install torch_linear_assignment"
+                            "pip install torch-linear-assignment")
+
+    def forward(self, truth, preds, colors):
+        total_loss = torch.tensor(0.0, device=preds.device)
+
+        for color in [0, 1]:
+            mask = (colors == color)
+
+            counts = mask.sum(dim=1)
+            unique_counts = torch.unique(counts)
+
+            for k in unique_counts:
+                k = k.item()
+                if k == 0: continue
+
+                batch_mask = (counts == k)
+
+                sub_p = preds[batch_mask][mask[batch_mask]].view(-1, k, preds.shape[-1])
+                sub_t = truth[batch_mask][mask[batch_mask]].view(-1, k, truth.shape[-1])
+
+                # 1. Cost on [..., :3] (XYZ). This tensor HAS gradients.
+                # dist_mat[b, i, j] = distance (i-th predicted , j-th truth) of b.
+                dist_mat = ((sub_p.unsqueeze(2) - sub_t.unsqueeze(1)) ** 2).sum(dim=-1)
+                    # 21 x 257 x 257 say
+
+                # 2. Solve Assignment
+                assignment = batch_linear_assignment(dist_mat.detach())
+                _, col_ind = assignment_to_indices(assignment)
+                    # 21 x 257
+
+                # 3. Gather Loss directly using indices
+                # We gather from the ORIGINAL 'dist_mat' to keep gradients flowing.
+                matched_costs = dist_mat.gather(2, col_ind.unsqueeze(2).long()).squeeze(2)
+                                                        #  | 21 x 257 x 1     -> 21 x 257
+                total_loss += matched_costs.sum()
+
+        return total_loss / truth.numel()
+
 
 class LSASerial(AbstractTrainer):
     def __init__(self, *args, **kwargs):
@@ -72,7 +126,7 @@ class LSASerial(AbstractTrainer):
         return self.lossfn(xysc_0, xysc_recovered, colors)
 
 #------------------------------------------------------------------------------
-# LSAParallel - Do from scratch
+# LSAParallel
 #------------------------------------------------------------------------------
 from contextlib import nullcontext
 import numpy as np
