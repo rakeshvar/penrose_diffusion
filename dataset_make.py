@@ -61,14 +61,10 @@ def generate_and_save(generator, samples_per_class, num_copies, prefix):
                               generator.imageset.class_id_to_name )
         print(f"Saved!")
 
-    half_total_samples = total_samples // 2
-    fhalf = f"{prefix}_t{num_tiles}_c{num_copies//2}.npz"
-    save_npz(fhalf, xya[:half_total_samples], colors[:half_total_samples], labels[:half_total_samples])
-    
     ffull = f"{prefix}_t{num_tiles}_c{num_copies}.npz"
     save_npz(ffull, xya, colors, labels)
 
-    return fhalf, ffull
+    return ffull
 
 if __name__ == "__main__":
     import sys
@@ -94,15 +90,14 @@ if __name__ == "__main__":
 
     if SYMMETRY == 6:
         gen6 = Generator6(imageset, num_tiles=NUM_TILES, target_halfside=5., unit_side=UNIT_SIDE)
-        files = generate_and_save(gen6, SAMPLES_PER_CLASS, num_random_copies, prefix="datasets/hex")
+        file = generate_and_save(gen6, SAMPLES_PER_CLASS, num_random_copies, prefix="datasets/hex")
         # 768 with .05 is great
         # 364 (x, y) need to be bigger unit_side ≈ .1 ?
     else:
         gen5 = Generator5(imageset, num_tiles=500, target_halfside=5., unit_side=UNIT_SIDE)
-        files = generate_and_save(gen5, SAMPLES_PER_CLASS, num_random_copies, prefix="datasets/pen")
+        file = generate_and_save(gen5, SAMPLES_PER_CLASS, num_random_copies, prefix="datasets/pen")
 
-    for f in files:
-        npz_stats(f)
+    npz_stats(file)
 
 """
 Pen5

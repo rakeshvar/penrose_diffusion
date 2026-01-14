@@ -51,7 +51,7 @@ class MyDataset(Dataset):
             f"  • Samples:    {self.n_samples}\n"
             f"  • Tiles:      {self.num_tiles}\n"
             f"  • Memory:     {self.mem_mb:.2f} MB\n"
-            f"  • Batches:    {len(self)} (Full batches)\n"
+            f"  • Samples:    {len(self)} ({self.n_samples//self.num_classes} per class * {self.num_classes} classes)\n"
         )
 
 if __name__ == "__main__":
