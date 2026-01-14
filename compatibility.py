@@ -27,8 +27,13 @@ def setup_paths():
     """
     if IS_COLAB:
         if not Path('/content/drive').exists():
-            print("Mounting Google Drive...")
-            drive.mount('/content/drive')
+            print("-" * 60)
+            print("ERROR: Google Drive is not mounted.")
+            print("Please run the following in a separate code cell BEFORE running this script:")
+            print("    from google.colab import drive")
+            print("    drive.mount('/content/drive')")
+            exit(1)
+
         base_dir = Path('/content/drive/MyDrive/penrose_diffusion')
     else:
         # Local or standard TPU VM
