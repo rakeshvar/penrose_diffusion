@@ -1,15 +1,28 @@
 # pyright: reportPossiblyUnboundVariable=false
 # pyright: reportMissingImports=false
-from pathlib import Path
 import os
-import torch
-from torch.utils.data.distributed import DistributedSampler
+import sys
+from pathlib import Path
 
+# --- 1. Detect Environment ---
 try:
+    import google.colab
     from google.colab import drive
     IS_COLAB = True
 except ImportError:
     IS_COLAB = False
+
+# --- 2. Apply Colab-Specific Fixes ---
+# Only unset these on Colab to force Single-VM mode. 
+# On GCP TPU Pods, these variables are required for distributed training.
+if IS_COLAB:
+    for key in ('TPU_PROCESS_ADDRESSES', 'CLOUD_TPU_TASK_ID'):
+        if key in os.environ:
+            del os.environ[key]
+
+# --- 3. Imports ---
+import torch
+from torch.utils.data.distributed import DistributedSampler
 
 try:
     import torch_xla.core.xla_model as xm
@@ -33,7 +46,7 @@ def setup_paths():
             print("Please run the following in a separate code cell BEFORE running this script:")
             print("    from google.colab import drive")
             print("    drive.mount('/content/drive')")
-            exit(1)
+            sys.exit(1)
 
         base_dir = Path('/content/drive/MyDrive/penrose_diffusion')
     else:
@@ -127,7 +140,7 @@ def launch(train_fn, args=()):
     """
     if IS_TPU:
         print("TPU Detected. Spawning processes...")
-        # nprocs=None allows torch_xla to automatically detect the number of devices (e.g. 4 or 8)
+        # 'spawn' is required for TPUs. nprocs=None auto-detects 4 (v5e) or 8 (v2/3) cores.
         xmp.spawn(train_fn, args=args, nprocs=None, start_method='spawn')
     else:
         print(f"Running single process. {'Colab ' if IS_COLAB else ''}")
