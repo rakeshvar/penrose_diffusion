@@ -18,14 +18,18 @@ try:
     import torch_xla.core.xla_model as xm
     import torch_xla.distributed.xla_multiprocessing as xmp
     import torch_xla.distributed.parallel_loader as pl
-    import torch_xla.runtime as xr
     IS_TPU = True
 except ImportError:
     IS_TPU = False
 
+IS_GPU = torch.cuda.is_available()
+IS_CPU = not (IS_TPU or IS_GPU)
+
 print("######################")
 print("IS_COLAB:", IS_COLAB)
 print("IS_TPU:", IS_TPU)
+print("IS_GPU:", IS_GPU)
+print("IS_CPU:", IS_CPU)
 print("######################")
 
 
@@ -58,7 +62,10 @@ CHECKPOINTS_DIR, SAMPLES_DIR = setup_paths()
 def get_device():
     if IS_TPU:
         return xm.xla_device()
-    return torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    elif torch.cuda.is_available():
+        return torch.device('cuda')
+    else:
+        return torch.device('cpu')
 
 
 def master_print(msg, rank):
@@ -67,7 +74,7 @@ def master_print(msg, rank):
         print(msg)
 
 
-def get_sampler(dataset):
+def get_maybe_sampler(dataset):
     """
     Returns a DistributedSampler if on TPU to split data across cores.
     Returns None for standard GPU/CPU training.
@@ -75,8 +82,8 @@ def get_sampler(dataset):
     if IS_TPU:
         return DistributedSampler(
             dataset,
-            num_replicas=xr.world_size(),
-            rank=xr.global_ordinal(),
+            num_replicas=xm.xrt_world_size(),
+            rank=xm.get_ordinal(),
             shuffle=True
         )
     return None
@@ -115,6 +122,7 @@ def optimizer_step(optimizer):
     """Triggers XLA graph execution on TPU or standard step on GPU."""
     if IS_TPU:
         xm.optimizer_step(optimizer)
+        xm.mark_step()
     else:
         optimizer.step()
 
@@ -134,8 +142,9 @@ def launch(train_fn, args=()):
     - GPU/CPU: Runs the function directly.
     """
     if IS_TPU:
-        print("TPU Detected. Initializing Single-VM Spawn...")
-        xmp.spawn(train_fn, args=args, nprocs=None, start_method='spawn')
+        nprocs = xm.xrt_world_size()
+        print(f"TPU Detected. Initializing Multi-VM Spawn with {nprocs} processes.")
+        xmp.spawn(train_fn, args=args, nprocs=nprocs, start_method='spawn')
     else:
         print(f"Running single process. {'Colab ' if IS_COLAB else ''}")
         train_fn(0, *args)

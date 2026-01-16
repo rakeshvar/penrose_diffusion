@@ -1,3 +1,4 @@
+import random
 import torch
 from pathlib import Path
 from tqdm import tqdm
@@ -40,13 +41,13 @@ def train_fn(rank, config):
     # Load Data
     #--------------------------------------------
     mprint(f"Loading data from {config.data_path}...", rank)
-    dataset = MyDataset(Path(config.data_path))  # CPU
-    sampler = compat.get_sampler(dataset)        # Split data for TPU cores
+    dataset = MyDataset(Path(config.data_path))         # CPU
+    maybe_sampler = compat.get_maybe_sampler(dataset)   # Split data for TPU cores
     
     loader_args = {
         'batch_size': config.train['batch_size'],
-        'sampler': sampler,
-        'shuffle': (sampler is None),              # Shuffle only if NOT using a sampler
+        'sampler': maybe_sampler,
+        'shuffle': (maybe_sampler is None),        # Shuffle iff NOT using a sampler
         'num_workers': 0 if compat.IS_TPU else 4,  # Keep 0 for safety on TPU VMs
         'drop_last': True
     }
@@ -84,6 +85,9 @@ def train_fn(rank, config):
     start_epoch = config.resume_epoch
     total_epochs = start_epoch + config.train['num_epochs']
     iterator = range(start_epoch, total_epochs)
+
+    sample_label = random.randint(0, dataset.num_classes - 1)
+    sample_name = dataset.class_lookup[sample_label]
     
     mprint(f"Starting training for {len(iterator)} epochs...", rank)
 
@@ -112,15 +116,13 @@ def train_fn(rank, config):
             config.save_checkpoint(epoch, denoiser, optimizer, avg_loss, dataset)
             
             # Save Sample
-            label_idx = int(config.timestamp[:2])
-            name = dataset.class_lookup[label_idx]
-            save_name = f"sample_{config.timestamp}_e{epoch:03d}_c{label_idx}_{name}.svg"
+            save_name = f"sample_{config.timestamp}_e{epoch:03d}_c{sample_label:02d}_{sample_name}.svg"
             svg_path = compat.SAMPLES_DIR / save_name
 
             # Call the reusable function from model_sampler.py
             save_sample(denoiser, diffuser, device, svg_path, 
                         dataset.num_tiles, dataset.symmetry, dataset.side, 
-                        label_idx)
+                        sample_label)
 #------
 # Main
 #------
