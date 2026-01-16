@@ -124,6 +124,7 @@ def train_fn(rank, config):
 #------
 # Main
 #------
-config = Config()
-print(config)
-compat.launch(train_fn, (config,))
+if __name__ == "__main__":
+    config = Config()
+    print(config)
+    compat.launch(train_fn, (config,))
