@@ -26,10 +26,10 @@ IS_GPU = torch.cuda.is_available()
 IS_CPU = not (IS_TPU or IS_GPU)
 
 print("######################")
-print("IS_COLAB:", IS_COLAB)
+print("IS_CPU:", IS_CPU)
 print("IS_TPU:", IS_TPU)
 print("IS_GPU:", IS_GPU)
-print("IS_CPU:", IS_CPU)
+print("IS_COLAB:", IS_COLAB)
 print("######################")
 
 
