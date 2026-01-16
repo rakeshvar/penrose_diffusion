@@ -64,6 +64,24 @@ class SamplePredictionLoss(AbstractLoss):
         return F.mse_loss(xysc_0, xysc_0_hat)
 
 #------------------------------------------------------------------------------
+# SamplePredictionLoss
+#------------------------------------------------------------------------------
+class SampleAngleLoss(AbstractLoss):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.denoiser.predict = 'sample'  # Important
+
+    def compute_loss(self, xysc_0, xysc_t, noise, xysc_0_hat, colors, t):
+        sample_loss = F.mse_loss(xysc_0, xysc_0_hat)
+
+        sc = xysc_0_hat[..., -2:]                                   # B, N, 2
+        circle_loss = ((sc.pow(2).sum(dim=-1) - 1.0) ** 2).mean()   # B, N
+        mean_sc = sc.mean(dim=1, keepdim=True)                      # B, 1, 2
+        equal_angle_loss = ((sc - mean_sc) ** 2).mean()
+
+        return sample_loss + circle_loss + equal_angle_loss
+
+#------------------------------------------------------------------------------
 # Linear Sum Assignment Losss (Torch)
 #------------------------------------------------------------------------------
 def lsa_loss(truth, preds, colors):

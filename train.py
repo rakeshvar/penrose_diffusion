@@ -11,7 +11,7 @@ from dataset_load import MyDataset
 from model_augment import GeometryAugment
 from model_ddim import DDIMDiffuser, TransformerDenoiser
 from model_sampler import save_sample
-from model_losses import NoisePredictionLoss, SamplePredictionLoss, LSALossSerial, LSALossParallel
+from model_losses import NoisePredictionLoss, SampleAngleLoss, SamplePredictionLoss, LSALossSerial, LSALossParallel
 
 # Suppress nested tensor warnings
 import warnings
@@ -72,6 +72,7 @@ def train_fn(rank, config):
     LossFunctions = {
         'Noise': NoisePredictionLoss,
         'Sample': SamplePredictionLoss,
+        'SampleAngle': SampleAngleLoss,
         'LSAS': LSALossSerial,
         'LSAP': LSALossParallel,
     }
