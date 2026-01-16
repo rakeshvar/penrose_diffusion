@@ -1,7 +1,7 @@
 # pyright: reportPossiblyUnboundVariable=false
 # pyright: reportMissingImports=false
 from pathlib import Path
-
+import os
 import torch
 from torch.utils.data.distributed import DistributedSampler
 
@@ -15,6 +15,7 @@ try:
     import torch_xla.core.xla_model as xm
     import torch_xla.distributed.xla_multiprocessing as xmp
     import torch_xla.distributed.parallel_loader as pl
+    import torch_xla.runtime as xr
     IS_TPU = True
 except ImportError:
     IS_TPU = False
@@ -66,8 +67,8 @@ def get_sampler(dataset):
     if IS_TPU:
         return DistributedSampler(
             dataset,
-            num_replicas=xm.xrt_world_size(),
-            rank=xm.get_ordinal(),
+            num_replicas=xr.world_size(),
+            rank=xr.global_ordinal(),
             shuffle=True
         )
     return None
@@ -121,12 +122,13 @@ def save_checkpoint(data, path):
 def launch(train_fn, args=()):
     """
     Universal launcher:
-    - TPU: Spawns 8 processes.
+    - TPU: Spawns processes (auto-detects count).
     - GPU/CPU: Runs the function directly.
     """
     if IS_TPU:
-        print("TPU Detected. Spawning 8 processes...")
-        xmp.spawn(train_fn, args=args, nprocs=None, start_method='fork')
+        print("TPU Detected. Spawning processes...")
+        # nprocs=None allows torch_xla to automatically detect the number of devices (e.g. 4 or 8)
+        xmp.spawn(train_fn, args=args, nprocs=None, start_method='spawn')
     else:
         print(f"Running single process. {'Colab ' if IS_COLAB else ''}")
         train_fn(0, *args)
