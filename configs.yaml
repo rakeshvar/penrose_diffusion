@@ -37,7 +37,7 @@ default_train: &default_train
   lr: 0.001
   batch_size: 64
   num_epochs: 100
-  trainer: 'Noise'
+  loss: 'Noise'
 
 # ---------------------------------------------------------
 # EXPERIMENT GROUPS

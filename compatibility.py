@@ -52,9 +52,9 @@ def get_device():
     return torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
 
-def master_print(msg, index):
+def master_print(msg, rank):
     """Helper to print only from the master process."""
-    if index == 0:
+    if rank == 0:
         print(msg)
 
 
@@ -78,14 +78,14 @@ class GpuDeviceLoader:
     def __init__(self, loader, device):
         self.loader = loader
         self.device = device
-        
+
     def __len__(self):
         return len(self.loader)
 
     def __iter__(self):
         for batch in self.loader:
             yield [
-                x.to(self.device) if isinstance(x, torch.Tensor) else x 
+                x.to(self.device) if isinstance(x, torch.Tensor) else x
                 for x in batch
             ]
 
@@ -126,7 +126,7 @@ def launch(train_fn, args=()):
     """
     if IS_TPU:
         print("TPU Detected. Spawning 8 processes...")
-        xmp.spawn(train_fn, args=args, nprocs=8, start_method='fork')
+        xmp.spawn(train_fn, args=args, nprocs=None, start_method='fork')
     else:
         print(f"Running single process. {'Colab ' if IS_COLAB else ''}")
         train_fn(0, *args)
