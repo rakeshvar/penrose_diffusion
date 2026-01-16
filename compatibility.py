@@ -82,7 +82,7 @@ def get_maybe_sampler(dataset):
     if IS_TPU:
         return DistributedSampler(
             dataset,
-            num_replicas=xm.xrt_world_size(),
+            num_replicas=get_world_size(),
             rank=get_ordinal(),
             shuffle=True
         )
