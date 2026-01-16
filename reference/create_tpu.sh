@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-TPU_NAME=${1:-penrose-test}
+TPU_NAME=${1:-penrose-train}
 PROJECT=${2:-penrose-diffusion}
 
 echo "Creating TPU VM: $TPU_NAME"
