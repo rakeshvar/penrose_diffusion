@@ -83,7 +83,7 @@ def get_maybe_sampler(dataset):
         return DistributedSampler(
             dataset,
             num_replicas=xm.xrt_world_size(),
-            rank=xm.get_ordinal(),
+            rank=get_ordinal(),
             shuffle=True
         )
     return None
@@ -134,6 +134,25 @@ def save_checkpoint(data, path):
     else:
         torch.save(data, path)
 
+def get_world_size():
+    if IS_TPU:
+        # PJRT (new)
+        if hasattr(xm, "world_size"):
+            return xm.world_size()
+        # XRT (old fallback)
+        if hasattr(xm, "xrt_world_size"):
+            return xm.xrt_world_size()
+        # Single process fallback
+    return 1
+
+
+def get_ordinal():
+    if IS_TPU:
+        if hasattr(xm, "get_ordinal"):
+            return xm.get_ordinal()
+        if hasattr(xm, "xrt_global_ordinal"):
+            return xm.xrt_global_ordinal()
+    return 0
 
 def launch(train_fn, args=()):
     """
@@ -142,7 +161,7 @@ def launch(train_fn, args=()):
     - GPU/CPU: Runs the function directly.
     """
     if IS_TPU:
-        nprocs = xm.xrt_world_size()
+        nprocs = get_world_size()
         print(f"TPU Detected. Initializing Multi-VM Spawn with {nprocs} processes.")
         xmp.spawn(train_fn, args=args, nprocs=nprocs, start_method='spawn')
     else:
