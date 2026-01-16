@@ -10,9 +10,6 @@ try:
 except ImportError:
     IS_COLAB = False
 
-if IS_COLAB:
-    for key in ('TPU_PROCESS_ADDRESSES', 'CLOUD_TPU_TASK_ID'):
-        os.environ.pop(key, None)
 
 import torch
 from torch.utils.data.distributed import DistributedSampler
@@ -25,6 +22,11 @@ try:
     IS_TPU = True
 except ImportError:
     IS_TPU = False
+
+print("######################")
+print("IS_COLAB:", IS_COLAB)
+print("IS_TPU:", IS_TPU)
+print("######################")
 
 
 def setup_paths():
@@ -133,7 +135,6 @@ def launch(train_fn, args=()):
     """
     if IS_TPU:
         print("TPU Detected. Initializing Single-VM Spawn...")
-        # nprocs=None lets XLA find the 4 or 8 local cores automatically.
         xmp.spawn(train_fn, args=args, nprocs=None, start_method='spawn')
     else:
         print(f"Running single process. {'Colab ' if IS_COLAB else ''}")
