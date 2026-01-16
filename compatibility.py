@@ -4,23 +4,16 @@ import os
 import sys
 from pathlib import Path
 
-# --- 1. Detect Environment ---
 try:
     import google.colab
-    from google.colab import drive
     IS_COLAB = True
 except ImportError:
     IS_COLAB = False
 
-# --- 2. Apply Colab-Specific Fixes ---
-# Only unset these on Colab to force Single-VM mode. 
-# On GCP TPU Pods, these variables are required for distributed training.
 if IS_COLAB:
     for key in ('TPU_PROCESS_ADDRESSES', 'CLOUD_TPU_TASK_ID'):
-        if key in os.environ:
-            del os.environ[key]
+        os.environ.pop(key, None)
 
-# --- 3. Imports ---
 import torch
 from torch.utils.data.distributed import DistributedSampler
 
@@ -139,8 +132,8 @@ def launch(train_fn, args=()):
     - GPU/CPU: Runs the function directly.
     """
     if IS_TPU:
-        print("TPU Detected. Spawning processes...")
-        # 'spawn' is required for TPUs. nprocs=None auto-detects 4 (v5e) or 8 (v2/3) cores.
+        print("TPU Detected. Initializing Single-VM Spawn...")
+        # nprocs=None lets XLA find the 4 or 8 local cores automatically.
         xmp.spawn(train_fn, args=args, nprocs=None, start_method='spawn')
     else:
         print(f"Running single process. {'Colab ' if IS_COLAB else ''}")
