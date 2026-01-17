@@ -123,18 +123,43 @@ gcloud compute tpus tpu-vm ssh <TPU_NAME> \
 
 ## 5. TPU Sanity Checks (inside VM)
 
-TPU devices
+OS and Python versions
 ```
-ls /dev/accel*
+lsb_release -a || cat /etc/os-release
+python3 --version
+echo $TPU_ACCELERATOR_TYPE
+echo $PJRT_DEVICE
 ```
 
-XLA device check
+Torch and XLA versions
 ```
-python - << 'EOF'
-import torch_xla.core.xla_model as xm
-print(xm.xla_device())
+python3 - << 'EOF'
+import sys
+print("python:", sys.version)
+
+try:
+    import torch
+    print("torch:", torch.__version__)
+    print("cuda available:", torch.cuda.is_available())
+except Exception as e:
+    print("torch: NOT INSTALLED", e)
+
+try:
+    import torch_xla
+    print("torch_xla:", torch_xla.__version__)
+except Exception as e:
+    print("torch_xla: NOT INSTALLED", e)
 EOF
+
 ```
+
+Torch CPU only with XLA (No CUDA)
+```
+pip install torch --index-url https://download.pytorch.org/whl/cpu
+pip install 'torch_xla[tpu]' \
+  -f https://storage.googleapis.com/libtpu-releases/index.html
+```
+
 
 
 ## 6. Install PyTorch + torch_xla (inside VM)

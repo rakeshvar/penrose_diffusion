@@ -86,14 +86,6 @@ def get_device():
     return torch.device("cpu")
 
 
-def get_world_size():
-    return xm.world_size() if IS_TPU else 1
-
-
-def get_ordinal():
-    return xm.get_ordinal() if IS_TPU else 0
-
-
 def master_print(msg: str, rank: int):
     if rank == 0:
         print(msg)
@@ -110,8 +102,8 @@ def get_maybe_sampler(dataset):
 
     return DistributedSampler(
         dataset,
-        num_replicas=get_world_size(),
-        rank=get_ordinal(),
+        num_replicas=1,
+        rank=0,
         shuffle=True,
     )
 
