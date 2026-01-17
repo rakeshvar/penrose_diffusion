@@ -27,6 +27,7 @@ def train_fn(rank, config):
     """
     device = compat.get_device()
     mprint(f"Process {rank} initialized on {device}", rank)
+    compat.print_env(rank)
 
     #--------------------------------------------
     # Setup & Config

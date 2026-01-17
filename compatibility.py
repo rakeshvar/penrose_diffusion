@@ -42,17 +42,16 @@ if IS_TPU:
     )
     IS_PJRT = True
 
-# Only print from the first process
-import torch_xla.runtime as xr
-if not IS_TPU or xr.global_ordinal() == 0:
-    print("######################")
-    print("IS_CPU:  ", IS_CPU)
-    print("IS_GPU:  ", IS_GPU)
-    print("IS_TPU:  ", IS_TPU)
-    print("IS_PJRT: ", IS_PJRT if IS_TPU else "N/A")
-    print("IS_COLAB:", IS_COLAB)
-    print("######################")
-    
+def print_env(rank):
+    if rank == 0:
+        print("######################")
+        print("IS_CPU:  ", IS_CPU)
+        print("IS_GPU:  ", IS_GPU)
+        print("IS_TPU:  ", IS_TPU)
+        print("IS_PJRT: ", IS_PJRT if IS_TPU else "N/A")
+        print("IS_COLAB:", IS_COLAB)
+        print("######################")
+
 # -------------------------------------------------
 # Paths
 # -------------------------------------------------
