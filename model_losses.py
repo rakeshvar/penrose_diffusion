@@ -47,8 +47,9 @@ class AbstractLoss(ABC):
 # NoisePredictionLoss
 #------------------------------------------------------------------------------
 class NoisePredictionLoss(AbstractLoss):
-    def compute_loss(self, xysc_0, xysc_t, noise, noise_hat, colors, t):
-        # L2 Loss on noise
+    def compute_loss(self, xysc_0, xysc_t, noise, prediction, colors, t):
+        # L2 Loss on noise prediction
+        noise_hat = prediction
         return F.mse_loss(noise, noise_hat)
 
 #------------------------------------------------------------------------------
@@ -59,8 +60,9 @@ class SamplePredictionLoss(AbstractLoss):
         super().__init__(*args, **kwargs)
         self.denoiser.predict = 'sample'  # Important
 
-    def compute_loss(self, xysc_0, xysc_t, noise, xysc_0_hat, colors, t):
-        # L2 Loss on sample (prediction is sample)
+    def compute_loss(self, xysc_0, xysc_t, noise, prediction, colors, t):
+        # L2 Loss on sample prediction
+        xysc_0_hat = prediction
         return F.mse_loss(xysc_0, xysc_0_hat)
 
 #------------------------------------------------------------------------------
@@ -71,7 +73,8 @@ class SampleAngleLoss(AbstractLoss):
         super().__init__(*args, **kwargs)
         self.denoiser.predict = 'sample'  # Important
 
-    def compute_loss(self, xysc_0, xysc_t, noise, xysc_0_hat, colors, t):
+    def compute_loss(self, xysc_0, xysc_t, noise, prediction, colors, t):
+        xysc_0_hat = prediction
         sample_loss = F.mse_loss(xysc_0, xysc_0_hat)
 
         sc = xysc_0_hat[..., -2:]                                   # B, N, 2
@@ -84,8 +87,15 @@ class SampleAngleLoss(AbstractLoss):
 #------------------------------------------------------------------------------
 # Linear Sum Assignment Losss (Torch)
 #------------------------------------------------------------------------------
-def lsa_loss(truth, preds, colors):
-    from torch_linear_assignment import batch_linear_assignment, assignment_to_indices
+def lsa_loss_cuda(truth, preds, colors):
+    try:
+        from torch_linear_assignment import batch_linear_assignment, assignment_to_indices
+    except ModuleNotFoundError as e:
+        print(
+            "Please install torch-linear-assignment as" \
+            " `pip install torch-linear-assignment`" \
+            " to use LSA loss with Torch.")
+        raise e
 
     total_loss = torch.tensor(0.0, device=preds.device)
 
@@ -127,19 +137,27 @@ class LSALossSerial(AbstractLoss):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
-        try:
-            import torch_linear_assignment
-        except ModuleNotFoundError:
-            raise ImportError(
-                "Please install torch-linear-assignment as" \
-                " `pip install torch-linear-assignment`" \
-                " to use LSA loss with Torch."
-            )
-
     def compute_loss(self, xysc_0, xysc_t, noise, noise_hat, colors, t):
         # Recover sample from predicted noise
-        xysc_recovered = self.diffuser.recover_xysc(xysc_t, t, noise_hat)
-        return lsa_loss(xysc_0, xysc_recovered, colors)
+        xysc_0_hat = self.diffuser.recover_xysc(xysc_t, t, noise_hat)
+
+        if not compat.IS_TPU:
+            return lsa_loss_cuda(xysc_0, xysc_0_hat, colors)
+
+        else:
+            # Cost Matrix for LSA
+            diff = xysc_0_hat.unsqueeze(2) - xysc_0.unsqueeze(1)
+            cost_matrix = (diff ** 2).sum(dim=-1)
+            cost_np = cost_matrix.detach().cpu().numpy()
+            colors_np = colors.detach().cpu().numpy()
+
+            bi, ti, pi = lsa_ordering_np(cost_np, colors_np)
+            with torch.no_grad():
+                bi = torch.from_numpy(bi).to(self.device, non_blocking=True)
+                ti = torch.from_numpy(ti).to(self.device, non_blocking=True)
+                pi = torch.from_numpy(pi).to(self.device, non_blocking=True)
+
+            return F.mse_loss(xysc_0[bi, ti], xysc_0_hat[bi, pi])
 
 #------------------------------------------------------------------------------
 # Linear Sum Assignment (Parallel)
@@ -188,6 +206,13 @@ def maybe_stream(stream, enabled):
 
 
 class LSALossParallel(AbstractLoss):
+    """
+    Loss calculation:
+        xysc_0 is permuted so that it is closest to xysc_t
+        MSE ( xysc_0_permuted, xysc_0_hat )
+        Equivalently
+        MSE (noise_permuted, noise_hat)
+    """
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
@@ -206,6 +231,7 @@ class LSALossParallel(AbstractLoss):
         # Predict noise
         with maybe_stream(self.stream_denoiser, self.use_cuda):
             noise_hat = self.denoiser(xysc_t, colors, t.float(), labels)
+            xysc_0_hat = self.diffuser.recover_xysc(xysc_t, t, noise_hat)
 
         # Cost Matrix for LSA
         with maybe_stream(self.stream_cost, self.use_cuda):
@@ -225,12 +251,12 @@ class LSALossParallel(AbstractLoss):
             ti = torch.from_numpy(ti).to(self.device, non_blocking=True)
             pi = torch.from_numpy(pi).to(self.device, non_blocking=True)
 
-        # Loss
-        # -  Ensure denoiser is done 
+        # Ensure denoiser is done 
         if self.use_cuda:
             torch.cuda.current_stream().wait_stream(self.stream_denoiser)
 
-        loss = F.mse_loss(noise[bi, ti], noise_hat[bi, pi])
+        # Loss
+        loss = F.mse_loss(xysc_0[bi, ti], xysc_0_hat[bi, pi])
 
         # Backpropagate
         self.optimizer.zero_grad()
