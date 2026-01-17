@@ -21,6 +21,7 @@ try:
     import torch_xla.core.xla_model as xm
     import torch_xla.distributed.xla_multiprocessing as xmp
     import torch_xla.distributed.parallel_loader as pl
+    import torch_xla.runtime as xr
     IS_TPU = True
 except ImportError:
     IS_TPU = False
@@ -102,8 +103,8 @@ def get_maybe_sampler(dataset):
 
     return DistributedSampler(
         dataset,
-        num_replicas=1,
-        rank=0,
+        num_replicas=xr.world_size(),
+        rank=xr.global_ordinal(),
         shuffle=True,
     )
 

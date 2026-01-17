@@ -153,6 +153,8 @@ EOF
 
 ```
 
+## 6. Install PyTorch + torch_xla (inside VM)
+
 Torch CPU only with XLA (No CUDA)
 ```
 pip install torch --index-url https://download.pytorch.org/whl/cpu
@@ -160,24 +162,15 @@ pip install 'torch_xla[tpu]' \
   -f https://storage.googleapis.com/libtpu-releases/index.html
 ```
 
-
-
-## 6. Install PyTorch + torch_xla (inside VM)
-
+Others
 ```
-
-pip install --upgrade pip
-
-pip install scipy tqdm torch torchvision torch_xla[tpu] \
-  -f https://storage.googleapis.com/libtpu-releases/index.html
+pip install scipy tqdm
 ```
-
-
 
 ## 7. Git Workflow (inside VM)
 
 
-Clone repo
+### Clone repo
 ```
 
 git clone https://github.com/rakeshvar/penrose_diffusion
@@ -240,10 +233,10 @@ Upload dataset
 gsutil cp data.npz gs://penrose_diffusion/datasets/data.npz
 ```
 
-Download dataset
+### Download dataset
 ```
 mkdir -p datasets
-gsutil cp gs://penrose_diffusion/datasets/*.npz datasets/
+gsutil cp gs://penrose_diffusion/datasets/hex_t096*.npz datasets/
 ```
 
 Sync checkpoints
