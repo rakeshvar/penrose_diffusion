@@ -5,7 +5,6 @@ Penrose Diffusion – TPU Research Cloud
 Example:
 ```
   <TPU_ZONE> → us-central2-b
-  <TPU_NAME> → penrose-test
 ```
 
 ## Auth & Project
@@ -99,23 +98,23 @@ gcloud compute tpus tpu-vm list \
 
 Describe TPU
 ```
-gcloud compute tpus tpu-vm describe <TPU_NAME> \
+gcloud compute tpus tpu-vm describe penrose-train \
   --project penrose-diffusion \
   --zone <TPU_ZONE>
 ```
 
 ## 4. SSH into TPU VM (canonical)
 
-SSH
+### SSH
 ```
-gcloud compute tpus tpu-vm ssh <TPU_NAME> \
+gcloud compute tpus tpu-vm ssh penrose-train \
   --project penrose-diffusion \
   --zone <TPU_ZONE>
 ```
 
 Show SSH command (for VS Code / debugging)
 ```
-gcloud compute tpus tpu-vm ssh <TPU_NAME> \
+gcloud compute tpus tpu-vm ssh penrose-train \
   --project penrose-diffusion \
   --zone <TPU_ZONE> \
   --dry-run
@@ -157,8 +156,13 @@ EOF
 
 Torch CPU only with XLA (No CUDA)
 ```
-pip install torch --index-url https://download.pytorch.org/whl/cpu
-pip install 'torch_xla[tpu]' \
+pip install torch==2.4.1 --index-url https://download.pytorch.org/whl/cpu
+pip install torch-xla[tpu]==2.4.0 -f https://storage.googleapis.com/libtpu-releases/index.html
+```
+Optimistic
+```
+#pip install torch --index-url https://download.pytorch.org/whl/cpu
+#pip install 'torch_xla[tpu]' \
   -f https://storage.googleapis.com/libtpu-releases/index.html
 ```
 
@@ -166,6 +170,25 @@ Others
 ```
 pip install scipy tqdm
 ```
+
+```
+# Add Google Cloud package repository
+echo "deb https://packages.cloud.google.com/apt google-fast-socket main" | sudo tee /etc/apt/sources.list.d/google-fast-socket.list
+
+# Import the Google Cloud public key
+curl https://packages.cloud.google.com/apt/doc/apt-key.gpg | sudo apt-key add -
+
+# Update and install libtpu
+sudo apt-get update
+sudo apt-get install -y libtpu
+```
+
+
+Test TPU presence
+```
+$ python3 -c "import torch_xla.core.xla_model as xm; print('TPU device:', xm.xla_device()); print('World size:', xm.xrt_world_size() if hasattr(xm, 'xrt_world_size') else 'N/A')"
+```
+
 
 ## 7. Git Workflow (inside VM)
 
@@ -256,14 +279,16 @@ gsutil rsync -r samples gs://penrose_diffusion/samples
 
 CPU sanity run
 ```
-python train.py datasets/data.npz toy \
-  -t batch_size=2 \
-  -t epochs=1
+python train.py datasets/hex_t096_c16_u18.npz toy -t loss=Noise
+python train.py datasets/hex_t096_c16_u18.npz toy -t loss=Sample
+python train.py datasets/hex_t096_c16_u18.npz toy -t loss=SampleAngle
+python train.py datasets/hex_t096_c16_u18.npz toy -t loss=LSAS
+python train.py datasets/hex_t096_c16_u18.npz toy -t loss=LSAP
 ```
 
 TPU test run
 ```
-python train.py datasets/data.npz toy \
+python train.py datasets/hex_t096_c16_u18.npz toy \
   -t batch_size=2 \
   -t epochs=1 \
   -t lr=0.0001
@@ -306,7 +331,7 @@ tmux attach -t run1
 
 Delete TPU VM
 ```
-gcloud compute tpus tpu-vm delete <TPU_NAME> \
+gcloud compute tpus tpu-vm delete penrose-train \
   --project penrose-diffusion \
   --zone <TPU_ZONE>
 ```
