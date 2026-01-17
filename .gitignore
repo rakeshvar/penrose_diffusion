@@ -46,6 +46,8 @@ ENV/
 *.ods
 *.pt
 *.txt
+ztmp.py
+ztmp.ipynb
 
 # Logs and runtime
 *.log
