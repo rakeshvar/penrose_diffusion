@@ -69,14 +69,3 @@ exit 1
 #   64 spot Cloud TPU v6e chips in zone us-east1-d
 #   32 spot Cloud TPU v4 chips in zone us-central2-b
 #   32 on-demand Cloud TPU v4 chips in zone us-central2-b
-
-for z in \
-  us-central2-b \
-  us-central1-a \
-  europe-west4-b \
-  europe-west4-a \
-  us-east1-d
-do
-  echo "---- $z ----"
-  gcloud compute tpus tpu-vm list --zone $z || true
-done

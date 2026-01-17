@@ -38,6 +38,14 @@ ENV/
 *.bmp
 *.tiff
 *.svg
+*.fig
+*.eps
+
+# Data
+*.csv
+*.ods
+*.pt
+*.txt
 
 # Logs and runtime
 *.log

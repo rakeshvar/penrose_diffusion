@@ -1,0 +1,11 @@
+
+for z in \
+  us-central2-b \
+  us-central1-a \
+  europe-west4-b \
+  europe-west4-a \
+  us-east1-d
+do
+  echo "---- $z ----"
+  gcloud compute tpus tpu-vm list --zone $z || true
+done

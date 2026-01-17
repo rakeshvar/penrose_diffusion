@@ -143,7 +143,7 @@ EOF
 
 pip install --upgrade pip
 
-pip install torch torchvision torch_xla[tpu] \
+pip install scipy tqdm torch torchvision torch_xla[tpu] \
   -f https://storage.googleapis.com/libtpu-releases/index.html
 ```
 
@@ -218,7 +218,7 @@ gsutil cp data.npz gs://penrose_diffusion/datasets/data.npz
 Download dataset
 ```
 mkdir -p datasets
-gsutil cp gs://penrose_diffusion/datasets/data.npz datasets/
+gsutil cp gs://penrose_diffusion/datasets/*.npz datasets/
 ```
 
 Sync checkpoints
