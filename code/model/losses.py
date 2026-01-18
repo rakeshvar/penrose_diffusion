@@ -14,6 +14,8 @@ _LOSS_REGISTRY = {}
 def register_loss(*aliases):
     """    Decorator to register a loss class with multiple name aliases. """
     def decorator(cls):
+        cls._canonical_name = aliases[0].lower() if aliases else cls.__name__.lower()
+        
         for alias in aliases:
             _LOSS_REGISTRY[alias.lower()] = cls
         return cls
@@ -57,10 +59,19 @@ class AbstractLoss(ABC):
 
         return loss.item()
 
+    def __repr__(self):
+        return f"{self.__class__.__name__}(device={self.device})"
+    
+    @property
+    def canonical_name(self):
+        """Returns the canonical short name for this loss."""
+        return getattr(self.__class__, '_canonical_name', self.__class__.__name__.lower())
+    
+    
 #------------------------------------------------------------------------------
 # NoisePredictionLoss
 #------------------------------------------------------------------------------
-@register_loss('noise', 'n', 'npl')
+@register_loss('npl', 'noise', 'n')
 class NoisePredictionLoss(AbstractLoss):
     def compute_loss(self, xysc_0, xysc_t, noise, prediction, colors, t):
         # L2 Loss on noise prediction
@@ -70,7 +81,7 @@ class NoisePredictionLoss(AbstractLoss):
 #------------------------------------------------------------------------------
 # SamplePredictionLoss
 #------------------------------------------------------------------------------
-@register_loss('sample', 'sp', 'spl')
+@register_loss('spl', 'sample', 'sp')
 class SamplePredictionLoss(AbstractLoss):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -84,7 +95,7 @@ class SamplePredictionLoss(AbstractLoss):
 #------------------------------------------------------------------------------
 # SamplePredictionLoss
 #------------------------------------------------------------------------------
-@register_loss('sample_angle', 'sa', 'sal', 'sampleangle', 'sangle')
+@register_loss('sal', 'sa', 'sampleangle', 'sangle', 'sampang')
 class SampleAngleLoss(AbstractLoss):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)

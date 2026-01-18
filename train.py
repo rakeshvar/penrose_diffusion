@@ -73,7 +73,7 @@ def train_fn(rank, config):
     # Select Loss Function
     lossfn = get_loss(config.train['loss'], 
                       denoiser, diffuser, optimizer, device)
-    mprint(f"Loss function: {type(lossfn)}", rank)
+    mprint(f"Loss function: {lossfn} ({lossfn.canonical_name})", rank)
 
     #--------------------------------------------
     # Training Loop

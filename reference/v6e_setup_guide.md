@@ -142,6 +142,12 @@ Now you can run Python scripts without the prefix:
 python3 your_script.py  # TPU will be used automatically
 ```
 
+## Clone your repo
+```
+git clone https://github.com/rakeshvar/penrose_diffusion
+cd penrose_diffusion
+```
+
 ---
 
 ## Summary
