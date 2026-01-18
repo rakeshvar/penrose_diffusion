@@ -3,49 +3,8 @@ import random
 import torch
 from pathlib import Path
 
-from model_ddim import DDIMDiffuser, TransformerDenoiser
-from hex_base import HexGrid
-from pen_base import PenGrid
-from hex_svg import save_svg as hex_save_svg
-from pen_svg import save_svg as pen_save_svg
-from utils import xysc_to_xyac
-
-#--------------------------------------------
-# Reusable Sampling Function
-#--------------------------------------------
-def save_sample(denoiser, diffuser, device, save_path, 
-                num_tiles, symmetry, side, label, num_steps=50):
-    """
-    Generates a sample for a specific class label and saves it as an SVG.
-    Can be called from train.py or standalone.
-    """
-    # Ensure directory exists
-    Path(save_path).parent.mkdir(parents=True, exist_ok=True)
-    
-    with torch.no_grad():
-        class_labels = torch.tensor([label], device=device)
-        
-        # Sample from the model
-        # Returns sine/cosine coords (xysc) and colors
-        xysc, colors = diffuser.sample(
-            denoiser, batch_size=1, num_tiles=num_tiles,
-            class_labels=class_labels, symmetry=symmetry, num_steps=num_steps
-        )
-
-        # Convert to standard coordinates (xyac)
-        samples = xysc_to_xyac(xysc, colors)
-        sample_np = samples[0] # Take first from batch
-
-        # Create Grid Object and Save SVG
-        if symmetry == 6:
-            grid = HexGrid(sample_np, side=side)
-            hex_save_svg(grid, str(save_path))
-        else:
-            grid = PenGrid(sample_np, from_np=True, side=side)
-            pen_save_svg(grid, str(save_path))
-
-    print(f"Saved sample -> {save_path}")
-
+from code.model.ddim import DDIMDiffuser, TransformerDenoiser
+from code.model.sampler import save_sample
 
 #--------------------------------------------
 # Interactive CLI
@@ -117,7 +76,6 @@ if __name__ == "__main__":
     diffuser = DDIMDiffuser(num_timesteps=1000).to(device)
 
     # 4. Extract Metadata
-    # These keys should exist in checkpoints saved by your new io.py
     num_tiles = cp.get('num_tiles')
     symmetry = cp.get('symmetry')
     side = cp.get('side', 1.0)
@@ -130,8 +88,6 @@ if __name__ == "__main__":
 
     # 5. Interactive Loop
     i = 0
-    samples_dir = Path("samples")
-    samples_dir.mkdir(exist_ok=True)
     
     print("\n--- Interactive Sampler ---")
     print("Press Enter to use random class, type a number/name to select, or 'q' to quit.")
@@ -139,7 +95,7 @@ if __name__ == "__main__":
     while True:
         label, cname = get_user_class(num_classes, class_lookup)
         
-        fname = samples_dir / f"{cp_path.stem}_i{i:02d}_{cname}.svg"
+        fname = f"library/samples/{cp_path.stem}_i{i:02d}_{cname}.svg"
         
         save_sample(
             denoiser=denoiser,

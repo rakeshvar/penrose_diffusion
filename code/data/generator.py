@@ -1,16 +1,9 @@
 import numpy as np
 from abc import ABC, abstractmethod
 
-from pen_base import PenGrid
-from hex_base import HexGrid
-from pen_pregen import get_pen_mother_tiles
-from hex_pregen import get_hex_mother_tiles
-from utils import inscribed_square_halfside
-
-from hex_svg import save_svg as hex_save_svg
-from pen_svg import save_svg as pen_save_svg
-
-from data_imageset import ImageSet
+from code.pen.pregen import get_pen_mother_tiles
+from code.hex.pregen import get_hex_mother_tiles
+from code.utils import inscribed_square_halfside
 
 class Generator(ABC):
     area_with_unit_side:float = 1.0
@@ -21,7 +14,7 @@ class Generator(ABC):
         Build a grid covering square region ([-C, C] × [-C, C]). C = tothalfside
         """
 
-        self.canvas = self._get_mother_tiles(target_halfside, unit_side)
+        self.canvas = self._get_mother_tiles(target_halfside, unit_side)  # type: ignore
         self.canvas_xy = np.array([(h.x, h.y) for h in self.canvas], dtype=float)
         self.colors = np.array([h.color for h in self.canvas])
         self.angles = np.array([h.angle for h in self.canvas])
@@ -38,10 +31,6 @@ class Generator(ABC):
         print(f"  Sampling Size: {self.num_tiles}")
 
         self.imagesetiter = iter(self.imageset)
-
-    @abstractmethod
-    def _get_mother_tiles(self, tothalfside, unit_side):
-        raise NotImplementedError
 
     @property
     def area_of_one_polygon(self):
@@ -65,7 +54,7 @@ class Generator(ABC):
         eqsqhfsd = c2hw(np.sqrt(self.area_of_one_polygon)) / 2.0  # Equivalent square half side
 
 
-        # Rotate Canvas 
+        # Rotate Canvas
         θ = np.random.uniform(-self.rot_range, self.rot_range)
         cosθ, sinθ = np.cos(θ), np.sin(θ)
         rot_mat = np.array([[cosθ, sinθ], [-sinθ, cosθ]])  # important minus goes here
@@ -85,7 +74,7 @@ class Generator(ABC):
         coverage = np.zeros(self.canvas_xy.shape[0], dtype=int)
         def update_coverage(uu, vv):
             uuvv = np.stack([uu, vv], axis=1) - np.array([H/2, W/2])
-            if rotate_mask:  uuvv = uuvv @ rot_mask_mat
+            if rotate_mask:  uuvv = uuvv @ rot_mask_mat # type: ignore
             uuvv = uuvv + np.array([H/2, W/2])
             uu = np.round(uuvv[:, 0]).astype(int)
             vv = np.round(uuvv[:, 1]).astype(int)
@@ -137,40 +126,14 @@ class Generator6(Generator):
     symmetry = 6
 
     def _get_mother_tiles(self, tothalfside, unit_side):
-        canvas = get_hex_mother_tiles(tothalfside, unit_side)
-        hex_save_svg(canvas, "images/hex_canvas.svg")
-        return canvas
+        return get_hex_mother_tiles(tothalfside, unit_side)
 
 
-from pen_base import psi, psi2
+from code.pen.base import psi, psi2
 class Generator5(Generator):
     area_with_unit_side = np.sin(np.pi/5) * psi2 + np.sin(2*np.pi/5) * psi # Weighted average of areas of rhombuses with side 1
     rot_range = np.pi
     symmetry = 5
 
     def _get_mother_tiles(self, tothalfside, unit_side):
-        canvas = get_pen_mother_tiles(tothalfside, unit_side)
-        pen_save_svg(canvas, "images/pen_canvas.svg")
-        return canvas
-
-
-if __name__ == "__main__":
-    from tqdm import tqdm
-    # tqdm = lambda x: x
-
-    folder = "MPEG7/gifs"
-    imageset = ImageSet(folder)
-
-    generator6 = Generator6(imageset, num_tiles=500, target_halfside=5., unit_side=.05)
-    for i in tqdm(range(len(imageset))):
-        sample = generator6.get_sample()
-        grid = HexGrid(sample['xyac'], generator6.unit_side)
-        hex_save_svg(grid, f"images/classes_hex/{sample['name']}.svg")
-        break
-
-    generator5 = Generator5(imageset, num_tiles=500, target_halfside=5., unit_side=.1)
-    for i in tqdm(range(len(imageset))):
-        sample = generator5.get_sample()
-        grid = PenGrid(sample['xyac'], from_np=True, side=generator5.unit_side)
-        pen_save_svg(grid, f"images/classes_pen/{sample['name']}.svg")
-        break
+        return get_pen_mother_tiles(tothalfside, unit_side)

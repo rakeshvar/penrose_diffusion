@@ -1,5 +1,5 @@
 import math
-from utils import inscribed_square_halfside
+from code.utils import inscribed_square_halfside
 
 def get_color(q, r, s):
     """

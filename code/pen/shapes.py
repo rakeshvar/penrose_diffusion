@@ -1,7 +1,7 @@
 import math
 from cmath import exp
 
-from pen_base import Fatt, Thin, TriangleGrid, psi
+from code.pen.base import Fatt, Thin, TriangleGrid, psi
 
 two_piby5 = 2 * math.pi / 5
 ej2piby5 = exp(1j * two_piby5)
@@ -49,36 +49,3 @@ circle_tiling = TriangleGrid([
     Thin(A5, B, C5)])
 
 circle_tiling.add_x_flipped()
-
-#----------------------------------------
-# Configurations
-#----------------------------------------
-
-configs = [
-    {'draw-arcs': False},
-    
-    {'tile-opacity': 1.0, 
-     'Aarc-colour': '#f04040',
-     'Carc-colour': '#4040f0'
-    },
-
-    {
-     'Aarc-colour': '#ff5e25',
-     'Carc-colour': 'none',
-     'Stile-colour': '#009000',
-     'Ltile-colour': '#90f030',
-    }
-]
-
-if __name__ == '__main__':
-    from pen_svg import save_svg
-
-    for j in range(5):
-        triangle_tiling.inflate(1)
-        circle_tiling.inflate(1)
-        star_tiling.inflate(1)
-
-        for i, config in enumerate(configs):
-            save_svg(triangle_tiling, f'pics/triangle_{i}_{j}.svg', config, 50)
-            save_svg(star_tiling, f'pics/star_{i}_{j}.svg', config, 50)
-            save_svg(circle_tiling, f'pics/circle_{i}_{j}.svg', config, 50)

@@ -251,6 +251,8 @@ def xysc_to_xyac(xysc, colors=None):
 
 
 def npz_stats(npz_name):
+    print("\nFile: ", npz_name)
+
     with np.load(npz_name) as data:
         xya = data['xya']
         x = xya[..., 0].astype(np.float64)
@@ -260,14 +262,14 @@ def npz_stats(npz_name):
         cos = np.cos(angle).astype(np.float64)
         colors = data['colors'].astype(np.float64)
 
-    tp = TablePrinter(6, 15)
+    tp = TablePrinter(6, 11)
     tp.top_line()
     tp.line("Var", "Global/Ind.", "min", "mean", "max", "std")
 
     def stats(v, name):
         tp.mid_line()
         tp.line(name, "global", np.min(v), np.mean(v), np.max(v), np.std(v))
-        tp.line(name, "individual avg",
+        tp.line(name, "indiv. avg",
                 np.min(v, axis=-1).mean(), np.mean(v, axis=-1).mean(),
                 np.max(v, axis=-1).mean(), np.std(v, axis=-1).mean())
 

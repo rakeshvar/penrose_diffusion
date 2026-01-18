@@ -1,7 +1,7 @@
 import sys
 import numpy as np
 import torch
-from model_ddim import DDIMDiffuser  # Assumes ddim.py is in the same folder
+from code.model.ddim import DDIMDiffuser  # Assumes ddim.py is in the same folder
 
 NBAR = 85
 
@@ -23,8 +23,10 @@ def print_stats(sample, text):
 
 def analyze_dataset(data_path):
     print(f"Loading {data_path}...")
-    dataset_np = np.load(data_path)
-    xyac = dataset_np['xyac']
+    dataset = np.load(data_path)
+    xya = dataset['xya']
+    colors = dataset['colors']
+    xyac = np.concatenate([xya, colors[..., None]], axis=-1)
     print(f"Dataset Shape: {xyac.shape}")
 
     flat_all = xyac.reshape(-1, 4)

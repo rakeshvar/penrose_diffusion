@@ -1,11 +1,6 @@
 import numpy as np
 from tqdm import tqdm
 
-from data_generator import Generator5, Generator6
-from data_imageset import ImageSet
-from utils import npz_stats
-
-
 def calculate_num_copies_per_sample(num_tiles, target_mb=1024., num_classes=70, samples_per_class=20):
     """
     Calculates how many random augmentations per image are needed  to hit the target file size.
@@ -46,7 +41,7 @@ def generate_and_save(generator, samples_per_class, num_copies, prefix):
                 labels[i] = sample_data['label']
 
                 i += 1
-        
+
     def save_npz(filename, _xya, _colors, _labels):
         print(f"Saving file: {filename} ")
         np.savez(filename,
@@ -57,7 +52,7 @@ def generate_and_save(generator, samples_per_class, num_copies, prefix):
                  side=generator.unit_side,
                  num_tiles=generator.num_tiles,
                  num_classes=num_classes,
-                 class_lookup=generator.imageset.class_name_to_id | 
+                 class_lookup=generator.imageset.class_name_to_id |
                               generator.imageset.class_id_to_name )
         print(f"Saved!")
 
@@ -65,61 +60,3 @@ def generate_and_save(generator, samples_per_class, num_copies, prefix):
     save_npz(ffull, xya, colors, labels)
 
     return ffull
-
-if __name__ == "__main__":
-    import sys
-    if len(sys.argv) < 2:
-        print(f"Usage: python {sys.argv[0]} symmetry num_tiles num_copies [unit_side]")
-        exit(0)
-    
-
-    folder = "MPEG7/gifs"
-    imageset = ImageSet(folder)
-    SAMPLES_PER_CLASS = 20
-
-    SYMMETRY = int(sys.argv[1])
-    NUM_TILES = int(sys.argv[2])
-    NUM_COPIES = int(sys.argv[3])
-
-    if len(sys.argv) > 4:
-        UNIT_SIDE = float(sys.argv[4])
-    else:                               # Aiming for a std of 1. for x, y
-        if SYMMETRY == 6:
-            UNIT_SIDE = .18 * (96/NUM_TILES)**.5
-        else:
-            UNIT_SIDE = .1 * (512/NUM_TILES)**.5
-    UNIT_SIDE = round(UNIT_SIDE, 2)
-
-    print(f"SYMMETRY: {SYMMETRY} \nNUM_TILES: {NUM_TILES} \nNUM_COPIES: {NUM_COPIES} \nUNIT_SIDE: {UNIT_SIDE}")
-
-
-    if SYMMETRY == 6:
-        gen6 = Generator6(imageset, num_tiles=NUM_TILES, target_halfside=5., unit_side=UNIT_SIDE)
-        file = generate_and_save(gen6, SAMPLES_PER_CLASS, NUM_COPIES, prefix="datasets/hex")
-    else:
-        gen5 = Generator5(imageset, num_tiles=500, target_halfside=5., unit_side=UNIT_SIDE)
-        file = generate_and_save(gen5, SAMPLES_PER_CLASS, NUM_COPIES, prefix="datasets/pen")
-
-    npz_stats(file)
-
-"""
-Pen5
-Total  Fatt Thin
-1   .618034 .381966
-10	      6	4
-100	     62	38
-162     100	62
-1000	618	382
-
-512	    316	196
-768	    475	293
-1024	633	391
-		
-52	32	20
-104	64	40
-207	128	79
-414	256	158
-828	512	316
-809	500	309
-828	512	316
-"""

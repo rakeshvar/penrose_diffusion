@@ -1,10 +1,10 @@
 import sys
-import yaml
-import torch
 import argparse
+import yaml
 from datetime import datetime
-from pathlib import Path
-import compatibility as compat
+
+import torch
+import code.compatibility as compat
 
 def recursive_update(base, update):
     """Recursively updates the base dictionary with values from the update dictionary."""
@@ -19,17 +19,17 @@ class Config:
     def __init__(self):
         # Setup Argparse
         parser = argparse.ArgumentParser(description="Training Argument Parser")
-        
+
         # Catch-all for your flexible positional args (ckpt, npz, config keys, .conf files)
         parser.add_argument('args', nargs='*', help="Sequence of .pt, .npz, .conf files, or config keys")
-        
+
         # Flags for overrides
         parser.add_argument('-t', '--train', action='append', help="Override train config (key=value)")
         parser.add_argument('-d', '--denoiser', action='append', help="Override denoiser config (key=value)")
-        
+
         # Parse
         self.parsed = parser.parse_args()
-        
+
         self.data_path = None
         self.checkpoint_path = None
         self.resume_epoch = 0
@@ -52,7 +52,7 @@ class Config:
             self.conf = ckpt['config']
             if 'data_path' in ckpt:
                 self.data_path = ckpt['data_path']
-            
+
             # Setup resume epoch (users must call load_state separately)
             self.resume_epoch = ckpt.get('epoch', -1) + 1
             del ckpt
@@ -68,15 +68,15 @@ class Config:
         for arg in self.parsed.args:
             if arg == self.checkpoint_path:
                 continue
-            
+
             if arg.endswith('.npz'):
                 self.data_path = arg
-            
+
             elif arg.endswith(('.conf', '.yaml', '.yml')):
                 with open(arg, 'r') as f:
                     new_conf = yaml.safe_load(f)
                 recursive_update(self.conf, new_conf)
-            
+
             elif '.' not in arg and '=' not in arg:
                 # Assume it is a key in configs.yaml (e.g., 'small', 'toy')
                 if arg in self.library:
@@ -112,14 +112,14 @@ class Config:
         if '=' not in kv_str:
             print(f"Warning: Invalid key-value pair '{kv_str}'. format must be key=value")
             return
-        
+
         key, val_str = kv_str.split('=', 1)
-        
+
         # Type Inference
         val = val_str
-        if val_str.lower() == 'true': 
+        if val_str.lower() == 'true':
             val = True
-        elif val_str.lower() == 'false': 
+        elif val_str.lower() == 'false':
             val = False
         else:
             try:
@@ -129,7 +129,7 @@ class Config:
                     val = float(val_str)
                 except ValueError:
                     pass # keep as string
-        
+
         print(f"  Override: {key} = {val} ({type(val).__name__})")
         target_dict[key] = val
 
@@ -142,28 +142,16 @@ class Config:
 
         print(f"Loading weights from {self.checkpoint_path}...")
         ckpt = torch.load(self.checkpoint_path, map_location='cpu')
-        
+
         model.load_state_dict(ckpt['denoiser_state_dict'])
         if optimizer and 'optimizer_state_dict' in ckpt:
             optimizer.load_state_dict(ckpt['optimizer_state_dict'])
-        
+
         print(f"Resumed weights from Epoch {ckpt.get('epoch', 0)}.")
 
     def save_checkpoint(self, epoch, denoiser, optimizer, loss, dataset):
-        """
-        Saves a checkpoint.
-        Name Format: {timestamp}_t{num_tiles}_e{epoch}.pt
-        """
-        # Ensure directory exists (master only check is typically done in compat/save)
-        is_master = not compat.IS_TPU or compat.xm.is_master_ordinal()
-
-        if is_master:
-             compat.CHECKPOINTS_DIR.mkdir(parents=True, exist_ok=True)
-
-        
-        # Generate Filename
-        filename = f"cp{self.timestamp}_t{dataset.num_tiles:03d}_e{epoch:03d}.pt"
-        save_path = compat.CHECKPOINTS_DIR / filename
+        ckpt_fname = f"cp{self.timestamp}_t{dataset.num_tiles:03d}_e{epoch:03d}.pt"
+        ckpt_fpath = compat.CHECKPOINTS_DIR / ckpt_fname
 
         checkpoint_data = {
             'epoch': epoch,
@@ -180,20 +168,19 @@ class Config:
             'class_lookup': getattr(dataset, 'class_lookup', {}),
         }
 
-        compat.save_checkpoint(checkpoint_data, save_path)
-        
-        if is_master:
-            print(f"Saved checkpoint: {save_path}")
-            self.saved_checkpoints.append(save_path)
-            
-            while len(self.saved_checkpoints) > 2:
-                to_remove = self.saved_checkpoints.pop(0)
-                try:
-                    if to_remove.exists():
-                        to_remove.unlink()
-                        print(f"Deleted old checkpoint: {to_remove.name}")
-                except OSError as e:
-                    print(f"Error deleting checkpoint {to_remove}: {e}")
+        compat.save(checkpoint_data, ckpt_fpath)
+        print(f"Saved checkpoint: {ckpt_fpath}")
+        self.saved_checkpoints.append(ckpt_fpath)
+
+        while len(self.saved_checkpoints) > 2:
+            to_remove = self.saved_checkpoints.pop(0)
+            try:
+                if to_remove.exists():
+                    to_remove.unlink()
+                    print(f"Deleted old checkpoint: {to_remove.name}")
+            except OSError as e:
+                print(f"Error deleting checkpoint {to_remove}: {e}")
+
 
     def __str__(self):
         s = []

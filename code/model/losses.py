@@ -2,9 +2,23 @@ from abc import ABC
 
 import torch
 import torch.nn.functional as F
-import compatibility as compat
+import code.compatibility as compat
 
-from model_ddim import DDIMDiffuser, TransformerDenoiser
+from code.model.ddim import DDIMDiffuser, TransformerDenoiser
+
+#------------------------------------------------------------------------------
+# Registry of losses
+#------------------------------------------------------------------------------
+_LOSS_REGISTRY = {}
+
+def register_loss(*aliases):
+    """    Decorator to register a loss class with multiple name aliases. """
+    def decorator(cls):
+        for alias in aliases:
+            _LOSS_REGISTRY[alias.lower()] = cls
+        return cls
+    return decorator
+
 
 #------------------------------------------------------------------------------
 # Abstract Base Class for Losses
@@ -37,15 +51,16 @@ class AbstractLoss(ABC):
         # Backpropagate
         self.optimizer.zero_grad()
         loss.backward()
-        
+
         # Universal Step (TPU/GPU)
         compat.optimizer_step(self.optimizer)
-        
+
         return loss.item()
 
 #------------------------------------------------------------------------------
 # NoisePredictionLoss
 #------------------------------------------------------------------------------
+@register_loss('noise', 'n', 'npl')
 class NoisePredictionLoss(AbstractLoss):
     def compute_loss(self, xysc_0, xysc_t, noise, prediction, colors, t):
         # L2 Loss on noise prediction
@@ -55,6 +70,7 @@ class NoisePredictionLoss(AbstractLoss):
 #------------------------------------------------------------------------------
 # SamplePredictionLoss
 #------------------------------------------------------------------------------
+@register_loss('sample', 'sp', 'spl')
 class SamplePredictionLoss(AbstractLoss):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -68,6 +84,7 @@ class SamplePredictionLoss(AbstractLoss):
 #------------------------------------------------------------------------------
 # SamplePredictionLoss
 #------------------------------------------------------------------------------
+@register_loss('sample_angle', 'sa', 'sal', 'sampleangle', 'sangle')
 class SampleAngleLoss(AbstractLoss):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -92,8 +109,8 @@ def lsa_loss_cuda(truth, preds, colors):
         from torch_linear_assignment import batch_linear_assignment, assignment_to_indices
     except ModuleNotFoundError as e:
         print(
-            "Please install torch-linear-assignment as" \
-            " `pip install torch-linear-assignment`" \
+            "Please install torch-linear-assignment as"
+            " `pip install torch-linear-assignment`"
             " to use LSA loss with Torch.")
         raise e
 
@@ -133,6 +150,7 @@ def lsa_loss_cuda(truth, preds, colors):
     return total_loss / truth.numel()
 
 
+@register_loss('lsas', 'lsaserial', 'serial')
 class LSALossSerial(AbstractLoss):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -170,7 +188,7 @@ from scipy.optimize import linear_sum_assignment
 def lsa_ordering_np(cost_np, colors_np):
     """
     Computes optimal assignment indices using scipy's linear_sum_assignment.
-    
+
     Returns:
         tuple: (batch_indices, truth_indices, pred_indices) as numpy arrays
     :param cost_np: Cost matrix
@@ -205,6 +223,7 @@ def maybe_stream(stream, enabled):
     return torch.cuda.stream(stream) if enabled else nullcontext()
 
 
+@register_loss('lsap', 'lsaparallel', 'parallel')
 class LSALossParallel(AbstractLoss):
     """
     Loss calculation:
@@ -251,7 +270,7 @@ class LSALossParallel(AbstractLoss):
             ti = torch.from_numpy(ti).to(self.device, non_blocking=True)
             pi = torch.from_numpy(pi).to(self.device, non_blocking=True)
 
-        # Ensure denoiser is done 
+        # Ensure denoiser is done
         if self.use_cuda:
             torch.cuda.current_stream().wait_stream(self.stream_denoiser)
 
@@ -264,3 +283,32 @@ class LSALossParallel(AbstractLoss):
         compat.optimizer_step(self.optimizer)
 
         return loss.item()
+    
+
+#------------------------------------------------------------------------------
+# Factory
+#------------------------------------------------------------------------------
+def get_loss(name: str, *args, **kwargs):
+    """     Factory function to instantiate a loss by name (case-insensitive).    """
+    key = name.lower()
+    if key not in _LOSS_REGISTRY:
+        # Build helpful error message
+        unique_classes = sorted(set(_LOSS_REGISTRY.values()), key=lambda x: x.__name__)
+        available = {cls.__name__: [k for k, v in _LOSS_REGISTRY.items() if v == cls] 
+                     for cls in unique_classes}
+        
+        error_msg = f"Loss '{name}' not found. Available losses:\n"
+        for cls_name, alias_list in available.items():
+            error_msg += f"  {cls_name}: {', '.join(alias_list)}\n"
+        
+        raise ValueError(error_msg)
+    
+    loss_class = _LOSS_REGISTRY[key]
+    return loss_class(*args, **kwargs)
+
+
+def list_losses():
+    """Returns a dict mapping loss class names to their aliases."""
+    unique_classes = sorted(set(_LOSS_REGISTRY.values()), key=lambda x: x.__name__)
+    return {cls.__name__: sorted([k for k, v in _LOSS_REGISTRY.items() if v == cls])
+            for cls in unique_classes}

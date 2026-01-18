@@ -1,7 +1,7 @@
 import math
 import cmath
 import copy
-from utils import cross
+from code.utils import cross
 
 TOL = 1.e-5                       # A small tolerance for comparing floats for equality
 psi = (math.sqrt(5) - 1) / 2      # psi = 1/phi where phi is the Golden ratio, (sqrt(5)+1)/2 = 0.618033988749895

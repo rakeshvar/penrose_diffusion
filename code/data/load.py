@@ -4,8 +4,6 @@ import numpy as np
 import torch
 from torch.utils.data import Dataset
 
-from utils import npz_stats
-
 class MyDataset(Dataset):
     def __init__(self, data_path):
         path = Path(data_path)
@@ -52,13 +50,3 @@ class MyDataset(Dataset):
             f"  • Memory:     {self.mem_mb:.2f} MB\n"
             f"  • Samples:    {len(self)} ({self.n_samples//self.num_classes} per class * {self.num_classes} classes)\n"
         )
-
-if __name__ == "__main__":
-    for path in Path(".").rglob("*.npz"):
-        print("#"* 50, "\nOpening: ", path)
-        try:
-            dataset = MyDataset(path)
-            print(dataset)
-            npz_stats(path)
-        except Exception as e:
-            print(f"Error opening file {path}:\n\t", e)

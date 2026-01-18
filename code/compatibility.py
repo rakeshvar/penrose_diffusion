@@ -94,6 +94,11 @@ def master_print(msg: str, rank: int):
     if rank == 0:
         print(msg)
 
+def is_master():
+    if IS_TPU:
+        return xm.is_master_ordinal()
+    return True  
+
 # -------------------------------------------------
 # Data loading
 # -------------------------------------------------
@@ -146,7 +151,7 @@ def optimizer_step(optimizer):
         optimizer.step()
 
 
-def save_checkpoint(data, path):
+def save(data, path):
     if IS_TPU:
         xm.save(data, path)
     else:

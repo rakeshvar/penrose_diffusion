@@ -6,8 +6,8 @@ from scipy.optimize import linear_sum_assignment
 import torch
 import torch.nn.functional as F
 from torch_linear_assignment import batch_linear_assignment, assignment_to_indices
-from utils import pairwise_compare as compare
-from utils import linear_compare as compare
+from code.utils import pairwise_compare as compare
+from code.utils import linear_compare as compare
 
 # ==========================================
 # Only use XY to calculate distance
@@ -210,7 +210,7 @@ def run_profile():
     MICRO = 10**6
     BATCH_SIZE = 32
     NOISE_MAGNITUDE = 1.
-    N_VALUES = [3*2**8 for i in range(4, 9)]
+    N_VALUES = [3*2**i for i in range(4, 9)]
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print(f"Running on: {device}")

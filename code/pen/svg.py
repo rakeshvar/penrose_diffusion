@@ -1,6 +1,6 @@
 import math
-from utils import cross, svg_path, vertexy
-from pen_base import PenGrid, TriangleGrid
+from code.utils import cross, svg_path, vertexy
+from code.pen.base import PenGrid, TriangleGrid
 
 def svg_arc(U, V, W, ndigits):
     """
@@ -30,7 +30,7 @@ def svg_arcs(rhombus, ndigits):
     return arc_a, arc_c
 
 
-def save_svg(pengrid: PenGrid|TriangleGrid, filename, additional_config=None, ndigits=3):
+def save_svg(pengrid: PenGrid|TriangleGrid, filename, ndigits=3, print_ok=True, add_config=None):
     config = {
     'stroke-colour': '#ffffff',
     'margin': .05,
@@ -41,8 +41,8 @@ def save_svg(pengrid: PenGrid|TriangleGrid, filename, additional_config=None, nd
     'draw-arcs': True,
     'tile-opacity': 0.5,
     }
-    if additional_config is not None:
-        config.update(additional_config)
+    if add_config is not None:
+        config.update(add_config)
 
     if isinstance(pengrid, TriangleGrid):
         pengrid = PenGrid(pengrid)
@@ -105,5 +105,6 @@ def save_svg(pengrid: PenGrid|TriangleGrid, filename, additional_config=None, nd
     with open(filename, 'w') as fo:
         fo.write(svg)
 
-    # print(f'Wrote SVG to {filename}')
+    if print_ok:
+        print(f'Wrote SVG to {filename}')
     return svg

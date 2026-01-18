@@ -2,11 +2,11 @@ import math
 import cmath
 import copy
 from collections import Counter
-from utils import deg, TOL
+from code.utils import deg, TOL
 
-from pen_base import Triangle, TriangleGrid, Rhombus
-from pen_svg import save_svg
-from pen_shapes import circle_tiling
+from code.pen.base import Triangle, TriangleGrid, Rhombus
+from code.pen.svg import save_svg
+from code.pen.shapes import circle_tiling
 
 def get_copy():
     return copy.deepcopy(circle_tiling)
@@ -47,8 +47,8 @@ def test_reparametrize():
         tiling.inflate(i)
 
         recreated_tiles = TriangleGrid([Rhombus(t).triangle() for t in tiling])
-        save_svg(pengrid=tiling, filename=f'pics/{i}_original.svg')
-        save_svg(pengrid=recreated_tiles, filename=f'pics/{i}_recreated.svg')
+        save_svg(pengrid=tiling, filename=f'library/samples/{i}_original.svg')
+        save_svg(pengrid=recreated_tiles, filename=f'library/samples/{i}_recreated.svg')
 
         for t in tiling:
             print_reparametrize_roundtrip(t)
@@ -99,3 +99,7 @@ def consistency_checks(self:Rhombus, tri:Triangle):
     dot_product = (uAC.real * orig_uAC.real + uAC.imag * orig_uAC.imag)
     if abs(dot_product) - 1 > TOL:
         raise ValueError(f"Inconsistent base direction in Rhombus initialization. dot_product = {dot_product}")
+
+
+print_reparametrize()
+test_reparametrize()

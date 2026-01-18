@@ -1,6 +1,6 @@
-from utils import svg_path
+from code.utils import svg_path
 
-def save_svg(hexgrid, filename, ndigits=3):
+def save_svg(hexgrid, filename, ndigits=3, print_ok=True):
     # Color palette
     config = {
     "colors": {
@@ -56,6 +56,9 @@ def save_svg(hexgrid, filename, ndigits=3):
     svg = '\n'.join(svg)
     with open(filename, 'w') as f:
         f.write(svg)
+
+    if print_ok:
+        print("Wrote to ", filename)
 
     return svg
 
