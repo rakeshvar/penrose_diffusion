@@ -111,7 +111,7 @@ def train_fn(rank, config):
             # Save Checkpoint
             config.save_checkpoint(epoch, denoiser, optimizer, avg_loss, dataset)
 
-        if not compat.IS_TPU:
+        # if not compat.IS_TPU:
             # Save Sample
             save_name = f"sample_{config.timestamp}_e{epoch:03d}_c{sample_label:02d}_{sample_name}.svg"
             svg_path = compat.SAMPLES_DIR / save_name
