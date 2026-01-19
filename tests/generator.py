@@ -15,10 +15,10 @@ out_folder = Path("library/tiles/")
 #-------
 # Hex
 #-------
-generator6 = Generator6(imageset, num_tiles=500, target_halfside=5., unit_side=.05)
+generator6 = Generator6(imageset, num_tiles=1024, target_halfside=5., unit_side=.05)
 hex_save_svg(generator6.canvas, out_folder / "canvas_hex.svg")
 for i in tqdm(range(len(imageset))):
-    sample = generator6.get_sample()
+    sample = generator6.get_sample(rotate_mask=False)
     grid = HexGrid(sample['xyac'], generator6.unit_side)
     hex_save_svg(grid, out_folder / f"classes_hex/{sample['name']}.svg", print_ok=False)
 
@@ -26,9 +26,9 @@ for i in tqdm(range(len(imageset))):
 #-------
 # Pen
 #-------
-generator5 = Generator5(imageset, num_tiles=500, target_halfside=5., unit_side=.1)
+generator5 = Generator5(imageset, num_tiles=1024, target_halfside=5., unit_side=.1)
 pen_save_svg(generator5.canvas, out_folder / "canvas_pen.svg")
 for i in tqdm(range(len(imageset))):
-    sample = generator5.get_sample()
+    sample = generator5.get_sample(rotate_mask=False)
     grid = PenGrid(sample['xyac'], from_np=True, side=generator5.unit_side)
     pen_save_svg(grid, out_folder / f"classes_pen/{sample['name']}.svg", print_ok=False)

@@ -191,7 +191,7 @@ class Rhombus:
             self.tilt = tri.tilt
             self.side = tri.side
             self.color = tri.color
-            self.type = Fatt if tri.color else Thin
+            self.type = Thin if tri.color else Fatt
 
 
     @property
