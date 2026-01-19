@@ -4,6 +4,8 @@ import torch.nn as nn
 import torch.nn.functional as F
 import math
 
+from code.compatibility import maybe_mark_step
+
 class SinusoidalPositionalEmbedding(nn.Module):
     """Sinusoidal positional embedding for time"""
     def __init__(self, dim):
@@ -211,5 +213,6 @@ class DDIMDiffuser(nn.Module):
         for i in range(num_steps):
             t = torch.full((batch_size,), times[i], device=device, dtype=torch.long) # type: ignore
             xysc = self.p_sample(denoiser, xysc, colors, t, class_labels, eta)
+            maybe_mark_step()
 
         return xysc, colors
