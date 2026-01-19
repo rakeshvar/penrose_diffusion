@@ -254,7 +254,7 @@ Unlike traditional approaches that cache a fixed dataset, our generator creates 
 - Iteratively denoise using DDIM (50 steps)
 - Condition on shape class embedding
 - Normalize angles to unit circle at final step
-- Export as resolution-independent SVG
+- Export as SVG
 
 ## Technical Details
 
@@ -291,13 +291,13 @@ Unlike traditional approaches that cache a fixed dataset, our generator creates 
 
 **Optional:**
 - `torch-xla` for TPU support
-- `torch-linear-assignment` for faster LSA on GPU
+- `torch-linear-assignment` for faster LSA on GPU with CUDA
 
 ## Citation
 
 ```bibtex
 @software{penrose_diffusion,
-  author = {Rakeshvar},
+  author = {Rakeshvara},
   title = {Penrose Diffusion: Conditional Tiling Generation with Diffusion Models},
   year = {2025},
   url = {https://github.com/rakeshvar/penrose_diffusion}
