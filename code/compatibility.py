@@ -30,9 +30,8 @@ IS_GPU = torch.cuda.is_available()
 IS_CPU = not (IS_TPU or IS_GPU)
 
 # -------------------------------------------------
-# Hard PJRT guard
+# PJRT check 
 # -------------------------------------------------
-# In compatibility.py, change the print section:
 
 if IS_TPU:
     pjrt = os.environ.get("PJRT_DEVICE")
@@ -59,7 +58,6 @@ def print_env(rank):
 def setup_paths():
     """
     Determines checkpoint and sample directories.
-    Auto-mounts Google Drive if in Colab.
     """
     if IS_COLAB:
         if not Path("/content/drive").exists():
@@ -150,6 +148,9 @@ def optimizer_step(optimizer):
     else:
         optimizer.step()
 
+def maybe_mark_step():
+    if IS_TPU:
+        xm.mark_step()
 
 def save(data, path):
     if IS_TPU:
