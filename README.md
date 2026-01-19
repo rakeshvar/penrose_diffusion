@@ -1,60 +1,57 @@
 # Penrose Diffusion
 
-**Learning to generate aperiodic Penrose tilings and hexagonal grids using conditional diffusion models.**
+**Learning to generate aperiodic Penrose tilings (and hexagonal grids) using class-conditional diffusion models.**
 
-Penrose Diffusion is a geometric **Denoising Diffusion Probabilistic Model (DDPM/DDIM)** that generates aperiodic tilings (Penrose P3) and periodic grids (Hexagonal) constrained by semantic class labels.
+Penrose Diffusion is a geometric **Denoising Diffusion Probabilistic Model (DDPM/DDIM)** that generates aperiodic tilings (Penrose P3) (and periodic grids (Hexagonal)) constrained by semantic class labels.
 
-The model is trained on the **MPEG-7 Core Experiment Shape-1 Part B** dataset, learning to arrange discrete geometric tiles to form silhouettes from 70 distinct classes (e.g., apple, device, bat, chopper).
 
 **Symmetries:**
-- **5-fold Penrose P3 tilings** - Aperiodic rhombus patterns (Thin/Fat rhombs)
-- **6-fold hexagonal tilings** - Regular tessellations
+- **5-fold Penrose P3 tilings** - Aperiodic rhombus patterns (Thin/Fat rhombuses)
+- **6-fold hexagonal tilings** - Regular tessellations (Dark/Lite rhombuses)
 
 **Training Dataset:**
-- **MPEG-7 Core Experiment Shape-1 Part B** - 70 distinct shape classes
-- Classes include: apple, device, bat, chopper, and 66 more diverse objects
-- Binary silhouette masks used to constrain tile arrangements
+The model is trained on a manufacturered dataset of tile arrangements, algorithmically designed to mimic the silhouettes from **MPEG-7 Core Experiment Shape-1 Part B** 
+- 70 distinct classes (e.g., apple, fish, bat, chopper, etc.).
+- For Penrose tilings the arrangement of Fatt and Thin tiles must obey Penrose rules
+-- 1.612:1 ratio of Thin to Fatt
+- For hexagonal mesh, no two colored tiles must be touching 
+-- 2:1 ratio of uncolored to colored
 
 ### Key Features
 
 #### 1. Infinite Data Generation
 
-We do **not** train on a fixed dataset of cached images. Instead, we implement an **infinite data loader** that generates unique samples on the fly.
+We do **not** train on a fixed dataset of cached tessellatios. Instead, we implement an **infinite data loader** that generates unique samples on the fly.
 
 - **Dual Rotation**: For every training step, we apply random rotations to both the underlying tile canvas and the target silhouette mask independently.
+
 - **Result**: The model never sees the exact same arrangement of tiles twice, preventing memorization and encouraging robust geometric generalization.
 
 #### 2. Uniform Sample Complexity
 
-A major challenge in geometric modeling is varying density. We solve this with a **dynamic scaling algorithm**:
+A major challenge in geometric modeling is varying density amongst silhouettes. Some are dense some are light. We solve this with a **dynamic scaling algorithm**:
 
-- Regardless of the class (e.g., a thin pencil vs. a bulky elephant), we automatically scale the silhouette so that it is filled by a **fixed, target number of tiles** (e.g., 500 tiles).
+- Regardless of the class (e.g., a thin pencil vs. a bulky elephant), we automatically scale the silhouette so that it is filled by a **fixed, target-number of tiles** (e.g., 768 tiles).
 - This ensures consistent tensor shapes `(Batch, Num_Tiles, 4)` and stable training dynamics across all classes.
+- 4 ≈ (x, y, orientation, color)
 
 #### 3. Advanced Permutation-Invariant Losses
 
 Standard loss functions (like MSE) fail for sets of tiles because the order of tiles doesn't matter (permutation invariance). We implement advanced losses to handle this:
 
 - **Linear Sum Assignment (LSA)**: We use the Hungarian Algorithm (solved via scipy or custom CUDA kernels) to find the optimal matching between predicted tiles and ground truth tiles before calculating loss.
-- **Geometric Constraints**: Custom terms like `SampleAngleLoss` enforce valid unit-circle properties for orientation parameters (sin θ, cos θ).
+- **Geometric Constraints**: Custom loss terms enforce valid unit-circle properties for orientation parameters (sin θ, cos θ).
 
-#### 4. Hardware Agnostic (TPU & GPU)
+#### 4. Vector Graphics Engine
 
-The codebase is built for scale and flexibility:
-
-- **Google Cloud TPU**: Optimized for v4/v5e/v6e TPUs using `torch_xla` and PJRT.
-- **GPU (Colab Pro)**: Fully compatible with NVIDIA GPUs. The code automatically detects the hardware accelerator and adjusts the training loop accordingly.
-
-#### 5. Vector Graphics Engine
-
-We provide a **complex, customizable SVG engine** to visualize outputs. Unlike pixel plots, our scripts generate resolution-independent `.svg` files, allowing you to inspect individual tile placements, angles, and types (Thin/Fat rhombs).
+We provide a **complex, customizable SVG engine** to visualize outputs. Unlike pixel plots, our scripts generate resolution-independent `.svg` files, allowing you to inspect individual tile placements, angles, and types (Thin/Fat rhombuses).
 
 ## Architecture
 
 ### Model Components
 
 - **Denoiser**: Transformer encoder that predicts noise or samples
-- **Diffuser**: DDIM diffusion process manager (1000 timesteps)
+- **Diffuser**: DDIM/DDPM diffusion process manager (1000 timesteps)
 - **Representation**: Tiles as (x, y, sin θ, cos θ) with color labels
 - **Conditioning**: Class embeddings + time embeddings + color embeddings
 
@@ -65,8 +62,6 @@ The codebase automatically detects and adapts to available hardware:
 - **TPU (v4/v5e/v6e)**: Uses `torch_xla` with PJRT runtime for distributed training
 - **GPU (CUDA)**: Standard PyTorch with CUDA acceleration
 - **CPU**: Fallback mode for development and testing
-
-All platform-specific logic is handled in `compatibility.py`, making the training code hardware-agnostic.
 
 ### Loss Functions
 
@@ -83,7 +78,7 @@ All samples are exported as **resolution-independent SVG files**:
 
 - **Inspect individual tiles**: Each tile is a separate SVG path element
 - **Customizable styling**: Colors, stroke width, margins configurable
-- **Type visualization**: Distinguish Thin/Fat rhombs in Penrose tilings
+- **Type visualization**: Distinguish Thin/Fatt rhombuses or Colored and uncolored hexagons
 - **Scalable**: View at any resolution without quality loss
 - **Analysis-friendly**: Easy to measure tile positions, angles, and coverage
 
@@ -95,7 +90,7 @@ git clone https://github.com/rakeshvar/penrose_diffusion
 cd penrose_diffusion
 
 # Install dependencies
-pip install torch numpy pyyaml pillow tqdm scipy
+pip install torch numpy tqdm scipy
 
 # For TPU support (optional)
 pip install torch-xla[tpu] -f https://storage.googleapis.com/libtpu-releases/index.html
@@ -121,10 +116,10 @@ python create_dataset.py 5 512 50 0.1
 ```
 
 This creates an `.npz` file in `datasets/` containing:
-- `xya`: Tile positions and angles
-- `colors`: Binary color labels (0 or 1)
-- `labels`: Shape class IDs (0-69)
-- Metadata: symmetry, side length, class lookup
+- `xya`: Tile positions and orientation angles. (B, N, 3)
+- `colors`: Binary colors (0 or 1). (B, N)
+- `labels`: Shape class IDs (0-69). (B,)
+- Metadata: symmetry, side length, class lookup table 
 
 ### 2. Train Model
 
@@ -138,13 +133,13 @@ python train.py <dataset.npz> [config_group] [checkpoint.pt] [options]
 python train.py datasets/hex_t096_c100_u18.npz
 
 # Resume from checkpoint
-python train.py checkpoint.pt datasets/hex_t096_c100_u18.npz
+python train.py checkpoint.pt
 
 # Use small model config
 python train.py datasets/hex_t096_c100_u18.npz small
 
 # Override training parameters
-python train.py datasets/hex_t096_c100_u18.npz -t lr=0.0005 -t batch_size=32
+python train.py datasets/hex_t096_c100_u18.npz -t lr=0.0005 -t batch_size=32 -t num_epochs=99
 ```
 
 **Training produces:**
@@ -159,12 +154,8 @@ Interactive sampling from trained checkpoint:
 python sample.py <checkpoint.pt>
 ```
 
-The sampler will prompt for class selection:
-- Press **Enter** for random class
-- Type **class number** (0-69) or **class name**
-- Type **q** to quit
+The sampler will prompt for class selection.
 
-Generated SVGs are saved to `library/samples/`.
 
 ## Configuration
 
@@ -199,27 +190,6 @@ default_train:
 
 For Google Cloud TPU v6e, see [`v6e_setup_guide.md`](v6e_setup_guide.md) for complete setup instructions.
 
-**Quick start:**
-```bash
-# Create TPU with Ubuntu 24.04
-gcloud compute tpus tpu-vm create penrose-train \
-  --zone=europe-west4-a \
-  --accelerator-type=v6e-8 \
-  --version=v6e-ubuntu-2404
-
-# SSH and setup environment
-gcloud compute tpus tpu-vm ssh penrose-train --zone=europe-west4-a
-python3 -m venv ~/tpu-env
-source ~/tpu-env/bin/activate
-pip install torch --index-url https://download.pytorch.org/whl/cpu
-pip install torch-xla[tpu] -f https://storage.googleapis.com/libtpu-releases/index.html
-
-# Set PJRT device
-export PJRT_DEVICE=TPU
-
-# Train
-python train.py datasets/your_data.npz
-```
 
 ## Project Structure
 
