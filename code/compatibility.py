@@ -3,30 +3,47 @@
 
 import os
 import sys
+import socket
 from pathlib import Path
+
+import torch
 
 # -------------------------------------------------
 # Environment detection
 # -------------------------------------------------
-
+# Colab
+#-------
 try:
     import google.colab
     IS_COLAB = True
 except ImportError:
     IS_COLAB = False
 
-import torch
+# GCP
+#------
+try:
+    socket.gethostbyname("metadata.google.internal")
+    IS_GCP = True
+except socket.gaierror:
+    IS_GCP = False
 
+# TPU
+#------
 try:
     import torch_xla.core.xla_model as xm
     import torch_xla.distributed.xla_multiprocessing as xmp
-    import torch_xla.distributed.parallel_loader as pl
-    import torch_xla.runtime as xr
+    import torch_xla.distributed.parallel_loader as xpl
+    import torch_xla.runtime as xrt
     IS_TPU = True
 except ImportError:
     IS_TPU = False
 
+# GPU
+#------
 IS_GPU = torch.cuda.is_available()
+
+# CPU
+#------
 IS_CPU = not (IS_TPU or IS_GPU)
 
 # -------------------------------------------------
@@ -39,7 +56,29 @@ if IS_TPU:
         f"TPU detected but PJRT_DEVICE={pjrt!r}. "
         "This setup requires PJRT."
     )
-    IS_PJRT = True
+
+# -------------------------------------------------
+# Default Base Directory for Checkpoints and Samples
+# -------------------------------------------------
+
+if IS_COLAB:
+    if not Path("/content/drive").exists():
+        print("ERROR: Google Drive not mounted.")
+        print("Run:")
+        print("  from google.colab import drive")
+        print("  drive.mount('/content/drive')")
+        sys.exit(1)
+    OUTPUT_BASE_DIR = "/content/drive/MyDrive/penrose_diffusion"
+
+elif IS_GCP:
+    OUTPUT_BASE_DIR = "gs://penrose-diffusion/"
+
+else:
+    OUTPUT_BASE_DIR = "."
+
+# -------------------------------------------------
+# Device helpers
+# -------------------------------------------------
 
 def print_env(rank):
     if rank == 0:
@@ -47,55 +86,25 @@ def print_env(rank):
         print("IS_CPU:  ", IS_CPU)
         print("IS_GPU:  ", IS_GPU)
         print("IS_TPU:  ", IS_TPU)
-        print("IS_PJRT: ", IS_PJRT if IS_TPU else "N/A")
+        print("IS_GCP:  ", IS_GCP)
         print("IS_COLAB:", IS_COLAB)
         print("######################")
-
-# -------------------------------------------------
-# Paths
-# -------------------------------------------------
-
-def setup_paths():
-    """
-    Determines checkpoint and sample directories.
-    """
-    if IS_COLAB:
-        if not Path("/content/drive").exists():
-            print("ERROR: Google Drive not mounted.")
-            print("Run:")
-            print("  from google.colab import drive")
-            print("  drive.mount('/content/drive')")
-            sys.exit(1)
-
-        base_dir = Path("/content/drive/MyDrive/penrose_diffusion")
-    else:
-        base_dir = Path(".")
-
-    return base_dir / "checkpoints", base_dir / "samples"
-
-
-CHECKPOINTS_DIR, SAMPLES_DIR = setup_paths()
-
-# -------------------------------------------------
-# Device helpers
-# -------------------------------------------------
 
 def get_device():
     if IS_TPU:
         return xm.xla_device()
     if IS_GPU:
         return torch.device("cuda")
-    return torch.device("cpu")
+    else:
+        return torch.device("cpu")
 
 
-def master_print(msg: str, rank: int):
+def master_print(msg, rank):
     if rank == 0:
         print(msg)
 
 def is_master():
-    if IS_TPU:
-        return xm.is_master_ordinal()
-    return True  
+    return (not IS_TPU) or xm.is_master_ordinal()
 
 # -------------------------------------------------
 # Data loading
@@ -103,19 +112,19 @@ def is_master():
 
 from torch.utils.data.distributed import DistributedSampler
 
-def get_maybe_sampler(dataset):
-    if not IS_TPU:
+def get_maybe_distributed_sampler(dataset):
+    if IS_TPU:
+        return DistributedSampler(
+            dataset,
+            num_replicas=xrt.world_size(),
+            rank=xrt.global_ordinal(),
+            shuffle=True,
+        )
+    else:
         return None
 
-    return DistributedSampler(
-        dataset,
-        num_replicas=xr.world_size(),
-        rank=xr.global_ordinal(),
-        shuffle=True,
-    )
 
-
-class GpuDeviceLoader:
+class MyDeviceLoader:
     """GPU / CPU equivalent of MpDeviceLoader."""
     def __init__(self, loader, device):
         self.loader = loader
@@ -134,8 +143,9 @@ class GpuDeviceLoader:
 
 def get_loader(dataloader, device):
     if IS_TPU:
-        return pl.MpDeviceLoader(dataloader, device)
-    return GpuDeviceLoader(dataloader, device)
+        return xpl.MpDeviceLoader(dataloader, device)
+    else:
+        return MyDeviceLoader(dataloader, device)
 
 # -------------------------------------------------
 # Optimizer / checkpoint helpers

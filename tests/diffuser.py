@@ -3,6 +3,8 @@ import torch
 import numpy as np
 from pathlib import Path
 
+from code.model.loss_helpers import lattice_loss
+
 current_dir = Path(__file__).resolve().parent
 parent_dir = current_dir.parent
 sys.path.append(str(parent_dir))
@@ -16,21 +18,25 @@ from code.hex.base import HexGrid
 from code.pen.base import PenGrid
 from code.hex.svg import save_svg as hex_save_svg
 from code.pen.svg import save_svg as pen_save_svg
+from code.utils import TablePrinter
 
-def save_grid_svg(xyac, symmetry, side, filename):
+# Table Printer
+tp = TablePrinter(8, 7, 4)
+
+def save_grid_svg(xyac, symmetry, side, filename, t):
     if symmetry == 6:
         grid = HexGrid(xyac, side=side)
-        hex_save_svg(grid, filename)
+        hex_save_svg(grid, filename, print_ok=False)
 
     else:
         grid = PenGrid(xyac, from_np=True, side=side)
-        pen_save_svg(grid, filename)
+        pen_save_svg(grid, filename, print_ok=False)
 
-    print(f"Saved {filename}", end=" ")
 
     m = xyac.mean(axis=0)
     s = xyac.std(axis=0)
-    print(f"{m[0]:6.2f}({s[0]:4.2f}) {m[1]:6.2f}({s[1]:4.2f}) {m[2]:6.2f}({s[2]:4.2f})")
+    latice = lattice_loss(torch.from_numpy(xyac).unsqueeze(0), side*np.sqrt(3), t).item() # add batch dim
+    tp.line(t, m[0], s[0], m[1], s[1], m[2], s[2], latice)
 
 
 def main():
@@ -61,10 +67,14 @@ def main():
     print(f"Saving output SVGs to: {out_dir.absolute()}")
     print("Printing Statistics... x:mean(std) y:mean(std) angle:mean(std)")
 
+
     # Samples
     while True:
         idx = np.random.randint(0, len(dataset))
         print(f"\nProcessing Sample Index: {idx}")
+        tp.top_line()
+        tp.line("t", "x", "(std)", "y", "(std)", "angle", "(std)", "lattice")
+        tp.mid_line()
 
         # Original
         xya_0, colors, label = dataset[idx]
@@ -77,20 +87,22 @@ def main():
         colors_np = colors.cpu().numpy()[0]
         xyac_orig = np.column_stack([xya_np, colors_np])
 
+        orig_file_name = out_dir / f"{idx:2d}_{label}_00_originals.svg"
         save_grid_svg(xyac_orig, dataset.symmetry, dataset.side,
-                      out_dir / f"{idx:2d}_{label}_00_originals.svg")
+                      orig_file_name, "orig")
 
         # Augmented
         xysc_aug = augmenter(xya_0)
         xyac_aug = xysc_to_xyac(xysc_aug, colors[..., np.newaxis])[0] 
 
         save_grid_svg(xyac_aug, dataset.symmetry, dataset.side,
-                      out_dir / f"{idx:2d}_{label}_01_augmented.svg")
+                      out_dir / f"{idx:2d}_{label}_01_augmented.svg", "augm")
 
         # Diffusion
-        print("Diffusing...")
+        tp.mid_line()
 
-        steps = np.linspace(0, 999, 20).astype(int)
+        steps = np.arange(0, 1001, 50)
+        steps[-1] -= 1
         # t=0 is data (clean), t=999 is noise.
 
         for t_val in steps:
@@ -99,7 +111,10 @@ def main():
 
             xyac_t = xysc_to_xyac(xysc_t, colors[..., np.newaxis])[0]
             filename = out_dir / f"{idx:2d}_{label}_02_diff_t{t_val:03d}.svg"
-            save_grid_svg(xyac_t, dataset.symmetry, dataset.side, filename)
+            save_grid_svg(xyac_t, dataset.symmetry, dataset.side, filename, t_val)
+
+        tp.bot_line()
+        print("Saved files as ", orig_file_name, end="\n\n")
 
         user_input = input("Press Enter to process another random sample (or 'q' to quit): ")
         if user_input.lower() == 'q':

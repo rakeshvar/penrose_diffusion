@@ -2,6 +2,7 @@ import sys
 import argparse
 import yaml
 from datetime import datetime
+from pathlib import Path
 
 import torch
 import code.compatibility as compat
@@ -26,6 +27,8 @@ class Config:
         # Flags for overrides
         parser.add_argument('-t', '--train', action='append', help="Override train config (key=value)")
         parser.add_argument('-d', '--denoiser', action='append', help="Override denoiser config (key=value)")
+        parser.add_argument('-o', '--output_base_dir', help="Base directory for checkpoints, samples, etc.", 
+                            default=compat.OUTPUT_BASE_DIR)
 
         # Parse
         self.parsed = parser.parse_args()
@@ -53,32 +56,33 @@ class Config:
             if 'data_path' in ckpt:
                 self.data_path = ckpt['data_path']
 
-            # Setup resume epoch (users must call load_state separately)
             self.resume_epoch = ckpt.get('epoch', -1) + 1
-            del ckpt
+            del ckpt            # users must call load_state separately
         else:
             self.conf = self.library['default']
 
-        # Setup Shortcuts
         # Set defaults so we can safely update them later
         self.train = self.conf.setdefault('train', {})
         self.denoiser = self.conf.setdefault('denoiser', {})
 
         # Process Positional Arguments (Files & Config Groups)
         for arg in self.parsed.args:
+            # Checkpoint already handled
             if arg == self.checkpoint_path:
                 continue
-
+            
+            # Data file
             if arg.endswith('.npz'):
                 self.data_path = arg
 
+            # Specific config file
             elif arg.endswith(('.conf', '.yaml', '.yml')):
                 with open(arg, 'r') as f:
                     new_conf = yaml.safe_load(f)
                 recursive_update(self.conf, new_conf)
 
+            # Config Group from configs.yaml (e.g., 'small', 'toy')
             elif '.' not in arg and '=' not in arg:
-                # Assume it is a key in configs.yaml (e.g., 'small', 'toy')
                 if arg in self.library:
                     recursive_update(self.conf, self.library[arg])
                 else:
@@ -100,8 +104,22 @@ class Config:
 
         # Track saved checkpoints to prevent clutter (Keep Max 2)
         self.saved_checkpoints = []
-        # if self.checkpoint_path:
-        #     self.timestamp = Path(self.checkpoint_path).stem
+
+        # Setup Directories
+        self.output_base_dir = Path(self.parsed.output_base_dir)
+        self.output_base_dir.mkdir(parents=True, exist_ok=True)
+        
+        self.checkpoints_dir = self.output_base_dir / 'checkpoints'
+        self.checkpoints_dir.mkdir(parents=True, exist_ok=True)
+        print(f"Saving checkpoints to {self.checkpoints_dir}")
+
+        self.samples_dir = self.output_base_dir / 'samples'
+        self.samples_dir.mkdir(parents=True, exist_ok=True)
+        print(f"Saving samples to {self.samples_dir}")
+
+        self.logs_dir = self.output_base_dir / 'logs'
+        self.logs_dir.mkdir(parents=True, exist_ok=True)
+        print(f"Saving logs to {self.logs_dir}")
 
         if not self.data_path:
             raise ValueError("Must specify either a checkpoint or data path.\n"
@@ -159,7 +177,7 @@ class Config:
             'optimizer_state_dict': optimizer.state_dict(),
             'config': self.conf,
             'loss': loss,
-            'data_path': str(self.data_path) if self.data_path else "",
+            'data_path': str(self.data_path),
             # Metadata for inference/sampling
             'symmetry': getattr(dataset, 'symmetry', 0),
             'num_tiles': getattr(dataset, 'num_tiles', 0),

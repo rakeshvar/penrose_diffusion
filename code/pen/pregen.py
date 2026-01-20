@@ -24,6 +24,6 @@ def get_pen_mother_tiles(target_halfside, target_pen_side):
     print_tile_stats(pengrid)
     inscribed_square_halfside(pengrid)
 
-    print(f"Pen Side: Original: {original_side} -> Final: {pengrid.side} scale factor: {original_side / pengrid.side}")
+    print(f"Pen Side: Original: {original_side} -> Final: {pengrid.side} scale factor: {original_side / pengrid.side:.2f}")
 
     return pengrid

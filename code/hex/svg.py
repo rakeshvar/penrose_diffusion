@@ -1,4 +1,5 @@
-from code.utils import svg_path
+from code.utils import detect_duplicates, svg_path
+from textwrap import dedent
 
 def save_svg(hexgrid, filename, ndigits=3, print_ok=True):
     # Color palette
@@ -7,8 +8,10 @@ def save_svg(hexgrid, filename, ndigits=3, print_ok=True):
         0: "#D8D388",
         1: "#4ee055",
         },
-    "margin": 0.05,
-    "stroke-colour": "#ffffff",
+        "margin": 0.05,
+        "stroke-colour": "#ffffff",
+        "opacity": 0.7,
+        "background": "black",
     }
 
     # Determine viewbox size
@@ -22,9 +25,6 @@ def save_svg(hexgrid, filename, ndigits=3, print_ok=True):
             ymax = max(ymax, y)
 
     wd, ht = xmax-xmin, ymax-ymin
-    stats =  f"# {len(hexgrid)} hexagons \n"
-    stats += f"# x {xmin:.2f} to {xmax:.2f} ({wd:.2f})\n"
-    stats += f"# y {ymin:.2f} to {ymax:.2f} ({ht:.2f})\n"
 
     m = config['margin']
     xmin -= m*wd
@@ -33,32 +33,62 @@ def save_svg(hexgrid, filename, ndigits=3, print_ok=True):
     ht += 2*m*ht
     viewbox = f'{xmin:.2f} {ymin:.2f} {wd:.2f} {ht:.2f}'
 
-    # Build SVG
-    svg = ['<?xml version="1.0" encoding="utf-8"?>']
-    svg.append( '<svg preserveAspectRatio="xMidYMid meet" version="1.1" baseProfile="full" xmlns="http://www.w3.org/2000/svg"')
-    svg.append(f'     width="{int(1080*wd/ht)}" height="1080"')
-    svg.append(f'     viewBox="{viewbox}">')
-    svg.append(f'<rect x="{xmin:.3f}" y="{ymin:.3f}" width="{wd:.3f}" height="{ht:.3f}" fill="black"/>\n')
-    svg.append(f'<g style="stroke:{config["stroke-colour"]}; stroke-width: {hexgrid.side/20:.4f};')
-    svg.append( '   stroke-linejoin: round; vector-effect: non-scaling-stroke;">\n')
-    svg.append(stats)
+    duplicates = detect_duplicates(hexgrid, ndigits=ndigits+1)
+
+    # Build SVG header
+    svg_header = dedent(f"""\
+        <?xml version="1.0" encoding="utf-8"?>
+        <svg preserveAspectRatio="xMidYMid meet" version="1.1" baseProfile="full" xmlns="http://www.w3.org/2000/svg"
+             width="{int(1080*wd/ht)}" height="1080"
+             viewBox="{viewbox}">
+          
+        <style>
+          .colored {{
+            fill: {config["colors"][1]};
+            fill-opacity: {config["opacity"]};
+          }}
+          .uncolor {{
+            fill: {config["colors"][0]};
+            fill-opacity: {config["opacity"]};
+          }}
+          .duplicate {{
+            fill: #0000c0;
+            fill-opacity: 1.0;
+          }}
+        </style>
+        <rect x="{xmin:.3f}" y="{ymin:.3f}" width="{wd:.3f}" height="{ht:.3f}" fill="{config["background"]}"/>
+        <g style="stroke:{config["stroke-colour"]}; stroke-width: {hexgrid.side/20:.4f};
+           stroke-linejoin: round; vector-effect: non-scaling-stroke;">
+        # {len(hexgrid)} hexagons 
+        # x {xmin:.2f} to {xmax:.2f} ({wd:.2f})
+        # y {ymin:.2f} to {ymax:.2f} ({ht:.2f})
+        """)
 
     # Draw hexagons
+    hexagon_paths = []
     for h in hexgrid:
-        fill_color = config["colors"][h.color]
-
-        # Draw hexagon
+        css_class = "colored" if h.color else "uncolor"
         path = svg_path(h, ndigits=ndigits)
-        svg.append(f'<path fill="{fill_color}" d="{path}" />')
+        hexagon_paths.append(f'<path class="{css_class}" d="{path}" />')
+    
+    hexagons = '\n'.join(hexagon_paths)
 
-    svg.append('</g>\n</svg>')
+    # SVG footer
+    svg_footer = "\n</g>\n</svg>"
 
-    svg = '\n'.join(svg)
+    # Mark duplicates with red circles at their centers
+    dup_markers = [f'<circle class="duplicate" cx="{h.y:.{ndigits}f}" cy="{h.x:.{ndigits}f}" r="{hexgrid.side/3:.{ndigits}f}" />' for h in duplicates]
+    dup_markers = '\n'.join(dup_markers)
+
+    # Combine all parts
+    svg = svg_header + hexagons + dup_markers + svg_footer
+
     with open(filename, 'w') as f:
         f.write(svg)
 
     if print_ok:
+        if duplicates:
+            print(f"TOTAL DUPLICATES FOUND: {len(duplicates)}")
         print("Wrote to ", filename)
 
     return svg
-

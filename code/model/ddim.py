@@ -157,6 +157,7 @@ class DDIMDiffuser(nn.Module):
         return xysc_t, noise
 
     def recover_xysc(self, xysc_t, t, noise):
+        #  x̂₀ = (xₜ -  √(1 − ᾱₜ) ̂ϵ) / √ᾱₜ
         return (xysc_t - self.r1mᾱ[t] * noise) / self.rtᾱ[t]
 
     @torch.no_grad()

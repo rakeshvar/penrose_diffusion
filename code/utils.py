@@ -4,6 +4,9 @@ from collections import Counter
 
 TOL = 1e-6
 
+#-------------------------------------------------------------------------------
+# Geometic Utilities
+#-------------------------------------------------------------------------------
 def cross(u, v):
     return u.real*v.imag - u.imag*v.real
 
@@ -57,6 +60,21 @@ def display_svg(filename):
 
 import numpy as np
 
+
+def detect_duplicates(grid, ndigits=4):
+    lookup = {}
+    duplicates = []
+    for h in grid:
+        x, y = h.center
+        key = int(x*10**ndigits), int(y*10**ndigits)
+        if key in lookup:
+            duplicates.append(h)
+        else:
+            lookup[key] = h
+    return duplicates
+
+
+
 def inscribed_square_halfside(grid):
     """
     Given a set of points, it will give the half-side of the smallest inscribed square.
@@ -69,20 +87,6 @@ def inscribed_square_halfside(grid):
 
     return min(max(map(abs, l1)), max(map(abs, l2))) / math.sqrt(2)
 
-def print_tile_stats(grid):
-    # Calculate and print some tile statistics
-    xs = [h.x for h in grid]
-    ys = [h.y for h in grid]
-    xmin, xmax = min(xs), max(xs)
-    ymin, ymax = min(ys), max(ys)
-    colors = Counter(h.color for h in grid)
-
-    print(f"""Tile 
-          Count: {len(grid)}
-          Colors: {dict(colors)}  
-          xmin: {xmin:.4f} xmax: {xmax:.4f}   
-          ymin: {ymin:.4f} ymax: {ymax:.4f}
-    """)
 
 def zealous_crop(arr, margin=0):
     """
@@ -117,10 +121,36 @@ def zealous_crop(arr, margin=0):
     # Crop the array
     return arr[top:bottom+1, left:right+1]
 
+#-------------------------------------------------------------------------------
+# Print Utilities
+#-------------------------------------------------------------------------------
+def print_config(config):
+    print("Config:")
+    for k, v in config.items():
+        print(k)
+        for kk, vv in v.items():
+            print(f"\t{kk}: {vv}")
+
+def print_tile_stats(grid):
+    # Calculate and print some tile statistics
+    xs = [h.x for h in grid]
+    ys = [h.y for h in grid]
+    xmin, xmax = min(xs), max(xs)
+    ymin, ymax = min(ys), max(ys)
+    colors = Counter(h.color for h in grid)
+
+    print(f"""Tile 
+          Count: {len(grid)}
+          Colors: {dict(colors)}  
+          xmin: {xmin:.4f} xmax: {xmax:.4f}   
+          ymin: {ymin:.4f} ymax: {ymax:.4f}
+    """)
+
 class TablePrinter:
-    def __init__(self, ncolumns, column_wd):
+    def __init__(self, ncolumns, column_wd, ndigits=4):
         self.n_columns = ncolumns
         self.max_name_len = column_wd
+        self.ndigits = ndigits
 
     def border(self, l, m, r):
         print(l, end="")
@@ -148,12 +178,44 @@ class TablePrinter:
             if isinstance(arg, str) and not any(c.isdigit() for c in arg):
                 print(f"{arg:<{self.max_name_len}}│", end="")
             elif isinstance(arg, float):
-                print(f"{arg:{self.max_name_len}.4f}│", end="")
+                print(f"{arg:{self.max_name_len}.{self.ndigits}f}│", end="")
             else:
                 print(f"{arg:>{self.max_name_len}}│", end="")
         print()
 
 
+def npz_stats(npz_name):
+    print("\nFile: ", npz_name)
+
+    with np.load(npz_name) as data:
+        xya = data['xya']
+        x = xya[..., 0].astype(np.float64)
+        y = xya[..., 1].astype(np.float64)
+        angle = xya[..., 2].astype(np.float64)
+        sin = np.sin(angle).astype(np.float64)
+        cos = np.cos(angle).astype(np.float64)
+        colors = data['colors'].astype(np.float64)
+
+    tp = TablePrinter(6, 11)
+    tp.top_line()
+    tp.line("Var", "Global/Ind.", "min", "mean", "max", "std")
+
+    def stats(v, name):
+        tp.mid_line()
+        tp.line(name, "global", np.min(v), np.mean(v), np.max(v), np.std(v))
+        tp.line(name, "indiv. avg",
+                np.min(v, axis=-1).mean(), np.mean(v, axis=-1).mean(),
+                np.max(v, axis=-1).mean(), np.std(v, axis=-1).mean())
+
+
+    stats(x, "x")
+    stats(y, "y")
+    stats(sin, "sin")
+    stats(cos, "cos")
+    stats(angle, "angle")
+    stats(colors, "color")
+
+    tp.bot_line()
 
 def pairwise_compare(vals, names, title, diag="both"):
     """
@@ -231,7 +293,9 @@ def f(v, N:int|str = ""):
     else:  # val >= 10
         return f"{v:{N}.0f}"
 
-
+#------------------------------------------------------------------------------
+# Conversions
+#------------------------------------------------------------------------------
 def xysc_to_xyac(xysc, colors=None):
     """
     Convert (x, y, sinθ, cosθ) to (x, y, θ) or (x, y, θ, color).
@@ -249,44 +313,3 @@ def xysc_to_xyac(xysc, colors=None):
 
     return out
 
-
-def npz_stats(npz_name):
-    print("\nFile: ", npz_name)
-
-    with np.load(npz_name) as data:
-        xya = data['xya']
-        x = xya[..., 0].astype(np.float64)
-        y = xya[..., 1].astype(np.float64)
-        angle = xya[..., 2].astype(np.float64)
-        sin = np.sin(angle).astype(np.float64)
-        cos = np.cos(angle).astype(np.float64)
-        colors = data['colors'].astype(np.float64)
-
-    tp = TablePrinter(6, 11)
-    tp.top_line()
-    tp.line("Var", "Global/Ind.", "min", "mean", "max", "std")
-
-    def stats(v, name):
-        tp.mid_line()
-        tp.line(name, "global", np.min(v), np.mean(v), np.max(v), np.std(v))
-        tp.line(name, "indiv. avg",
-                np.min(v, axis=-1).mean(), np.mean(v, axis=-1).mean(),
-                np.max(v, axis=-1).mean(), np.std(v, axis=-1).mean())
-
-
-    stats(x, "x")
-    stats(y, "y")
-    stats(sin, "sin")
-    stats(cos, "cos")
-    stats(angle, "angle")
-    stats(colors, "color")
-
-    tp.bot_line()
-
-
-def print_config(config):
-    print("Config:")
-    for k, v in config.items():
-        print(k)
-        for kk, vv in v.items():
-            print(f"\t{kk}: {vv}")

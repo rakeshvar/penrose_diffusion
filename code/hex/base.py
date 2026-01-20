@@ -64,6 +64,9 @@ def get_hex_ring(degree):
         for step in range(degree):
             hexes.append(hexes[-1] + direction)
     
+    if degree:       # You end up at the beginning of the ring
+        hexes.pop()
+
     return hexes
 
 class HexagonGrid:

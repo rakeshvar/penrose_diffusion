@@ -5,8 +5,8 @@ def calculate_num_copies_per_sample(num_tiles, target_mb=1024., num_classes=70, 
     """
     Calculates how many random augmentations per image are needed  to hit the target file size.
     """
-    bytes_per_val = 2    # float16
-    columns = 3.5         # xya (float16) + colors (uint8)
+    bytes_per_val = 4    # float32
+    columns = 3.25        # xya (float32) + colors (uint8)
     total_base_images = num_classes * samples_per_class
 
     bytes_per_sample = num_tiles * columns * bytes_per_val
@@ -21,10 +21,10 @@ def generate_and_save(generator, samples_per_class, num_copies, prefix):
     total_samples = num_classes * samples_per_class * num_copies
     print(f"\nTotal Samples = {num_classes} classes * {samples_per_class} samples * {num_copies} copies = {total_samples}.")
 
-    print(f"xya: ({total_samples}, {num_tiles}, 3) [float16]")
+    print(f"xya: ({total_samples}, {num_tiles}, 3) [float32]")
     print(f"colors: ({total_samples}, {num_tiles}) [uint8]")
     print(f"labels: ({total_samples},) [uint8]")
-    xya = np.zeros((total_samples, num_tiles, 3), dtype=np.float16)
+    xya = np.zeros((total_samples, num_tiles, 3), dtype=np.float32)
     colors = np.zeros((total_samples, num_tiles), dtype=np.uint8)
     labels = np.zeros((total_samples,), dtype=np.uint8)
 
