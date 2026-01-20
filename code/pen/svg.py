@@ -106,5 +106,6 @@ def save_svg(pengrid: PenGrid|TriangleGrid, filename, ndigits=3, print_ok=True, 
         fo.write(svg)
 
     if print_ok:
-        print(f'Wrote SVG to {filename}')
+        print("Saved svg file  :", filename)
+
     return svg

@@ -87,7 +87,7 @@ def save_svg(hexgrid, filename, ndigits=3, print_ok=True):
         f.write(svg)
 
     if print_ok:
-        print("Wrote to ", filename)
+        print("Saved svg file  :", filename)
 
     if duplicates:
         print(f"DUPLICATES FOUND: {len(duplicates)}")

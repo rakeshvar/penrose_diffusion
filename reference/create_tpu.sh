@@ -49,15 +49,15 @@ try_create() {
 # v5e and v4 can use tpu-ubuntu2204-base or tpu-vm-v4-base
 # -------------------------------
 
+# 2. v6e spot (newer, requires specific runtime)
+try_create europe-west4-a v6e-8 true "tpu-ubuntu2204-base" "TPU v6e SPOT (europe-west4-a)"
+try_create us-east1-d     v6e-8 true "tpu-ubuntu2204-base" "TPU v6e SPOT (us-east1-d)"
+# v2-alpha-tpuv6e
+
 # 1. v5e spot (often fastest, well-supported)
 try_create europe-west4-b v5litepod-8 true "tpu-ubuntu2204-base" "TPU v5e SPOT (europe-west4-b)"
 try_create us-central1-a  v5litepod-8 true "tpu-ubuntu2204-base" "TPU v5e SPOT (us-central1-a)"
 # v2-alpha-tpuv5-lite
-
-# 2. v6e spot (newer, requires specific runtime)
-try_create europe-west4-a v6e-8 true "v6e-ubuntu-2204" "TPU v6e SPOT (europe-west4-a)"
-try_create us-east1-d     v6e-8 true "v6e-ubuntu-2204" "TPU v6e SPOT (us-east1-d)"
-# v2-alpha-tpuv6e
 
 # 3. v4 spot (most reliable spot option)
 try_create us-central2-b v4-8 true "tpu-ubuntu2204-base" "TPU v4 SPOT (us-central2-b)"

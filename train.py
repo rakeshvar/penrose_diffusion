@@ -53,13 +53,20 @@ def train_fn(rank, config):
     #--------------------------------------------
     # Model Initialization
     #--------------------------------------------
-    denoiser = TransformerDenoiser(**config.denoiser).to(device)
-    diffuser = DDIMDiffuser(num_timesteps=1000).to(device)
     augmenter = GeometryAugment().to(device)
-    optimizer = torch.optim.AdamW(denoiser.parameters(), lr=config.train['lr'])
+    diffuser = DDIMDiffuser(num_timesteps=1000).to(device)
 
-    # Load weights if a checkpoint was provided in args
-    config.load_model_state(denoiser, optimizer)
+    denoiser = TransformerDenoiser(**config.denoiser).to(device)
+    optimizer = torch.optim.AdamW(denoiser.parameters(), lr=config.train['lr'])
+    config.load_model_state(denoiser, optimizer) # if checkpoint
+
+    # Move to device
+    for state in optimizer.state.values():
+        for k, v in state.items():
+            if isinstance(v, torch.Tensor):
+                state[k] = v.to(device)
+            elif not isinstance(v, (int, float, bool, type(None))):
+                warnings.warn(f"Unexpected optimizer state type: '{type(v)}' for key '{k}'")
 
     # Select Loss Function
     lossfunctor = get_loss(config.train['loss'], 
@@ -110,6 +117,8 @@ def train_fn(rank, config):
             save_sample(denoiser, diffuser, device, svg_path,
                         dataset.num_tiles, dataset.symmetry, dataset.side,
                         sample_label)
+            print()
+            
 #------
 # Main
 #------

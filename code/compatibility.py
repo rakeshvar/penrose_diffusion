@@ -8,6 +8,12 @@ from pathlib import Path
 
 import torch
 
+import fsspec
+import tempfile
+import shutil
+import subprocess
+
+
 # -------------------------------------------------
 # Environment detection
 # -------------------------------------------------
@@ -148,7 +154,7 @@ def get_loader(dataloader, device):
         return MyDeviceLoader(dataloader, device)
 
 # -------------------------------------------------
-# Optimizer / checkpoint helpers
+# Optimizer / mark step
 # -------------------------------------------------
 
 def optimizer_step(optimizer):
@@ -161,12 +167,6 @@ def optimizer_step(optimizer):
 def maybe_mark_step():
     if IS_TPU:
         xm.mark_step()
-
-def save(data, path):
-    if IS_TPU:
-        xm.save(data, path)
-    else:
-        torch.save(data, path)
 
 # -------------------------------------------------
 # Launch
@@ -184,3 +184,98 @@ def launch(train_fn, args=()):
     else:
         print("Running single-process.")
         train_fn(0, *args)
+
+# -------------------------------------------------
+# Load
+# -------------------------------------------------
+
+
+def load(path, map_location="cpu"):
+    p = str(path)
+    if p.startswith("gs://"):
+        with fsspec.open(p, "rb") as f:
+            ckpt = torch.load(f, map_location=map_location) # type: ignore  
+
+    else:
+        ckpt = torch.load(p, map_location=map_location)
+
+    return ckpt
+
+
+def download_to_local(path, suffix=""):
+    p = str(path)
+    if not p.startswith("gs://"):
+        return p
+
+    tf = tempfile.NamedTemporaryFile(delete=False, suffix=suffix)
+    tf.close()
+    tmp_path = tf.name
+
+    with fsspec.open(p, "rb") as src, open(tmp_path, "wb") as dst:
+        shutil.copyfileobj(src, dst) # type: ignore
+
+    return tmp_path
+
+# -------------------------------------------------
+# Save
+# -------------------------------------------------
+def _cpuify(obj):
+    """Recursively move torch/xla tensors to CPU so torch.save works on them."""
+    if isinstance(obj, torch.Tensor):
+        if IS_TPU:
+            return xm.to_cpu(obj)
+        else:
+            return obj.cpu()
+    elif isinstance(obj, dict):
+        return {k: _cpuify(v) for k, v in obj.items()}
+    elif isinstance(obj, list):
+        return [_cpuify(v) for v in obj]
+    elif isinstance(obj, tuple):
+        return tuple(_cpuify(v) for v in obj)
+    else:
+        return obj
+
+def save(data, path):
+    """
+    Save checkpoint 'data' to path.
+    Supports local paths and gs:// URIs via fsspec/gcsfs.
+    Fallback: save to local tmp file and run gsutil cp if fsspec isn't available.
+    """
+    path_str = str(path)
+    data_cpu = _cpuify(data)
+
+    # Remote (GCS) using fsspec (gcsfs)
+    if path_str.startswith("gs://"):
+        try:
+            # fsspec.open will use gcsfs when 'gs://' is detected (gcsfs must be installed)
+            with fsspec.open(path_str, "wb") as f:
+                # torch.save accepts a file-like object opened in binary write mode
+                torch.save(data_cpu, f) # type: ignore
+            return
+        except Exception as e:
+            # helpful debug message (do not crash silently)
+            print(f"[compat.save] fsspec/gcsfs write failed: {e}. Falling back to local tmp + gsutil.")
+
+        # Fallback: write locally then gsutil cp
+        with tempfile.NamedTemporaryFile(delete=False, suffix=".pt") as tmp:
+            tmp_path = tmp.name
+        torch.save(data_cpu, tmp_path)
+        try:
+            subprocess.check_call(["gsutil", "cp", tmp_path, path_str])
+        except Exception as e:
+            print(f"[compat.save] fallback gsutil upload failed: {e}")
+            raise
+        finally:
+            try:
+                import os
+                os.remove(tmp_path)
+            except Exception:
+                pass
+
+    else:
+        # Local save
+        if IS_TPU:
+            # xm.save tries to behave like torch.save, but it may not accept file-like objects so use path string
+            xm.save(data_cpu, path_str)
+        else:
+            torch.save(data_cpu, path_str)

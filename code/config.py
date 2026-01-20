@@ -18,7 +18,9 @@ def recursive_update(base, update):
 
 class Config:
     def __init__(self):
+        #-----------------------
         # Setup Argparse
+        #-----------------------
         parser = argparse.ArgumentParser(description="Training Argument Parser")
 
         # Catch-all for your flexible positional args (ckpt, npz, config keys, .conf files)
@@ -33,31 +35,38 @@ class Config:
         # Parse
         self.parsed = parser.parse_args()
 
-        self.data_path = None
+        #-----------------------
+        # Setup Config
+        #-----------------------
+        self.library = {}
         self.checkpoint_path = None
         self.resume_epoch = 0
         self.conf = {}
 
-        # Identify Checkpoint (First .pt file found)
+        #-----------------------
+        # Identify Checkpoint
         # We need this first to establish the base config
+        #-----------------------
         for arg in self.parsed.args:
             if arg.endswith('.pt'):
                 self.checkpoint_path = arg
                 break
 
+        #-----------------------
         # Load Base Config (from checkpoint or defaults)
+        #-----------------------
         with open('configs.yaml', 'r') as f:
             self.library = yaml.safe_load(f)
 
         if self.checkpoint_path:
-            # Load to CPU to avoid VRAM collisions
-            ckpt = torch.load(self.checkpoint_path, map_location='cpu')
+            ckpt = compat.load(self.checkpoint_path, map_location='cpu')
             self.conf = ckpt['config']
+            
             if 'data_path' in ckpt:
-                self.data_path = ckpt['data_path']
-
+                self.data_path_orig = ckpt['data_path']
             self.resume_epoch = ckpt.get('epoch', -1) + 1
-            del ckpt            # users must call load_state separately
+            
+            del ckpt
         else:
             self.conf = self.library['default']
 
@@ -65,7 +74,9 @@ class Config:
         self.train = self.conf.setdefault('train', {})
         self.denoiser = self.conf.setdefault('denoiser', {})
 
+        #-----------------------
         # Process Positional Arguments (Files & Config Groups)
+        #-----------------------
         for arg in self.parsed.args:
             # Checkpoint already handled
             if arg == self.checkpoint_path:
@@ -73,7 +84,7 @@ class Config:
             
             # Data file
             if arg.endswith('.npz'):
-                self.data_path = arg
+                self.data_path_orig = arg
 
             # Specific config file
             elif arg.endswith(('.conf', '.yaml', '.yml')):
@@ -88,7 +99,9 @@ class Config:
                 else:
                     print(f"Warning: Config group '{arg}' not found in configs.yaml")
 
+        #-----------------------
         # Apply Flag Overrides (-t and -d)
+        #-----------------------
         if self.parsed.train:
             print("Applying Train Overrides:")
             for kv in self.parsed.train:
@@ -105,25 +118,36 @@ class Config:
         # Track saved checkpoints to prevent clutter (Keep Max 2)
         self.saved_checkpoints = []
 
+        #----------------------------
         # Setup Directories
-        self.output_base_dir = Path(self.parsed.output_base_dir)
-        self.output_base_dir.mkdir(parents=True, exist_ok=True)
-        
-        self.checkpoints_dir = self.output_base_dir / 'checkpoints'
-        self.checkpoints_dir.mkdir(parents=True, exist_ok=True)
-        print(f"Saving checkpoints to {self.checkpoints_dir}")
+        #----------------------------
+        out = self.parsed.output_base_dir
+        if isinstance(out, Path):
+            out = str(out)
+        self.output_base_dir = out  # keep string
 
-        self.samples_dir = self.output_base_dir / 'samples'
-        self.samples_dir.mkdir(parents=True, exist_ok=True)
-        print(f"Saving samples to {self.samples_dir}")
+        # If remote GCS, create remote paths as strings and don't try to mkdir using pathlib
+        if self.output_base_dir.startswith("gs://"):
+            self.checkpoints_dir = f"{self.output_base_dir.rstrip('/')}/checkpoints"
+            self.samples_dir = f"{self.output_base_dir.rstrip('/')}/samples"
+            self.logs_dir = f"{self.output_base_dir.rstrip('/')}/logs"
+            print(f"Using remote GCS output base: {self.output_base_dir}")
+        else:
+            # local filesystem: continue to use Path and mkdir
+            self.output_base_dir = Path(self.output_base_dir)
+            self.output_base_dir.mkdir(parents=True, exist_ok=True)
+            self.checkpoints_dir = self.output_base_dir / 'checkpoints'
+            self.checkpoints_dir.mkdir(parents=True, exist_ok=True)
+            self.samples_dir = self.output_base_dir / 'samples'
+            self.samples_dir.mkdir(parents=True, exist_ok=True)
+            self.logs_dir = self.output_base_dir / 'logs'
+            self.logs_dir.mkdir(parents=True, exist_ok=True)
 
-        self.logs_dir = self.output_base_dir / 'logs'
-        self.logs_dir.mkdir(parents=True, exist_ok=True)
-        print(f"Saving logs to {self.logs_dir}")
-
-        if not self.data_path:
+        if not self.data_path_orig:
             raise ValueError("Must specify either a checkpoint or data path.\n"
                              f" (e.g., python {sys.argv[0]} checkpoint.pt data.npz)")
+        
+        self.data_path = compat.download_to_local(self.data_path_orig, suffix='.npz')
 
     def _update_from_kv(self, kv_str, target_dict):
         """Parses key=value and updates target_dict with type inference."""
@@ -151,39 +175,39 @@ class Config:
         print(f"  Override: {key} = {val} ({type(val).__name__})")
         target_dict[key] = val
 
-    def load_model_state(self, model, optimizer=None):
-        """
-        Helper to load state dicts into model/optimizer if a checkpoint was provided.
-        """
-        if not self.checkpoint_path:
-            return
-
-        print(f"Loading weights from {self.checkpoint_path}...")
-        ckpt = torch.load(self.checkpoint_path, map_location='cpu')
-
-        model.load_state_dict(ckpt['denoiser_state_dict'])
-        if optimizer and 'optimizer_state_dict' in ckpt:
-            optimizer.load_state_dict(ckpt['optimizer_state_dict'])
-
-        print(f"Resumed weights from Epoch {ckpt.get('epoch', 0)}.")
+    def load_model_state(self, denoiser, optimizer):
+        if self.checkpoint_path:
+            print(f"Loading weights from {self.checkpoint_path}...")
+            ckpt = compat.load(self.checkpoint_path, map_location='cpu')
+            denoiser.load_state_dict(ckpt['denoiser_state_dict'], strict=True)
+    
+            if optimizer and 'optimizer_state_dict' in ckpt:
+                # Sometimes we want to discard momentum, etc.
+                optimizer.load_state_dict(ckpt['optimizer_state_dict'])
+    
+            print(f"Resumed weights from Epoch {ckpt.get('epoch', 0)}.")
 
     def save_checkpoint(self, epoch, denoiser, optimizer, loss, dataset, lossname):
         ckpt_fname = f"cp{self.timestamp}_{lossname}_t{dataset.num_tiles:03d}_e{epoch:03d}.pt"
-        ckpt_fpath = self.checkpoints_dir / ckpt_fname
+
+        if isinstance(self.checkpoints_dir, (str,)):
+            ckpt_fpath = f"{self.checkpoints_dir.rstrip('/')}/{ckpt_fname}"
+        else:
+            ckpt_fpath = self.checkpoints_dir / ckpt_fname
 
         checkpoint_data = {
-            'epoch': epoch,
+            'epoch': int(epoch),
             'denoiser_state_dict': denoiser.state_dict(),
             'optimizer_state_dict': optimizer.state_dict(),
             'config': self.conf,
             'loss': loss,
-            'data_path': str(self.data_path),
+            'data_path': str(self.data_path_orig),
             # Metadata for inference/sampling
-            'symmetry': getattr(dataset, 'symmetry', 0),
-            'num_tiles': getattr(dataset, 'num_tiles', 0),
-            'side': getattr(dataset, 'side', 1.0),
-            'num_classes': getattr(dataset, 'num_classes', 0),
-            'class_lookup': getattr(dataset, 'class_lookup', {}),
+            'symmetry': dataset.symmetry,
+            'num_tiles': dataset.num_tiles,
+            'side': dataset.side,
+            'num_classes': dataset.num_classes,
+            'class_lookup': dataset.class_lookup,
         }
 
         compat.save(checkpoint_data, ckpt_fpath)
@@ -207,7 +231,8 @@ class Config:
         s.append("="*40)
         s.append(f"Timestamp:       {self.timestamp}")
         s.append(f"Checkpoint Path: {self.checkpoint_path}")
-        s.append(f"Data Path:       {self.data_path}")
+        s.append(f"Data Path:       {self.data_path_orig} -> {self.data_path}")
+        s.append(f"Output Base Dir: {self.output_base_dir}")
         s.append(f"Resume Epoch:    {self.resume_epoch}")
         s.append("-" * 30)
         s.append(yaml.dump(self.conf, default_flow_style=False, sort_keys=False))

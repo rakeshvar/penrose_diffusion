@@ -11,7 +11,7 @@ From your local machine, create the TPU:
 gcloud compute tpus tpu-vm create penrose-train \
   --zone=europe-west4-a \
   --accelerator-type=v6e-8 \
-  --version=v6e-ubuntu-2404 \
+  --version=v6e-ubuntu-2204 \
   --preemptible
 ```
 
@@ -53,28 +53,19 @@ source ~/tpu-env/bin/activate
 
 **Note:** Your prompt should now show `(tpu-env)` prefix.
 
+## Step 6: Install PyTorch (CPU version) & Step 7: Install PyTorch/XLA with TPU Support
+
 Install requirements
-```
-pip install tqdm scipy
-```
-
-## Step 6: Install PyTorch (CPU version)
-
 Install CPU-only PyTorch to avoid unnecessary CUDA dependencies:
 
 ```bash
+pip install fsspec gcsfs
+pip install tqdm scipy
 pip install torch --index-url https://download.pytorch.org/whl/cpu
+pip install torch-xla[tpu] -f https://storage.googleapis.com/libtpu-releases/index.html
 ```
 
 **Why CPU version?** TPUs don't need CUDA. The CPU version is smaller and faster to install.
-
-## Step 7: Install PyTorch/XLA with TPU Support
-
-Install PyTorch/XLA with the TPU plugin:
-
-```bash
-pip install torch-xla[tpu] -f https://storage.googleapis.com/libtpu-releases/index.html
-```
 
 This installs:
 - `torch-xla`: XLA compiler integration for PyTorch
@@ -126,6 +117,21 @@ Device: xla:0
 Result shape: torch.Size([3, 3])
 ✅ TPU computation successful!
 ```
+### Verify saving to gs
+```bash
+python3 << 'EOF'
+from  pathlib import Path
+import torch_xla.core.xla_model as xm
+
+OUTPUT_BASE_DIR = Path("gs://penrose-diffusion/")
+checkpoints_dir = OUTPUT_BASE_DIR / 'checkpoints'
+checkpoints_dir.mkdir(parents=True, exist_ok=True)
+path = checkpoints_dir / "crazy_ck.pt"
+data = {'epoch': 0}
+
+xm.save(data, path)
+EOF
+```
 
 ## Step 10: Make PJRT_DEVICE Permanent (Optional)
 
@@ -146,6 +152,8 @@ python3 your_script.py  # TPU will be used automatically
 ```
 git clone https://github.com/rakeshvar/penrose_diffusion
 cd penrose_diffusion
+mkdir -p datasets
+gsutil -m cp gs://penrose_diffusion/datasets/*.npz datasets
 ```
 
 ---
