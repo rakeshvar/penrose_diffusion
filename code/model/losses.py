@@ -79,7 +79,7 @@ class AbstractLoss(ABC):
         return f"{self.__class__.__name__}(device={self.device})"
     
     @property
-    def canonical_name(self):
+    def abbr(self):
         """Returns the canonical short name for this loss."""
         return getattr(self.__class__, '_canonical_name', self.__class__.__name__.lower())
     

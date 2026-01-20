@@ -38,6 +38,3 @@ def save_sample(denoiser, diffuser, device, save_path,
         else:
             grid = PenGrid(sample_np, from_np=True, side=side)
             pen_save_svg(grid, str(save_path))
-
-    print(f"Saved sample -> {save_path}")
-

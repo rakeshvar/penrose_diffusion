@@ -11,7 +11,7 @@ from code.data.load import MyDataset
 from code.model.augment import GeometryAugment
 from code.model.ddim import DDIMDiffuser, TransformerDenoiser
 from code.model.sampler import save_sample
-from code.model.losses import NoisePredictionLoss, SampleAngleLoss, SamplePredictionLoss, LSALossSerial, LSALossParallel, get_loss
+from code.model.losses import NoisePredictionLoss, SampleAssistedLoss, SamplePredictionLoss, LSALossSerial, LSALossParallel, get_loss
 
 # Suppress nested tensor warnings
 import warnings
@@ -31,26 +31,17 @@ def train_fn(rank, config):
     is_master = compat.is_master()
 
     #--------------------------------------------
-    # Setup & Config
-    #--------------------------------------------
-    if rank == 0:
-        print(f"Checkpoints: {compat.CHECKPOINTS_DIR}")
-        compat.CHECKPOINTS_DIR.mkdir(parents=True, exist_ok=True)
-        print(f"Samples:     {compat.SAMPLES_DIR}")
-        compat.SAMPLES_DIR.mkdir(parents=True, exist_ok=True)
-
-    #--------------------------------------------
     # Load Data
     #--------------------------------------------
     mprint(f"Loading data from {config.data_path}...", rank)
     dataset = MyDataset(Path(config.data_path))         # CPU
-    maybe_sampler = compat.get_maybe_sampler(dataset)   # Split data for TPU cores
+    distributed_sampler = compat.get_maybe_distributed_sampler(dataset)   # Split data for TPU cores
 
     loader_args = {
         'batch_size': config.train['batch_size'],
-        'sampler': maybe_sampler,
-        'shuffle': (maybe_sampler is None),        # Shuffle iff NOT using a sampler
-        'num_workers': 0 if compat.IS_TPU else 4,  # Keep 0 for safety on TPU VMs
+        'sampler': distributed_sampler,
+        'shuffle': distributed_sampler is None,           # distributed_sampler handles shuffling
+        'num_workers': 0 if distributed_sampler else 4,   # distributed_sampler handles multi-threading
         'drop_last': True
     }
     raw_loader = DataLoader(dataset, **loader_args)
@@ -71,9 +62,9 @@ def train_fn(rank, config):
     config.load_model_state(denoiser, optimizer)
 
     # Select Loss Function
-    lossfn = get_loss(config.train['loss'], 
+    lossfunctor = get_loss(config.train['loss'], 
                       denoiser, diffuser, optimizer, device)
-    mprint(f"Loss function: {lossfn} ({lossfn.canonical_name})", rank)
+    mprint(f"Loss function: {lossfunctor} ({lossfunctor.abbr})", rank)
 
     #--------------------------------------------
     # Training Loop
@@ -97,7 +88,7 @@ def train_fn(rank, config):
         for batch in progressbar:
             xya, colors, labels = batch
             xysc = augmenter(xya)
-            loss = lossfn(xysc, colors, labels)
+            loss = lossfunctor(xysc, colors, labels)
             epoch_loss += loss
             count += 1
 
@@ -109,12 +100,11 @@ def train_fn(rank, config):
 
         if is_master:
             # Save Checkpoint
-            config.save_checkpoint(epoch, denoiser, optimizer, avg_loss, dataset)
+            config.save_checkpoint(epoch, denoiser, optimizer, avg_loss, dataset, lossfunctor.abbr)
 
-        # if not compat.IS_TPU:
             # Save Sample
             save_name = f"sample_{config.timestamp}_e{epoch:03d}_c{sample_label:02d}_{sample_name}.svg"
-            svg_path = compat.SAMPLES_DIR / save_name
+            svg_path = config.samples_dir / save_name
 
             # Call the reusable function from model_sampler.py
             save_sample(denoiser, diffuser, device, svg_path,

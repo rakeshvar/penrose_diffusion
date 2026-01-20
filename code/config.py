@@ -167,9 +167,9 @@ class Config:
 
         print(f"Resumed weights from Epoch {ckpt.get('epoch', 0)}.")
 
-    def save_checkpoint(self, epoch, denoiser, optimizer, loss, dataset):
-        ckpt_fname = f"cp{self.timestamp}_t{dataset.num_tiles:03d}_e{epoch:03d}.pt"
-        ckpt_fpath = compat.CHECKPOINTS_DIR / ckpt_fname
+    def save_checkpoint(self, epoch, denoiser, optimizer, loss, dataset, lossname):
+        ckpt_fname = f"cp{self.timestamp}_{lossname}_t{dataset.num_tiles:03d}_e{epoch:03d}.pt"
+        ckpt_fpath = self.checkpoints_dir / ckpt_fname
 
         checkpoint_data = {
             'epoch': epoch,

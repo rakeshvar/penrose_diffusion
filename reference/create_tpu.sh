@@ -55,8 +55,8 @@ try_create us-central1-a  v5litepod-8 true "tpu-ubuntu2204-base" "TPU v5e SPOT (
 # v2-alpha-tpuv5-lite
 
 # 2. v6e spot (newer, requires specific runtime)
-try_create europe-west4-a v6e-8 true "v6e-ubuntu-2404" "TPU v6e SPOT (europe-west4-a)"
-try_create us-east1-d     v6e-8 true "v6e-ubuntu-2404" "TPU v6e SPOT (us-east1-d)"
+try_create europe-west4-a v6e-8 true "v6e-ubuntu-2204" "TPU v6e SPOT (europe-west4-a)"
+try_create us-east1-d     v6e-8 true "v6e-ubuntu-2204" "TPU v6e SPOT (us-east1-d)"
 # v2-alpha-tpuv6e
 
 # 3. v4 spot (most reliable spot option)
