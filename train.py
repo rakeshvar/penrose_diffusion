@@ -100,9 +100,9 @@ def train_fn(rank:int, config:Config):
     mprint(f"Starting training for {len(iterator)} epochs...", rank)
 
     for epoch in iterator:
-        epoch_loss = 0
+        total_loss = 0
+        min_loss, max_loss = 1e9, -1e9
         count = 0
-        batch_losses = []
 
         # Enable progress bar only on master process
         progressbar = tqdm(train_loader, disable=(rank != 0))
@@ -111,17 +111,16 @@ def train_fn(rank:int, config:Config):
             xya, colors, labels = batch
             xysc_hat = augmenter(xya)
             loss = lossfunctor(xysc_hat, colors, labels)
-            epoch_loss += loss
+            total_loss += loss
+            min_loss = min(min_loss, loss)
+            max_loss = max(max_loss, loss)
             count += 1
-            batch_losses.append(loss)
 
             progressbar.set_description(f"Epoch {epoch} | Loss: {loss:.4f}")
 
-        avg_loss = epoch_loss / count if count > 0 else 0
+        avg_loss = total_loss / count if count > 0 else 0
         mprint(f"Epoch {epoch} Done. Avg Loss: {avg_loss:.4f}", rank)
 
-        min_loss = min(batch_losses) if batch_losses else 0
-        max_loss = max(batch_losses) if batch_losses else 0
         wandblog.lsepoch_metrics(epoch, {
             'loss_avg': avg_loss,
             'loss_min': min_loss,

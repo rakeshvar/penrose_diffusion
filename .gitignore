@@ -29,6 +29,7 @@ venv/
 .venv/
 env/
 ENV/
+wandb/
 
 # Image
 *.png
