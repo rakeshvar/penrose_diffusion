@@ -1,11 +1,13 @@
 import sys
 import argparse
+from textwrap import dedent
 import yaml
 from datetime import datetime
 from pathlib import Path
 
 import torch
 import code.compatibility as compat
+from code.utils import safe_path
 
 def recursive_update(base, update):
     """Recursively updates the base dictionary with values from the update dictionary."""
@@ -29,6 +31,7 @@ class Config:
         # Flags for overrides
         parser.add_argument('-t', '--train', action='append', help="Override train config (key=value)")
         parser.add_argument('-d', '--denoiser', action='append', help="Override denoiser config (key=value)")
+        parser.add_argument('-w', '--wandb', action='append', help="Override wandb config (key=value)")
         parser.add_argument('-o', '--output_base_dir', help="Base directory for checkpoints, samples, etc.", 
                             default=compat.OUTPUT_BASE_DIR)
 
@@ -41,7 +44,7 @@ class Config:
         self.library = {}
         self.checkpoint_path = None
         self.resume_epoch = 0
-        self.conf = {}
+        self.conf_dict = {}
 
         #-----------------------
         # Identify Checkpoint
@@ -57,22 +60,27 @@ class Config:
         #-----------------------
         with open('configs.yaml', 'r') as f:
             self.library = yaml.safe_load(f)
+        self.conf_dict = self.library['default']
 
         if self.checkpoint_path:
             ckpt = compat.load(self.checkpoint_path, map_location='cpu')
-            self.conf = ckpt['config']
+            recursive_update(self.conf_dict, ckpt['config']) 
             
             if 'data_path' in ckpt:
                 self.data_path_orig = ckpt['data_path']
             self.resume_epoch = ckpt.get('epoch', -1) + 1
             
+            # Preserve wandb run_id for resuming
+            if 'wandb_run_id' in ckpt:
+                if ckpt['wandb_run_id']:
+                    self.conf_dict.setdefault('wandb', {})['run_id'] = ckpt['wandb_run_id']
+            
             del ckpt
-        else:
-            self.conf = self.library['default']
 
         # Set defaults so we can safely update them later
-        self.train = self.conf.setdefault('train', {})
-        self.denoiser = self.conf.setdefault('denoiser', {})
+        self.train = self.conf_dict.setdefault('train', {})
+        self.denoiser = self.conf_dict.setdefault('denoiser', {})
+        self.wandb = self.conf_dict.setdefault('wandb', {})
 
         #-----------------------
         # Process Positional Arguments (Files & Config Groups)
@@ -89,18 +97,17 @@ class Config:
             # Specific config file
             elif arg.endswith(('.conf', '.yaml', '.yml')):
                 with open(arg, 'r') as f:
-                    new_conf = yaml.safe_load(f)
-                recursive_update(self.conf, new_conf)
+                    recursive_update(self.conf_dict, yaml.safe_load(f))
 
             # Config Group from configs.yaml (e.g., 'small', 'toy')
             elif '.' not in arg and '=' not in arg:
                 if arg in self.library:
-                    recursive_update(self.conf, self.library[arg])
+                    recursive_update(self.conf_dict, self.library[arg])
                 else:
                     print(f"Warning: Config group '{arg}' not found in configs.yaml")
 
         #-----------------------
-        # Apply Flag Overrides (-t and -d)
+        # Apply Flag Overrides (-t, -d, -w)
         #-----------------------
         if self.parsed.train:
             print("Applying Train Overrides:")
@@ -112,6 +119,11 @@ class Config:
             for kv in self.parsed.denoiser:
                 self._update_from_kv(kv, self.denoiser)
 
+        if self.parsed.wandb:
+            print("Applying WandB Overrides:")
+            for kv in self.parsed.wandb:
+                self._update_from_kv(kv, self.wandb)
+                
         # Setup Naming Template
         self.timestamp = datetime.now().strftime("%m%d_%H%M")
 
@@ -187,19 +199,19 @@ class Config:
     
             print(f"Resumed weights from Epoch {ckpt.get('epoch', 0)}.")
 
-    def save_checkpoint(self, epoch, denoiser, optimizer, loss, dataset, lossname):
-        ckpt_fname = f"cp{self.timestamp}_{lossname}_t{dataset.num_tiles:03d}_e{epoch:03d}.pt"
 
-        if isinstance(self.checkpoints_dir, (str,)):
-            ckpt_fpath = f"{self.checkpoints_dir.rstrip('/')}/{ckpt_fname}"
-        else:
-            ckpt_fpath = self.checkpoints_dir / ckpt_fname
+    def set_identifier(self, lossname, num_tiles):
+        self.identifier = f"{self.timestamp}_{lossname}_t{num_tiles:03d}"
+    
+    def save_checkpoint(self, epoch, denoiser, optimizer, loss, dataset, wandblog=None):
+        ckpt_fname = "cp" + self.identifier + f"_e{epoch:03d}.pt"
+        ckpt_fpath = safe_path(self.checkpoints_dir, ckpt_fname)
 
         checkpoint_data = {
             'epoch': int(epoch),
             'denoiser_state_dict': denoiser.state_dict(),
             'optimizer_state_dict': optimizer.state_dict(),
-            'config': self.conf,
+            'config': self.conf_dict,
             'loss': loss,
             'data_path': str(self.data_path_orig),
             # Metadata for inference/sampling
@@ -209,6 +221,12 @@ class Config:
             'num_classes': dataset.num_classes,
             'class_lookup': dataset.class_lookup,
         }
+        
+        # Save WandB run ID for resuming
+        if wandblog:
+            run_id = wandblog.get_run_id()
+            if run_id:
+                checkpoint_data['wandb_run_id'] = run_id
 
         compat.save(checkpoint_data, ckpt_fpath)
         print(f"Saved checkpoint: {ckpt_fpath}")
@@ -220,21 +238,21 @@ class Config:
                 if to_remove.exists():
                     to_remove.unlink()
                     print(f"Deleted old checkpoint: {to_remove.name}")
-            except OSError as e:
+            except (OSError, AttributeError) as e:
                 print(f"Error deleting checkpoint {to_remove}: {e}")
 
 
     def __str__(self):
-        s = []
-        s.append("\n" + "="*40)
-        s.append("        Configuration         ")
-        s.append("="*40)
-        s.append(f"Timestamp:       {self.timestamp}")
-        s.append(f"Checkpoint Path: {self.checkpoint_path}")
-        s.append(f"Data Path:       {self.data_path_orig} -> {self.data_path}")
-        s.append(f"Output Base Dir: {self.output_base_dir}")
-        s.append(f"Resume Epoch:    {self.resume_epoch}")
-        s.append("-" * 30)
-        s.append(yaml.dump(self.conf, default_flow_style=False, sort_keys=False))
-        s.append("="*40 + "\n")
-        return "\n".join(s)
+        return dedent(f"""
+        ================================
+                Configuration         
+        ================================
+        Timestamp:       {self.timestamp}
+        Checkpoint Path: {self.checkpoint_path}
+        Data Path:       {self.data_path_orig} -> {self.data_path}
+        Output Base Dir: {self.output_base_dir}
+        Resume Epoch:    {self.resume_epoch}
+        ---------------------------------
+        {yaml.dump(self.conf_dict, default_flow_style=False, sort_keys=False)}
+        =================================
+        """)

@@ -83,8 +83,9 @@ def save_svg(hexgrid, filename, ndigits=3, print_ok=True):
     # Combine all parts
     svg = svg_header + hexagons + dup_markers + svg_footer
 
-    with open(filename, 'w') as f:
-        f.write(svg)
+    if filename is not None:
+        with open(filename, 'w') as f:
+            f.write(svg)
 
     if print_ok:
         print("Saved svg file  :", filename)

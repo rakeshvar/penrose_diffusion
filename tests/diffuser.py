@@ -35,7 +35,7 @@ def save_grid_svg(xyac, symmetry, side, filename, t):
 
     m = xyac.mean(axis=0)
     s = xyac.std(axis=0)
-    latice = lattice_loss(torch.from_numpy(xyac).unsqueeze(0), side*np.sqrt(3), t).item() # add batch dim
+    latice = lattice_loss(torch.from_numpy(xyac).unsqueeze(0), side, symmetry).item() # add batch dim
     tp.line(t, m[0], s[0], m[1], s[1], m[2], s[2], latice)
 
 

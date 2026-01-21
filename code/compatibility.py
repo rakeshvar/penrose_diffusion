@@ -279,3 +279,9 @@ def save(data, path):
             xm.save(data_cpu, path_str)
         else:
             torch.save(data_cpu, path_str)
+
+
+def write(text: str, path):
+    path_str = str(path)    
+    with fsspec.open(path_str, "wt", encoding="utf-8") as f:
+        f.write(text) # type: ignore

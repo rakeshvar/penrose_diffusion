@@ -99,33 +99,19 @@ def lsa_ordering_scipy(cost_np, colors_np):
 #-----------------------------------------------------------------------------
 # Lattice Loss
 #-----------------------------------------------------------------------------
-def lattice_loss(xy_hat, s, t):
+def lattice_loss(xy_hat, unit_side, symmetry):
     """
-    0 when all nearest neighbors are exactly s away.
+    0 when all nearest neighbors are exactly s units away.
     """
-    _, N, D = xy_hat.shape
-    if D > 2:
-        xy_hat = xy_hat[..., :2]
+    side2nearest = {6: 3**0.5}[symmetry]    
+    to_nearest = unit_side * side2nearest
+
+    B, N, D = xy_hat.shape
+    if D > 2: xy_hat = xy_hat[..., :2]
     
     sq_dist = ((xy_hat.unsqueeze(2) - xy_hat.unsqueeze(1)) ** 2).sum(-1)
-    dist = sq_dist ** .5
-    dist += torch.eye(N, device=xy_hat.device).unsqueeze(0) * 1e6
-    min_dist, min_idx = dist.min(-1)
-    min_dist, min_idx = min_dist.squeeze(0), min_idx.squeeze(0)
-
-    if isinstance(t, str):
-        min_dist_rounded = min_dist.round(decimals=5)
-        unique_vals, counts = torch.unique(min_dist_rounded, return_counts=True)
-
-        if len(unique_vals) != 1:       
-            print("Unique distances (6 decimal places):")
-            for val, count in zip(unique_vals, counts):
-                print(f"{val:.6f}: {count}")
-            
-            for i in range(N):
-                if (min_dist[i] - s).abs() > 1e-4:
-                    print(f"Point {i:2d}: {min_dist[i]:.5f} with point {min_idx[i]}")
-
-            input("Press enter to continue...")
-        
-    return ((min_dist - s) ** 2).mean()
+    sq_dist += torch.eye(N, device=xy_hat.device).unsqueeze(0) * 1e6
+    min_sq_dist = sq_dist.min(-1)[0]
+    min_dist = torch.sqrt(min_sq_dist)
+    loss = (min_dist - to_nearest) ** 2
+    return loss.mean()

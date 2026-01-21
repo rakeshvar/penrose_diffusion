@@ -10,15 +10,18 @@ from code.config import Config
 from code.data.load import MyDataset
 from code.model.augment import GeometryAugment
 from code.model.ddim import DDIMDiffuser, TransformerDenoiser
+from code.model.loss_helpers import circle_loss, lattice_loss
 from code.model.sampler import save_sample
-from code.model.losses import NoisePredictionLoss, SampleAssistedLoss, SamplePredictionLoss, LSALossSerial, LSALossParallel, get_loss
+from code.model.losses import get_loss
+from code.utils import safe_path
+from code.wandblog import WandBLog
 
 # Suppress nested tensor warnings
 import warnings
 warnings.filterwarnings("ignore", message="enable_nested_tensor is True")
 
 
-def train_fn(rank, config):
+def train_fn(rank:int, config:Config):
     """
     Main training loop.
     Args:
@@ -72,6 +75,17 @@ def train_fn(rank, config):
     lossfunctor = get_loss(config.train['loss'], 
                       denoiser, diffuser, optimizer, device)
     mprint(f"Loss function: {lossfunctor} ({lossfunctor.abbr})", rank)
+    
+
+    #--------------------------------------------
+    # Initialize WandB Logger
+    #--------------------------------------------
+    config.set_identifier(lossfunctor.abbr, dataset.num_tiles)
+    if not config.wandb['run_name']:
+        config.wandb['run_name'] = config.identifier
+
+    wandblog = WandBLog(rank, config.wandb)
+    wandblog.info(config, compat, dataset, denoiser, lossfunctor)
 
     #--------------------------------------------
     # Training Loop
@@ -88,36 +102,55 @@ def train_fn(rank, config):
     for epoch in iterator:
         epoch_loss = 0
         count = 0
+        batch_losses = []
 
         # Enable progress bar only on master process
         progressbar = tqdm(train_loader, disable=(rank != 0))
 
-        for batch in progressbar:
+        for batch_idx, batch in enumerate(progressbar):
             xya, colors, labels = batch
-            xysc = augmenter(xya)
-            loss = lossfunctor(xysc, colors, labels)
+            xysc_hat = augmenter(xya)
+            loss = lossfunctor(xysc_hat, colors, labels)
             epoch_loss += loss
             count += 1
+            batch_losses.append(loss)
 
             progressbar.set_description(f"Epoch {epoch} | Loss: {loss:.4f}")
 
-        # Log Average
         avg_loss = epoch_loss / count if count > 0 else 0
         mprint(f"Epoch {epoch} Done. Avg Loss: {avg_loss:.4f}", rank)
 
+        min_loss = min(batch_losses) if batch_losses else 0
+        max_loss = max(batch_losses) if batch_losses else 0
+        wandblog.lsepoch_metrics(epoch, {
+            'loss_avg': avg_loss,
+            'loss_min': min_loss,
+            'loss_max': max_loss,
+            'learning_rate': optimizer.param_groups[0]['lr']
+        })
+        wandblog.lsgradient_norm(epoch, denoiser)
+
         if is_master:
-            # Save Checkpoint
-            config.save_checkpoint(epoch, denoiser, optimizer, avg_loss, dataset, lossfunctor.abbr)
+            config.save_checkpoint(epoch, denoiser, optimizer, avg_loss, dataset, wandblog)
 
-            # Save Sample
-            save_name = f"sample_{config.timestamp}_e{epoch:03d}_c{sample_label:02d}_{sample_name}.svg"
-            svg_path = config.samples_dir / save_name
+            # Sample via the diffuser (using the denoiser)
+            svg_name = f"sample_{config.timestamp}_e{epoch:03d}_c{sample_label:02d}_{sample_name}.svg"
+            svg_path = safe_path(config.samples_dir, svg_name)
+            svg, xysc_hat = save_sample(denoiser, diffuser, device, None,
+                                dataset.num_tiles, dataset.symmetry, dataset.side,
+                                sample_label)
+            compat.write(svg, svg_path)
 
-            # Call the reusable function from model_sampler.py
-            save_sample(denoiser, diffuser, device, svg_path,
-                        dataset.num_tiles, dataset.symmetry, dataset.side,
-                        sample_label)
+            # Save some special losses
+            latticeloss = lattice_loss(xysc_hat, dataset.side, dataset.symmetry).item()
+            circleloss = circle_loss(xysc_hat).item()
+            
+            wandblog.lsvg(epoch, svg, sample_label, sample_name)
+            wandblog.log_step({'lattice_loss': latticeloss, 'circle_loss': circleloss}, step=epoch)
+
             print()
+
+    wandblog.finish()
             
 #------
 # Main

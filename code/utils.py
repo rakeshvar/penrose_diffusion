@@ -313,3 +313,11 @@ def xysc_to_xyac(xysc, colors=None):
 
     return out
 
+#------------------------------------------------------------------------------
+# IO
+#------------------------------------------------------------------------------
+def safe_path(folder, fname):
+    if isinstance(folder, (str,)):
+        return f"{folder.rstrip('/')}/{fname}"
+    else:
+        return folder / fname

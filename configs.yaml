@@ -39,6 +39,31 @@ default_train: &default_train
   num_epochs: 100
   loss: 'Noise'
 
+#---------------------------------------------------------
+# WandB
+#---------------------------------------------------------
+default_wandb: &default_wandb
+  enabled: true
+  project: 'penrose-diffusion'
+  run_name: null        # Auto-generated if null
+  run_id: null          # Specify to resume a specific run
+  watch_freq: 100       # Frequency to log gradients and parameters
+
+verbose_wandb:
+  <<: *default_wandb
+  enabled: true
+  project: 'penrose-debug'
+  watch_freq: 10
+
+no_wandb:
+  <<: *default_wandb
+  enabled: false
+
+nowatch_wandb:
+  <<: *default_wandb
+  enabled: true
+  watch_freq: 0     
+
 # ---------------------------------------------------------
 # EXPERIMENT GROUPS
 # This is what you select via CLI (e.g., -g small)
@@ -48,6 +73,8 @@ default:
     <<: *default_denoiser
   train:
     <<: *default_train
+  wandb:
+    <<: *default_wandb
 
 toy:
   denoiser:
@@ -55,6 +82,12 @@ toy:
   train:
     <<: *default_train
     num_epochs: 2
+  wandb:
+    <<: *default_wandb
+    enabled: true
+    project: 'penrose-toy'
+    watch_freq: 0
+
     
 # SMALL
 small:
@@ -65,6 +98,8 @@ small:
     lr: 0.001   
     batch_size: 64
     num_epochs: 10           
+  wandb:
+    <<: *default_wandb
 
 # LARGE
 large:
@@ -72,3 +107,6 @@ large:
     <<: *big_denoiser
   train:
     <<: *default_train
+  wandb:
+    <<: *default_wandb
+
