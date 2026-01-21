@@ -3,6 +3,7 @@ import torch
 from pathlib import Path
 from tqdm import tqdm
 from torch.utils.data import DataLoader
+from torch.optim.lr_scheduler import LinearLR, CosineAnnealingLR, SequentialLR
 
 import code.compatibility as compat
 from code.compatibility import master_print as mprint
@@ -61,7 +62,18 @@ def train_fn(rank:int, config:Config):
 
     denoiser = TransformerDenoiser(**config.denoiser).to(device)
     optimizer = torch.optim.AdamW(denoiser.parameters(), lr=config.train['lr'])
-    config.load_model_state(denoiser, optimizer) # if checkpoint
+
+    # 2. Init Scheduler (Create it NOW, before loading state)
+    warmup_epochs = min(10, int(config.train['num_epochs'] * 0.05)) 
+    decay_epochs = config.train['num_epochs'] - warmup_epochs
+
+    scheduler1 = LinearLR(optimizer, start_factor=0.01, total_iters=warmup_epochs)
+    scheduler2 = CosineAnnealingLR(optimizer, T_max=decay_epochs)
+    scheduler = SequentialLR(optimizer, schedulers=[scheduler1, scheduler2], milestones=[warmup_epochs])
+
+    # 3. Load State (Pass scheduler so it can load its internal counter/state)
+    # You will need to update config.load_model_state to accept this argument
+    config.load_model_state(denoiser, optimizer, scheduler) 
 
     # Move to device
     for state in optimizer.state.values():
@@ -117,7 +129,7 @@ def train_fn(rank:int, config:Config):
             count += 1
 
             progressbar.set_description(f"Epoch {epoch} | Loss: {loss:.4f}")
-
+        scheduler.step()
         avg_loss = total_loss / count if count > 0 else 0
         mprint(f"Epoch {epoch} Done. Avg Loss: {avg_loss:.4f}", rank)
 
@@ -130,7 +142,7 @@ def train_fn(rank:int, config:Config):
         wandblog.lsgradient_norm(epoch, denoiser)
 
         if is_master:
-            config.save_checkpoint(epoch, denoiser, optimizer, avg_loss, dataset, wandblog)
+            config.save_checkpoint(epoch, denoiser, optimizer, scheduler, avg_loss, dataset, wandblog)
 
             # Sample via the diffuser (using the denoiser)
             svg_name = f"sample_{config.timestamp}_e{epoch:03d}_c{sample_label:02d}_{sample_name}.svg"

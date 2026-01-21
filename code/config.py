@@ -187,23 +187,25 @@ class Config:
         print(f"  Override: {key} = {val} ({type(val).__name__})")
         target_dict[key] = val
 
-    def load_model_state(self, denoiser, optimizer):
+    def load_model_state(self, denoiser, optimizer, scheduler=None):
         if self.checkpoint_path:
             print(f"Loading weights from {self.checkpoint_path}...")
             ckpt = compat.load(self.checkpoint_path, map_location='cpu')
             denoiser.load_state_dict(ckpt['denoiser_state_dict'], strict=True)
     
             if optimizer and 'optimizer_state_dict' in ckpt:
-                # Sometimes we want to discard momentum, etc.
                 optimizer.load_state_dict(ckpt['optimizer_state_dict'])
-    
+
+            if scheduler and 'scheduler_state_dict' in ckpt:
+                scheduler.load_state_dict(ckpt['scheduler_state_dict'])
+
             print(f"Resumed weights from Epoch {ckpt.get('epoch', 0)}.")
 
 
     def set_identifier(self, lossname, num_tiles):
         self.identifier = f"{self.timestamp}_{lossname}_t{num_tiles:03d}"
     
-    def save_checkpoint(self, epoch, denoiser, optimizer, loss, dataset, wandblog=None):
+    def save_checkpoint(self, epoch, denoiser, optimizer, scheduler, loss, dataset, wandblog=None):
         ckpt_fname = "cp" + self.identifier + f"_e{epoch:03d}.pt"
         ckpt_fpath = safe_path(self.checkpoints_dir, ckpt_fname)
 
@@ -211,6 +213,7 @@ class Config:
             'epoch': int(epoch),
             'denoiser_state_dict': denoiser.state_dict(),
             'optimizer_state_dict': optimizer.state_dict(),
+            'scheduler_state_dict': scheduler.state_dict(),
             'config': self.conf_dict,
             'loss': loss,
             'data_path': str(self.data_path_orig),
