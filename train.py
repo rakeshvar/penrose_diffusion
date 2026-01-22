@@ -180,3 +180,4 @@ if __name__ == "__main__":
 # TODO:
 # delete checkpoint in compat (gs://)
 # add artifcat to wandb ckpt.pt
+# softmin loss

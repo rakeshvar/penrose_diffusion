@@ -3,7 +3,7 @@
 # ---------------------------------------------------------
 # denoisers 
 # ---------------------------------------------------------
-denoiser_d32: &denoiser_d32
+denoiser32: &denoiser32
   num_classes: 70
   class_embed_dim: 8
   time_embed_dim: 16 
@@ -12,7 +12,7 @@ denoiser_d32: &denoiser_d32
   num_layers: 2
   dropout: 0.            
 
-denoiser_d64: &denoiser_d64
+denoiser64: &denoiser64
   num_classes: 70
   class_embed_dim: 16
   time_embed_dim: 32
@@ -21,7 +21,7 @@ denoiser_d64: &denoiser_d64
   num_layers: 4
   dropout: 0.1
 
-denoiser_d128: &denoiser_d128
+denoiser128: &denoiser128
   num_classes: 70
   class_embed_dim: 32
   time_embed_dim: 64
@@ -30,7 +30,7 @@ denoiser_d128: &denoiser_d128
   num_layers: 4
   dropout: 0.1
 
-denoiser_d256: &denoiser_d256
+denoiser256: &denoiser256
   num_classes: 70
   class_embed_dim: 64
   time_embed_dim: 128
@@ -74,13 +74,13 @@ nowatch_wandb:
   enabled: true
   watch_freq: 0     
 
-# ---------------------------------------------------------
+# ----------------------------------------------------------------
 # EXPERIMENT GROUPS
-# This is what you select via CLI (e.g., -g small)
-# ---------------------------------------------------------
+# This is what you select via CLI (e.g., train.py data.npz toy)
+# ----------------------------------------------------------------
 default:
   denoiser:
-    <<: *denoiser_d64
+    <<: *denoiser64
   train:
     <<: *default_train
   wandb:
@@ -88,7 +88,7 @@ default:
 
 toy:
   denoiser:
-    <<: *denoiser_d32
+    <<: *denoiser32
   train:
     <<: *default_train
     num_epochs: 3
@@ -98,30 +98,34 @@ toy:
     project: 'penrose-toy'
     watch_freq: 0
 
-small:
+model32:
   denoiser:
-    <<: *denoiser_d64
-  train:
-    <<: *default_train    
-    lr: 0.001   
-    batch_size: 64
-    num_epochs: 10           
-  wandb:
-    <<: *default_wandb
-
-medium:
-  denoiser:
-    <<: *denoiser_d128
-  train:
-    <<: *default_train    
-  wandb:
-    <<: *default_wandb
-
-large:
-  denoiser:
-    <<: *denoiser_d256
+    <<: *denoiser32
   train:
     <<: *default_train
   wandb:
     <<: *default_wandb
 
+model64:
+  denoiser:
+    <<: *denoiser64
+  train:
+    <<: *default_train    
+  wandb:
+    <<: *default_wandb
+
+model128:
+  denoiser:
+    <<: *denoiser128
+  train:
+    <<: *default_train    
+  wandb:
+    <<: *default_wandb
+
+model256:
+  denoiser:
+    <<: *denoiser256
+  train:
+    <<: *default_train
+  wandb:
+    <<: *default_wandb

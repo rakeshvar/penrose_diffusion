@@ -217,7 +217,7 @@ class Config:
 
 
     def set_identifier(self, lossname, num_tiles):
-        self.identifier = f"{self.timestamp}_{lossname}_t{num_tiles:03d}"
+        self.identifier = f"{self.timestamp}_d{self.denoiser['d_model']}_{lossname}_t{num_tiles:03d}"
     
     def save_checkpoint(self, epoch, denoiser, optimizer, scheduler, loss, dataset, wandblog=None):
         ckpt_fname = "cp" + self.identifier + f"_e{epoch:03d}.pt"

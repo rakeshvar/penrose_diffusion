@@ -33,7 +33,6 @@ source ~/tpu-env/bin/activate```
 ### pip
 ```bash
 pip install --upgrade pip
-#pip uninstall -y torch torch-xla torchvision torchaudio
 pip install fsspec gcsfs 
 pip install tqdm scipy wandb
 pip install torch~=2.6.0 torch_xla[tpu]~=2.6.0 \
@@ -112,6 +111,8 @@ gsutil -m cp gs://penrose_diffusion/datasets/*.npz datasets
 
 ### Train
 ```bash
+#export WANDB_API_KEY=
+#Kolkata
 python train.py gs://penrose_diffusion/datasets/hex_t096_c96_u18.npz -t num_epochs=10
 ```
 
@@ -120,4 +121,9 @@ python train.py gs://penrose_diffusion/datasets/hex_t096_c96_u18.npz -t num_epoc
 sudo fuser -v /dev/vfio/*
 pkill -9 -f python
 sudo fuser -v /dev/vfio/*
+```
+
+## Working Area
+```
+/home/raka/.local/lib/python3.10/site-packages/torch/optim/lr_scheduler.py:243: UserWarning: The epoch parameter in `scheduler.step()` was not necessary and is being deprecated where possible. Please use `scheduler.step()` to step the scheduler. During the deprecation, if epoch is different from None, the closed form is used instead of the new chainable form, where available. Please open an issue if you are unable to replicate your use case: https://github.com/pytorch/pytorch/issues/new/choose.
 ```
