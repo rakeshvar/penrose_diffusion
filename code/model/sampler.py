@@ -34,9 +34,9 @@ def save_sample(denoiser, diffuser, device, save_path,
         # Create Grid Object and Save SVG
         if symmetry == 6:
             grid = HexGrid(sample_np, side=side)
-            svg = hex_save_svg(grid, str(save_path))
+            svg = hex_save_svg(grid, save_path)
         else:
             grid = PenGrid(sample_np, from_np=True, side=side)
-            svg = pen_save_svg(grid, str(save_path))
+            svg = pen_save_svg(grid, save_path)
     
     return svg, xysc

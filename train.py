@@ -156,6 +156,7 @@ def train_fn(rank:int, config:Config):
                                     dataset.num_tiles, dataset.symmetry, dataset.side,
                                     sample_label)
                 compat.write(svg, svg_path)
+                mprint(f"Saved svf file  : {svg_path}", rank)
                 wandblog.lsvg(epoch, svg, sample_label, sample_name)
 
                 # Save some special losses

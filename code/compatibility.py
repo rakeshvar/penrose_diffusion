@@ -217,167 +217,73 @@ def download_to_local(path, suffix=""):
     return tmp_path
 
 # -------------------------------------------------
-# Save
+# Write / Save
 # -------------------------------------------------
-def write(text: str, path):
+def _upload_to_gcs(local_path: str, gcs_path: str, verify: bool, remove_local: bool) -> None:
+    try:
+        subprocess.check_call(["gsutil", "-q", "cp", local_path, gcs_path])
+    except subprocess.CalledProcessError as e:
+        raise RuntimeError(f"gsutil cp failed for {gcs_path}") from e
+    except Exception as e:
+        raise RuntimeError(f"Unexpected error during GCS upload to {gcs_path}") from e
+    finally:
+        try:
+            if verify:
+                ls_result = subprocess.run(["gsutil", "ls", "-l", gcs_path], capture_output=True, text=True)
+                if ls_result.returncode != 0:
+                    print(f"[compat.upload] WARNING: Verification failed for {gcs_path}: {ls_result.stderr.strip()}")
+            if remove_local:
+                os.remove(local_path)
+        except Exception:
+            pass  
+    
+
+def write(text: str, path, verify: bool = False):
     """
     Write text (e.g., SVG string) to path.
-    - If GCS (gs://): Write locally to temp file first, then gsutil cp.
-    - If local: Direct write to file.
-    No fsspec/gcsfs used at all.
-    Heavy debugging prints included.
-    Multi-process safe: only master ordinal writes (NO RENDEZVOUS — removed to prevent stalls).
+    - Local paths → direct write
+    - GCS (gs://) → write to temp local file, then gsutil cp
     """
     path_str = str(path)
-    print(f"[compat.write] === START WRITE === Path: {path_str}")
 
-    # Safety guard: only master should call this (as in your training code)
     if IS_TPU and not xm.is_master_ordinal():
-        print(f"[compat.write] Non-master ordinal. Skipping write (safety guard).")
         return
 
-    print("[compat.write] This process is writing (master ordinal or single-process).")
-
     if path_str.startswith("gs://"):
-        print("[compat.write] GCS path detected. Using local temp + gsutil cp strategy.")
+        with tempfile.NamedTemporaryFile(delete=False, suffix=path_str[-4:], mode="wt", encoding="utf-8") as tmp:
+            local_path = tmp.name
+            tmp.write(text)
 
-        # Create local temp file and write text
-        try:
-            with tempfile.NamedTemporaryFile(delete=False, suffix=".svg", mode="w", encoding="utf-8") as tmp:
-                local_path = tmp.name
-                tmp.write(text)
-            print(f"[compat.write] Created and wrote to local temp file: {local_path}")
-        except Exception as e:
-            print(f"[compat.write] ERROR: Failed to create/write temp file: {e}")
-            raise
-
-        try:
-            # Upload with gsutil
-            print(f"[compat.write] Starting gsutil cp: {local_path} -> {path_str}")
-            subprocess.check_call(["gsutil", "cp", local_path, path_str])
-            print("[compat.write] gsutil cp SUCCESSFUL")
-
-            # Verification
-            print("[compat.write] Verifying upload with gsutil ls -l...")
-            ls_result = subprocess.run(["gsutil", "ls", "-l", path_str], capture_output=True, text=True)
-            if ls_result.returncode == 0:
-                print(f"[compat.write] VERIFIED in GCS:\n{ls_result.stdout.strip()}")
-            else:
-                print(f"[compat.write] WARNING: Verification failed (stderr): {ls_result.stderr.strip()}")
-
-        except subprocess.CalledProcessError as e:
-            print(f"[compat.write] ERROR: gsutil command failed: {e}")
-            raise
-        except Exception as e:
-            print(f"[compat.write] ERROR during upload/verification: {e}")
-            raise
-        finally:
-            # Cleanup local temp
-            try:
-                os.remove(local_path)
-                print(f"[compat.write] Cleaned up local temp file: {local_path}")
-            except Exception as e:
-                print(f"[compat.write] WARNING: Failed to delete temp file {local_path}: {e}")
+        _upload_to_gcs(local_path, path_str, verify, remove_local=True)
 
     else:
-        print("[compat.write] Local filesystem path detected. Writing directly.")
-        
-        try:
-            with open(path_str, "w", encoding="utf-8") as f:
-                f.write(text)
-            print(f"[compat.write] Direct local write SUCCESSFUL to {path_str}")
-        except Exception as e:
-            print(f"[compat.write] ERROR during direct local write: {e}")
-            raise
+        with open(path_str, "w", encoding="utf-8") as f:
+            f.write(text)
 
-    print(f"[compat.write] === WRITE COMPLETED === Path: {path_str}")
 
-def save(data, path):
+def save(data, path, verify: bool = False):
     """
     Save checkpoint 'data' to path.
-    - If GCS (gs://): Save locally first (xm.save on TPU for efficiency), then gsutil cp.
-    - If local: Direct save (xm.save on TPU, torch.save otherwise).
-    No fsspec/gcsfs used at all.
-    Heavy debugging prints included.
-    Multi-process safe: only master ordinal saves (NO RENDEZVOUS — removed to prevent stalls).
+    - Local paths → direct xm.save / torch.save
+    - GCS (gs://) → save to temp local file first, then gsutil cp
     """
     path_str = str(path)
-    print(f"[compat.save] === START SAVE === Path: {path_str}")
 
-    # Safety guard: only master should call this (as in your training code)
     if IS_TPU and not xm.is_master_ordinal():
-        print(f"[compat.save] Non-master ordinal. Skipping save (safety guard).")
         return
-
-    print("[compat.save] This process is saving (master ordinal or single-process).")
-
+    
     if path_str.startswith("gs://"):
-        print("[compat.save] GCS path detected. Using local temp + gsutil cp strategy.")
+        with tempfile.NamedTemporaryFile(delete=False, suffix=".pt") as tmp:
+            local_path = tmp.name
 
-        # Create local temp file
-        try:
-            with tempfile.NamedTemporaryFile(delete=False, suffix=".pt") as tmp:
-                local_path = tmp.name
-            print(f"[compat.save] Created local temp file: {local_path}")
-        except Exception as e:
-            print(f"[compat.save] ERROR: Failed to create temp file: {e}")
-            raise
+        if IS_TPU:       xm.save(data, local_path)
+        else:            torch.save(data, local_path)
 
-        # Local save step
-        try:
-            print("[compat.save] Starting local save step...")
-            if IS_TPU:
-                print("[compat.save] TPU: Saving locally with xm.save (efficient, no manual transfer).")
-                xm.save(data, local_path)
-            else:
-                print("[compat.save] Non-TPU: Saving locally with torch.save (NO _cpuify).")
-                torch.save(data, local_path)
-            print(f"[compat.save] Local save SUCCESSFUL to {local_path}")
-        except Exception as e:
-            print(f"[compat.save] ERROR during local save: {e}")
-            raise
-
-        try:
-            # Upload with gsutil
-            print(f"[compat.save] Starting gsutil cp: {local_path} -> {path_str}")
-            subprocess.check_call(["gsutil", "cp", local_path, path_str])
-            print("[compat.save] gsutil cp SUCCESSFUL")
-
-            # Verification
-            print("[compat.save] Verifying upload with gsutil ls -l...")
-            ls_result = subprocess.run(["gsutil", "ls", "-l", path_str], capture_output=True, text=True)
-            if ls_result.returncode == 0:
-                print(f"[compat.save] VERIFIED in GCS:\n{ls_result.stdout.strip()}")
-            else:
-                print(f"[compat.save] WARNING: Verification failed (stderr): {ls_result.stderr.strip()}")
-
-        except subprocess.CalledProcessError as e:
-            print(f"[compat.save] ERROR: gsutil command failed: {e}")
-            raise
-        except Exception as e:
-            print(f"[compat.save] ERROR during upload/verification: {e}")
-            raise
-        finally:
-            # Cleanup local temp
-            try:
-                os.remove(local_path)
-                print(f"[compat.save] Cleaned up local temp file: {local_path}")
-            except Exception as e:
-                print(f"[compat.save] WARNING: Failed to delete temp file {local_path}: {e}")
+        _upload_to_gcs(local_path, path_str, verify, remove_local=True)
 
     else:
-        print("[compat.save] Local filesystem path detected. Saving directly.")
-        
         try:
-            if IS_TPU:
-                print("[compat.save] TPU: Direct xm.save to local path.")
-                xm.save(data, path_str)
-            else:
-                print("[compat.save] Non-TPU: Direct torch.save (NO _cpuify).")
-                torch.save(data, path_str)
-            print(f"[compat.save] Direct local save SUCCESSFUL to {path_str}")
+            if IS_TPU:     xm.save(data, path_str)
+            else:          torch.save(data, path_str)
         except Exception as e:
-            print(f"[compat.save] ERROR during direct local save: {e}")
-            raise
-
-    print(f"[compat.save] === SAVE COMPLETED === Path: {path_str}")
+            raise RuntimeError(f"Failed to save checkpoint to local path {path_str}") from e
