@@ -88,13 +88,13 @@ else:
 
 def print_env(rank):
     if rank == 0:
-        print("######################")
+        print("-------------------")
         print("IS_CPU:  ", IS_CPU)
         print("IS_GPU:  ", IS_GPU)
         print("IS_TPU:  ", IS_TPU)
         print("IS_GCP:  ", IS_GCP)
         print("IS_COLAB:", IS_COLAB)
-        print("######################")
+        print("-------------------")
 
 def get_device():
     if IS_TPU:

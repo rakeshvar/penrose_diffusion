@@ -32,13 +32,17 @@ try_create() {
   fi
 
   if "${CMD[@]}"; then
-    echo -e "\a"
     echo ""
     echo "✅ SUCCESS: $LABEL"
     echo "TPU VM '$TPU_NAME' is ready in zone $ZONE"
     echo ""
     echo "To connect:"
     echo "  gcloud compute tpus tpu-vm ssh $TPU_NAME --zone=$ZONE"
+    echo -e "\a"
+    sleep 1
+    echo -e "\a"
+    sleep 1
+    echo -e "\a"
     exit 0
   fi
 }
@@ -50,9 +54,8 @@ try_create() {
 # -------------------------------
 
 # 2. v6e spot (newer, requires specific runtime)
-try_create europe-west4-a v6e-8 true "tpu-ubuntu2204-base" "TPU v6e SPOT (europe-west4-a)"
-try_create us-east1-d     v6e-8 true "tpu-ubuntu2204-base" "TPU v6e SPOT (us-east1-d)"
-# v2-alpha-tpuv6e
+try_create europe-west4-a v6e-8 true "v2-alpha-tpuv6e" "TPU v6e SPOT (europe-west4-a)"
+try_create us-east1-d     v6e-8 true "v2-alpha-tpuv6e" "TPU v6e SPOT (us-east1-d)"
 
 # 1. v5e spot (often fastest, well-supported)
 try_create europe-west4-b v5litepod-8 true "tpu-ubuntu2204-base" "TPU v5e SPOT (europe-west4-b)"

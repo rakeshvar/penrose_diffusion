@@ -87,18 +87,22 @@ def train_fn(rank:int, config:Config):
     lossfunctor = get_loss(config.train['loss'], 
                       denoiser, diffuser, optimizer, device)
     mprint(f"Loss function: {lossfunctor} ({lossfunctor.abbr})", rank)
-    
+
+    # We are ready to set an identifier based on timestamp, loss and num_tiles    
+    config.set_identifier(lossfunctor.abbr, dataset.num_tiles)
+    mprint(f"Identifier for this run: {config.identifier}", rank)
 
     #--------------------------------------------
     # Initialize WandB Logger
     #--------------------------------------------
-    config.set_identifier(lossfunctor.abbr, dataset.num_tiles)
+    mprint("Initializing WandB...", rank)
     if not config.wandb['run_name']:
         config.wandb['run_name'] = config.identifier
 
     wandblog = WandBLog(rank, config.wandb)
     wandblog.info(config, compat, dataset, denoiser, lossfunctor)
-
+    mprint("WandB initialized.", rank)
+    
     #--------------------------------------------
     # Training Loop
     #--------------------------------------------

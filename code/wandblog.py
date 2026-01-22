@@ -55,7 +55,7 @@ class WandBLog:
             return
         
         self.update_run_config({
-            **tr_conf.conf_dict,
+            **tr_conf.config,
             'timestamp': tr_conf.timestamp,
             'checkpoint_path': str(tr_conf.checkpoint_path) if tr_conf.checkpoint_path else None,
             'data_path': str(tr_conf.data_path_orig),

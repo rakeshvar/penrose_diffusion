@@ -5,18 +5,33 @@ import yaml
 from datetime import datetime
 from pathlib import Path
 
-import torch
 import code.compatibility as compat
 from code.utils import safe_path
 
-def recursive_update(base, update):
-    """Recursively updates the base dictionary with values from the update dictionary."""
-    for k, v in update.items():
-        if isinstance(v, dict) and k in base and isinstance(base[k], dict):
-            recursive_update(base[k], v)
+VALID_SUBCONFIGS = ['train', 'denoiser', 'wandb']
+
+def deep_merge_dict(target, source):
+    """Helper: Merges update into base recursively."""
+    for k, v in source.items():
+        if isinstance(v, dict) and k in target and isinstance(target[k], dict):
+            deep_merge_dict(target[k], v)
         else:
-            base[k] = v
-    return base
+            if k not in target:
+                print(f"WARNING: Adding new/unrecognized config key: {k}")
+            target[k] = v
+
+def update_config(target, source):
+    for subconfig in source:
+        if subconfig not in VALID_SUBCONFIGS:
+            print(f"WARNING: Unknown config section: {subconfig}. Ignoring.")
+            continue
+        
+        assert isinstance( source[subconfig], dict), f"Sub-Config {subconfig} is not a dictionary. Got {source[subconfig]}."
+
+        if subconfig not in target:
+            target[subconfig] = {}
+        
+        deep_merge_dict(target[subconfig], source[subconfig])
 
 class Config:
     def __init__(self):
@@ -44,7 +59,7 @@ class Config:
         self.library = {}
         self.checkpoint_path = None
         self.resume_epoch = 0
-        self.conf_dict = {}
+        self.config = {}
 
         #-----------------------
         # Identify Checkpoint
@@ -60,11 +75,11 @@ class Config:
         #-----------------------
         with open('configs.yaml', 'r') as f:
             self.library = yaml.safe_load(f)
-        self.conf_dict = self.library['default']
+        self.config = self.library['default']
 
         if self.checkpoint_path:
             ckpt = compat.load(self.checkpoint_path, map_location='cpu')
-            recursive_update(self.conf_dict, ckpt['config']) 
+            update_config(self.config, ckpt['config']) 
             
             if 'data_path' in ckpt:
                 self.data_path_orig = ckpt['data_path']
@@ -73,14 +88,14 @@ class Config:
             # Preserve wandb run_id for resuming
             if 'wandb_run_id' in ckpt:
                 if ckpt['wandb_run_id']:
-                    self.conf_dict.setdefault('wandb', {})['run_id'] = ckpt['wandb_run_id']
+                    self.config.setdefault('wandb', {})['run_id'] = ckpt['wandb_run_id']
             
             del ckpt
 
-        # Set defaults so we can safely update them later
-        self.train = self.conf_dict.setdefault('train', {})
-        self.denoiser = self.conf_dict.setdefault('denoiser', {})
-        self.wandb = self.conf_dict.setdefault('wandb', {})
+        # link to sub configs (initialize if they don't exist)
+        self.train = self.config.setdefault('train', {})
+        self.denoiser = self.config.setdefault('denoiser', {})
+        self.wandb = self.config.setdefault('wandb', {})
 
         #-----------------------
         # Process Positional Arguments (Files & Config Groups)
@@ -97,12 +112,12 @@ class Config:
             # Specific config file
             elif arg.endswith(('.conf', '.yaml', '.yml')):
                 with open(arg, 'r') as f:
-                    recursive_update(self.conf_dict, yaml.safe_load(f))
+                    update_config(self.config, yaml.safe_load(f))
 
             # Config Group from configs.yaml (e.g., 'small', 'toy')
             elif '.' not in arg and '=' not in arg:
                 if arg in self.library:
-                    recursive_update(self.conf_dict, self.library[arg])
+                    update_config(self.config, self.library[arg])
                 else:
                     print(f"Warning: Config group '{arg}' not found in configs.yaml")
 
@@ -142,7 +157,6 @@ class Config:
         if self.output_base_dir.startswith("gs://"):
             self.checkpoints_dir = f"{self.output_base_dir.rstrip('/')}/checkpoints"
             self.samples_dir = f"{self.output_base_dir.rstrip('/')}/samples"
-            self.logs_dir = f"{self.output_base_dir.rstrip('/')}/logs"
             print(f"Using remote GCS output base: {self.output_base_dir}")
         else:
             # local filesystem: continue to use Path and mkdir
@@ -152,8 +166,6 @@ class Config:
             self.checkpoints_dir.mkdir(parents=True, exist_ok=True)
             self.samples_dir = self.output_base_dir / 'samples'
             self.samples_dir.mkdir(parents=True, exist_ok=True)
-            self.logs_dir = self.output_base_dir / 'logs'
-            self.logs_dir.mkdir(parents=True, exist_ok=True)
 
         if not self.data_path_orig:
             raise ValueError("Must specify either a checkpoint or data path.\n"
@@ -185,6 +197,8 @@ class Config:
                     pass # keep as string
 
         print(f"  Override: {key} = {val} ({type(val).__name__})")
+        if key not in target_dict:
+            print(f"!!! Warning: Adding new/unrecognized config key: {key} not found in configs.yaml")
         target_dict[key] = val
 
     def load_model_state(self, denoiser, optimizer, scheduler=None):
@@ -214,7 +228,7 @@ class Config:
             'denoiser_state_dict': denoiser.state_dict(),
             'optimizer_state_dict': optimizer.state_dict(),
             'scheduler_state_dict': scheduler.state_dict(),
-            'config': self.conf_dict,
+            'config': self.config,
             'loss': loss,
             'data_path': str(self.data_path_orig),
             # Metadata for inference/sampling
@@ -235,6 +249,7 @@ class Config:
         print(f"Saved checkpoint: {ckpt_fpath}")
         self.saved_checkpoints.append(ckpt_fpath)
 
+        # Keep only the last two checkpoints
         while len(self.saved_checkpoints) > 2:
             to_remove = self.saved_checkpoints.pop(0)
             try:
@@ -250,12 +265,15 @@ class Config:
         ================================
                 Configuration         
         ================================
-        Timestamp:       {self.timestamp}
-        Checkpoint Path: {self.checkpoint_path}
-        Data Path:       {self.data_path_orig} -> {self.data_path}
-        Output Base Dir: {self.output_base_dir}
-        Resume Epoch:    {self.resume_epoch}
+        Timestamp        : {self.timestamp}
+        Checkpoint Path  : {self.checkpoint_path}
+        Data Path        : {self.data_path_orig}
+        Data Path (Local): {self.data_path}
+        Output Base Dir  : {self.output_base_dir}
+        Checkpoints Dir  : {self.checkpoints_dir}
+        Samples Dir      : {self.samples_dir}
+        Resume Epoch     : {self.resume_epoch}
         ---------------------------------
-        {yaml.dump(self.conf_dict, default_flow_style=False, sort_keys=False)}
-        =================================
-        """)
+        """) + \
+        yaml.dump(self.config, default_flow_style=False, sort_keys=False) + \
+        "================================="
