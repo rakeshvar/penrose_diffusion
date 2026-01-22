@@ -38,6 +38,7 @@ default_train: &default_train
   batch_size: 64
   num_epochs: 100
   loss: 'Noise'
+  save_samples: true
 
 #---------------------------------------------------------
 # WandB

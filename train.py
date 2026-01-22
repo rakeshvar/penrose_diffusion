@@ -102,7 +102,7 @@ def train_fn(rank:int, config:Config):
     wandblog = WandBLog(rank, config.wandb)
     wandblog.info(config, compat, dataset, denoiser, lossfunctor)
     mprint("WandB initialized.", rank)
-    
+
     #--------------------------------------------
     # Training Loop
     #--------------------------------------------
@@ -148,20 +148,21 @@ def train_fn(rank:int, config:Config):
         if is_master:
             config.save_checkpoint(epoch, denoiser, optimizer, scheduler, avg_loss, dataset, wandblog)
 
-            # Sample via the diffuser (using the denoiser)
-            svg_name = f"sample_{config.timestamp}_e{epoch:03d}_c{sample_label:02d}_{sample_name}.svg"
-            svg_path = safe_path(config.samples_dir, svg_name)
-            svg, xysc_hat = save_sample(denoiser, diffuser, device, None,
-                                dataset.num_tiles, dataset.symmetry, dataset.side,
-                                sample_label)
-            compat.write(svg, svg_path)
+            if config.train['save_samples']:
+                # Sample via the diffuser (using the denoiser)
+                svg_name = f"sample_{config.timestamp}_e{epoch:03d}_c{sample_label:02d}_{sample_name}.svg"
+                svg_path = safe_path(config.samples_dir, svg_name)
+                svg, xysc_hat = save_sample(denoiser, diffuser, device, svg_path,
+                                    dataset.num_tiles, dataset.symmetry, dataset.side,
+                                    sample_label)
+                compat.write(svg, svg_path)
+                wandblog.lsvg(epoch, svg, sample_label, sample_name)
 
-            # Save some special losses
-            latticeloss = lattice_loss(xysc_hat, dataset.side, dataset.symmetry).item()
-            circleloss = circle_loss(xysc_hat).item()
-            
-            wandblog.lsvg(epoch, svg, sample_label, sample_name)
-            wandblog.log_step({'lattice_loss': latticeloss, 'circle_loss': circleloss}, step=epoch)
+                # Save some special losses
+                latticeloss = lattice_loss(xysc_hat, dataset.side, dataset.symmetry).item()
+                circleloss = circle_loss(xysc_hat).item()
+                
+                wandblog.log_step({'lattice_loss': latticeloss, 'circle_loss': circleloss}, step=epoch)
 
             print()
 
