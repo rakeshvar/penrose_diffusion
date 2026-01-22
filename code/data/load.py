@@ -45,8 +45,7 @@ class MyDataset(Dataset):
             f"  • Source:     {self.data_path_name}\n"
             f"  • Symmetry:   {self.symmetry}\n"
             f"  • Side:       {self.side}\n"
-            f"  • Samples:    {self.n_samples}\n"
             f"  • Tiles:      {self.num_tiles}\n"
             f"  • Memory:     {self.mem_mb:.2f} MB\n"
-            f"  • Samples:    {len(self)} ({self.n_samples//self.num_classes} per class * {self.num_classes} classes)\n"
+            f"  • Samples:    {len(self)} (20 copies * {self.n_samples//(self.num_classes*20)} per class * {self.num_classes} classes)\n"
         )

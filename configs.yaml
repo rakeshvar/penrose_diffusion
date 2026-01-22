@@ -3,7 +3,16 @@
 # ---------------------------------------------------------
 # denoisers 
 # ---------------------------------------------------------
-default_denoiser: &default_denoiser
+denoiser_d32: &denoiser_d32
+  num_classes: 70
+  class_embed_dim: 8
+  time_embed_dim: 16 
+  d_model: 32             
+  num_heads: 4             
+  num_layers: 2
+  dropout: 0.            
+
+denoiser_d64: &denoiser_d64
   num_classes: 70
   class_embed_dim: 16
   time_embed_dim: 32
@@ -12,19 +21,19 @@ default_denoiser: &default_denoiser
   num_layers: 4
   dropout: 0.1
 
-small_denoiser: &small_denoiser
-  <<: *default_denoiser      
-  class_embed_dim: 8
-  time_embed_dim: 16 
-  d_model: 32             
-  num_heads: 4             
-  num_layers: 2
-  dropout: 0.            
+denoiser_d128: &denoiser_d128
+  num_classes: 70
+  class_embed_dim: 32
+  time_embed_dim: 64
+  d_model: 128
+  num_heads: 8
+  num_layers: 4
+  dropout: 0.1
 
-big_denoiser: &big_denoiser
-  <<: *default_denoiser
-  class_embed_dim: 128
-  time_embed_dim: 256
+denoiser_d256: &denoiser_d256
+  num_classes: 70
+  class_embed_dim: 64
+  time_embed_dim: 128
   d_model: 256
   num_heads: 8
   num_layers: 6
@@ -71,7 +80,7 @@ nowatch_wandb:
 # ---------------------------------------------------------
 default:
   denoiser:
-    <<: *default_denoiser
+    <<: *denoiser_d64
   train:
     <<: *default_train
   wandb:
@@ -79,7 +88,7 @@ default:
 
 toy:
   denoiser:
-    <<: *small_denoiser
+    <<: *denoiser_d32
   train:
     <<: *default_train
     num_epochs: 3
@@ -89,11 +98,9 @@ toy:
     project: 'penrose-toy'
     watch_freq: 0
 
-    
-# SMALL
 small:
   denoiser:
-    <<: *small_denoiser
+    <<: *denoiser_d64
   train:
     <<: *default_train    
     lr: 0.001   
@@ -102,10 +109,17 @@ small:
   wandb:
     <<: *default_wandb
 
-# LARGE
+medium:
+  denoiser:
+    <<: *denoiser_d128
+  train:
+    <<: *default_train    
+  wandb:
+    <<: *default_wandb
+
 large:
   denoiser:
-    <<: *big_denoiser
+    <<: *denoiser_d256
   train:
     <<: *default_train
   wandb:
