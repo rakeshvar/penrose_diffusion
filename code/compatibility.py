@@ -222,6 +222,7 @@ def download_to_local(path, suffix=""):
 def _upload_to_gcs(local_path: str, gcs_path: str, verify: bool, remove_local: bool) -> None:
     try:
         subprocess.check_call(["gsutil", "-q", "cp", local_path, gcs_path])
+        print(f"\tgsutil: Uploaded {local_path} to {gcs_path}")
     except subprocess.CalledProcessError as e:
         raise RuntimeError(f"gsutil cp failed for {gcs_path}") from e
     except Exception as e:
@@ -246,15 +247,15 @@ def write(text: str, path, verify: bool = False):
     """
     path_str = str(path)
 
-    if IS_TPU and not xm.is_master_ordinal():
-        return
-
     if path_str.startswith("gs://"):
-        with tempfile.NamedTemporaryFile(delete=False, suffix=path_str[-4:], mode="wt", encoding="utf-8") as tmp:
+        with tempfile.NamedTemporaryFile(delete=False, suffix=path_str[-4:], mode="w", encoding="utf-8") as tmp:
             local_path = tmp.name
             tmp.write(text)
+            print(f"[compat.write] Wrote {len(text)} bytes to {local_path}. Uploading to {path_str}")
 
         _upload_to_gcs(local_path, path_str, verify, remove_local=True)
+
+        print(f"[compat.write] Wrote {len(text)} bytes to {path_str}")
 
     else:
         with open(path_str, "w", encoding="utf-8") as f:
@@ -269,9 +270,6 @@ def save(data, path, verify: bool = False):
     """
     path_str = str(path)
 
-    if IS_TPU and not xm.is_master_ordinal():
-        return
-    
     if path_str.startswith("gs://"):
         with tempfile.NamedTemporaryFile(delete=False, suffix=".pt") as tmp:
             local_path = tmp.name

@@ -156,7 +156,7 @@ def train_fn(rank:int, config:Config):
                                     dataset.num_tiles, dataset.symmetry, dataset.side,
                                     sample_label)
                 compat.write(svg, svg_path)
-                mprint(f"Saved svf file  : {svg_path}", rank)
+                mprint(f"Saved SVG       : {svg_path}", rank)
                 wandblog.lsvg(epoch, svg, sample_label, sample_name)
 
                 # Save some special losses
@@ -176,3 +176,7 @@ if __name__ == "__main__":
     config = Config()
     print(config)
     compat.launch(train_fn, (config,))
+
+# TODO:
+# delete checkpoint in compat (gs://)
+# add artifcat to wandb ckpt.pt
