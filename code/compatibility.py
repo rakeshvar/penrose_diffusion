@@ -235,7 +235,7 @@ def _cpuify(obj):
     else:
         return obj
 
-def save(data, path):
+def save_cpuify(data, path):
     """
     Save checkpoint 'data' to path.
     Supports local paths and gs:// URIs via fsspec/gcsfs.
@@ -280,6 +280,30 @@ def save(data, path):
         else:
             torch.save(data_cpu, path_str)
 
+def save(data, path):
+    """
+    Save checkpoint data.
+
+    - TPU: use xm.save (supports gs:// directly, XLA-aware, fast)
+    - CPU/GPU: use torch.save
+    """
+    path_str = str(path)
+
+    if IS_TPU:
+        # IMPORTANT:
+        # - path must be a string
+        # - only call from master rank
+        xm.save(data, path_str)
+        return
+
+    # CPU / GPU path
+    if path_str.startswith("gs://"):
+        # torch.save does NOT understand gs:// directly
+        # so use fsspec here (safe on CPU/GPU)
+        with fsspec.open(path_str, "wb") as f:
+            torch.save(data, f)
+    else:
+        torch.save(data, path_str)
 
 def write(text: str, path):
     path_str = str(path)    

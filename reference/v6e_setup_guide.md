@@ -115,3 +115,9 @@ gsutil -m cp gs://penrose_diffusion/datasets/*.npz datasets
 python train.py gs://penrose_diffusion/datasets/hex_t096_c96_u18.npz -t num_epochs=10
 ```
 
+### Kill jobs
+```bash
+sudo fuser -v /dev/vfio/*
+pkill -9 -f python
+sudo fuser -v /dev/vfio/*
+```

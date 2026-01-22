@@ -30,7 +30,7 @@ def train_fn(rank:int, config:Config):
         config: Instance of config.Config containing parsed settings.
     """
     device = compat.get_device()
-    mprint(f"Process {rank} initialized on {device}", rank)
+    print(f"Process {rank} initialized on {device}", rank)
     compat.print_env(rank)
     is_master = compat.is_master()
 
