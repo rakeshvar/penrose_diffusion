@@ -82,7 +82,7 @@ toy:
     <<: *small_denoiser
   train:
     <<: *default_train
-    num_epochs: 2
+    num_epochs: 3
   wandb:
     <<: *default_wandb
     enabled: true

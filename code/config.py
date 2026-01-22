@@ -125,17 +125,17 @@ class Config:
         # Apply Flag Overrides (-t, -d, -w)
         #-----------------------
         if self.parsed.train:
-            print("Applying Train Overrides:")
+            print("Train Config applying:")
             for kv in self.parsed.train:
                 self._update_from_kv(kv, self.train)
 
         if self.parsed.denoiser:
-            print("Applying Denoiser Overrides:")
+            print("Denoiser Config applying:")
             for kv in self.parsed.denoiser:
                 self._update_from_kv(kv, self.denoiser)
 
         if self.parsed.wandb:
-            print("Applying WandB Overrides:")
+            print("WandB Config applying:")
             for kv in self.parsed.wandb:
                 self._update_from_kv(kv, self.wandb)
                 

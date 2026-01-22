@@ -152,7 +152,7 @@ def train_fn(rank:int, config:Config):
                 # Sample via the diffuser (using the denoiser)
                 svg_name = f"sample_{config.timestamp}_e{epoch:03d}_c{sample_label:02d}_{sample_name}.svg"
                 svg_path = safe_path(config.samples_dir, svg_name)
-                svg, xysc_hat = save_sample(denoiser, diffuser, device, svg_path,
+                svg, xysc_hat = save_sample(denoiser, diffuser, device, None,
                                     dataset.num_tiles, dataset.symmetry, dataset.side,
                                     sample_label)
                 compat.write(svg, svg_path)
