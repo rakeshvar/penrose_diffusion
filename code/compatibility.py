@@ -226,19 +226,14 @@ def write(text: str, path):
     - If local: Direct write to file.
     No fsspec/gcsfs used at all.
     Heavy debugging prints included.
-    Multi-process safe: only master ordinal writes, with rendezvous sync on TPU.
+    Multi-process safe: only master ordinal writes (NO RENDEZVOUS — removed to prevent stalls).
     """
     path_str = str(path)
     print(f"[compat.write] === START WRITE === Path: {path_str}")
 
-    # TPU multi-process sync: all cores wait here before proceeding
-    if IS_TPU:
-        print("[compat.write] TPU detected. Performing rendezvous sync before write.")
-        xm.rendezvous('write_sync_start')
-
-    # Only master ordinal performs the actual write
+    # Safety guard: only master should call this (as in your training code)
     if IS_TPU and not xm.is_master_ordinal():
-        print(f"[compat.write] Non-master ordinal. Skipping write.")
+        print(f"[compat.write] Non-master ordinal. Skipping write (safety guard).")
         return
 
     print("[compat.write] This process is writing (master ordinal or single-process).")
@@ -246,11 +241,11 @@ def write(text: str, path):
     if path_str.startswith("gs://"):
         print("[compat.write] GCS path detected. Using local temp + gsutil cp strategy.")
 
-        # Create local temp file
+        # Create local temp file and write text
         try:
             with tempfile.NamedTemporaryFile(delete=False, suffix=".svg", mode="w", encoding="utf-8") as tmp:
                 local_path = tmp.name
-                tmp.write(text)  # Write text directly to temp file
+                tmp.write(text)
             print(f"[compat.write] Created and wrote to local temp file: {local_path}")
         except Exception as e:
             print(f"[compat.write] ERROR: Failed to create/write temp file: {e}")
@@ -295,14 +290,8 @@ def write(text: str, path):
             print(f"[compat.write] ERROR during direct local write: {e}")
             raise
 
-    # Final sync for TPU
-    if IS_TPU:
-        print("[compat.write] Master finished. Rendezvous sync end.")
-        xm.rendezvous('write_sync_end')
-
     print(f"[compat.write] === WRITE COMPLETED === Path: {path_str}")
-    
-    
+
 def save(data, path):
     """
     Save checkpoint 'data' to path.
@@ -310,19 +299,14 @@ def save(data, path):
     - If local: Direct save (xm.save on TPU, torch.save otherwise).
     No fsspec/gcsfs used at all.
     Heavy debugging prints included.
-    Multi-process safe: only master ordinal saves, with rendezvous sync on TPU.
+    Multi-process safe: only master ordinal saves (NO RENDEZVOUS — removed to prevent stalls).
     """
     path_str = str(path)
     print(f"[compat.save] === START SAVE === Path: {path_str}")
 
-    # TPU multi-process sync: all cores wait here before proceeding
-    if IS_TPU:
-        print("[compat.save] TPU detected. Performing rendezvous sync before save.")
-        xm.rendezvous('save_sync_start')
-
-    # Only master ordinal performs the actual save (safe even if called from non-master)
+    # Safety guard: only master should call this (as in your training code)
     if IS_TPU and not xm.is_master_ordinal():
-        print(f"[compat.save] Non-master ordinal (world_size={xrt.world_size()}). Skipping save.")
+        print(f"[compat.save] Non-master ordinal. Skipping save (safety guard).")
         return
 
     print("[compat.save] This process is saving (master ordinal or single-process).")
@@ -339,16 +323,15 @@ def save(data, path):
             print(f"[compat.save] ERROR: Failed to create temp file: {e}")
             raise
 
-        # === Local save 
+        # Local save step
         try:
             print("[compat.save] Starting local save step...")
             if IS_TPU:
                 print("[compat.save] TPU: Saving locally with xm.save (efficient, no manual transfer).")
                 xm.save(data, local_path)
             else:
-                print("[compat.save] Non-TPU: Saving locally with torch.save (NO _cpuify for now).")
-                torch.save(data, local_path)  # Direct save without _cpuify as requested
-            
+                print("[compat.save] Non-TPU: Saving locally with torch.save (NO _cpuify).")
+                torch.save(data, local_path)
             print(f"[compat.save] Local save SUCCESSFUL to {local_path}")
         except Exception as e:
             print(f"[compat.save] ERROR during local save: {e}")
@@ -390,17 +373,11 @@ def save(data, path):
                 print("[compat.save] TPU: Direct xm.save to local path.")
                 xm.save(data, path_str)
             else:
-                print("[compat.save] Non-TPU: Direct torch.save (NO _cpuify for now).")
-                torch.save(data, path_str)  # Direct save without _cpuify
-            
+                print("[compat.save] Non-TPU: Direct torch.save (NO _cpuify).")
+                torch.save(data, path_str)
             print(f"[compat.save] Direct local save SUCCESSFUL to {path_str}")
         except Exception as e:
             print(f"[compat.save] ERROR during direct local save: {e}")
             raise
-
-    # Final sync for TPU (all cores wait until master finished)
-    if IS_TPU:
-        print("[compat.save] Master finished. Rendezvous sync end.")
-        xm.rendezvous('save_sync_end')
 
     print(f"[compat.save] === SAVE COMPLETED === Path: {path_str}")
