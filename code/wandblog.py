@@ -85,17 +85,13 @@ class WandBLog:
     #--------------------------------------
     # Log every epoch
     #--------------------------------------
-    def log_step(self, new_dict, step):
+    def log_step(self, new_dict: Dict, step: int):
         if not self.enabled:
             return
         try:
             self.run.log(new_dict, step=step) # type: ignore
         except Exception as e:
             warnings.warn(f"Failed to log: {e}")
-    
-    def lsepoch_metrics(self, epoch: int, metrics: Dict):
-        metrics['epoch'] = epoch
-        self.log_step(metrics, step=epoch)
     
     def lsgradient_norm(self, epoch: int, model):
         if not self.enabled:

@@ -137,12 +137,12 @@ def train_fn(rank:int, config:Config):
         avg_loss = total_loss / count if count > 0 else 0
         mprint(f"Epoch {epoch} Done. Avg Loss: {avg_loss:.4f}", rank)
 
-        wandblog.lsepoch_metrics(epoch, {
+        wandblog.log_step({
             'loss_avg': avg_loss,
             'loss_min': min_loss,
             'loss_max': max_loss,
             'learning_rate': optimizer.param_groups[0]['lr']
-        })
+        }, step=epoch)
         wandblog.lsgradient_norm(epoch, denoiser)
 
         if is_master:
@@ -150,7 +150,7 @@ def train_fn(rank:int, config:Config):
 
             if config.train['save_samples']:
                 # Sample via the diffuser (using the denoiser)
-                svg_name = f"sample_{config.timestamp}_e{epoch:03d}_c{sample_label:02d}_{sample_name}.svg"
+                svg_name = f"sv{config.timestamp}_e{epoch:03d}_c{sample_label:02d}_{sample_name}.svg"
                 svg_path = safe_path(config.samples_dir, svg_name)
                 svg, xysc_hat = save_sample(denoiser, diffuser, device, None,
                                     dataset.num_tiles, dataset.symmetry, dataset.side,
@@ -181,3 +181,4 @@ if __name__ == "__main__":
 # delete checkpoint in compat (gs://)
 # add artifcat to wandb ckpt.pt
 # softmin loss
+# lattice loss wandb
