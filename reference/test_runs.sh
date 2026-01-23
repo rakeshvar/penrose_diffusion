@@ -1,4 +1,5 @@
 #!/bin/bash
+# source from one directory above
 
 # Fancy banner function with colored text and bold borders
 banner() {

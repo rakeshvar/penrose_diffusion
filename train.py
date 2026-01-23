@@ -106,8 +106,8 @@ def train_fn(rank:int, config:Config):
     # Initialize Checkpointer
     #--------------------------------------------
     if is_master:
-        ckptr = CheckPointer(config.output_base_dir, identifier, rank)
-        ckptr.add_fixed_ckpt_data(dataset, config.config, wandblog.get_run_id)
+        ckptr = CheckPointer(config.output_base_dir, identifier)
+        ckptr.add_fixed_ckpt_data(dataset, config.config, config.data_path_orig, wandblog.get_run_id())
 
     #--------------------------------------------
     # Training Loop
@@ -157,7 +157,6 @@ def train_fn(rank:int, config:Config):
                 
                 svg_fname = f"sv{config.timestamp}_e{epoch:03d}_{sample_name}.svg"
                 ckptr.save_svg(svg, svg_fname)
-                mprint(f"Saved SVG       : {svg_fname} to {ckptr.svg_folder}", rank)
                 wandblog.lsvg(epoch, svg, sample_label, sample_name)
 
                 # Save some special losses
@@ -168,6 +167,7 @@ def train_fn(rank:int, config:Config):
             print()
 
     wandblog.finish()
+    mprint("\n======\nDone!\n======", rank)
 
 #------
 # Main

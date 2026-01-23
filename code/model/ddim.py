@@ -193,7 +193,7 @@ class DDIMDiffuser(nn.Module):
                    torch.sqrt(1 - self.ᾱtm1[t] - σₜ**2) * noise_pred + σₜεₜ
 
         # Circle Project
-        xysc_new[..., 2:] = F.normalize(xysc_new[..., 2:], dim=2)
+        # xysc_new[..., 2:] = F.normalize(xysc_new[..., 2:], dim=2)
         return xysc_new
 
     @torch.no_grad()

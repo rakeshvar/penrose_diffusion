@@ -1,8 +1,10 @@
-from pathlib import Path
-import tempfile
-
 import fsspec
+import shutil
+import tempfile
+from pathlib import Path
+
 import torch
+
 import code.compatibility as compat
 from code.compatibility import master_print as mprint
 
@@ -13,10 +15,10 @@ def safe_torch_load(path, map_location="cpu"):
     p = str(path)
     if p.startswith("gs://"):
         with fsspec.open(p, "rb") as f:
-            ckpt = torch.load(f, map_location=map_location) # type: ignore
+            ckpt = torch.load(f, weights_only=False, map_location=map_location) # type: ignore
 
     else:
-        ckpt = torch.load(p, map_location=map_location)
+        ckpt = torch.load(p, weights_only=False, map_location=map_location)
 
     return ckpt
 
@@ -28,8 +30,9 @@ def maybe_download(path:str, suffix=""):
     with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as tmp:
         tmp_path = tmp.name
 
+    print(f"Downloading {path} to {tmp_path}")
     with fsspec.open(path, "rb") as src, open(tmp_path, "wb") as dst:
-        shutil.copyfileobj(src, dst) # type: ignore
+        shutil.copyfileobj(src, dst)
 
     return tmp_path
 
@@ -67,6 +70,7 @@ class CheckPointer:
         self.is_local = not self.is_gcs
         self.fixed_ckpt_data = {}
         self.saved_checkpoints = []
+        self.saved_svgs = []
 
         self.ckpt_folder = self.folder + "/checkpoints"
         self.svg_folder = self.folder + "/svg"
@@ -83,14 +87,15 @@ class CheckPointer:
     def add_fixed_ckpt_data_generic(self, **kwargs):
         self.fixed_ckpt_data.update(kwargs)
 
-    def add_fixed_ckpt_data(self, dataset, config, wandb_run_id):
+    def add_fixed_ckpt_data(self, dataset, config, data_path, wandb_run_id):
         self.fixed_ckpt_data['side']         = dataset.side
         self.fixed_ckpt_data['symmetry']     = dataset.symmetry
         self.fixed_ckpt_data['num_tiles']    = dataset.num_tiles
-        self.fixed_ckpt_data['data_path']    = dataset.data_path
         self.fixed_ckpt_data['num_classes']  = dataset.num_classes
         self.fixed_ckpt_data['class_lookup'] = dataset.class_lookup
+        
         self.fixed_ckpt_data['config']       = config
+        self.fixed_ckpt_data['data_path']    = data_path
         self.fixed_ckpt_data['wandb_run_id'] = wandb_run_id
 
 
@@ -113,10 +118,8 @@ class CheckPointer:
             compat.local_save(data, local_tmp_path)
             self._upload_to_gcs(local_tmp_path, path)
 
-        self.saved_checkpoints.append(path)
-        while len(self.saved_checkpoints) > self.keep_last_n:
-            to_remove = self.saved_checkpoints.pop(0)
-            self._delete_resource(to_remove)
+        print(f"Saved Checkpoint: {path}")
+        self._keep_only_last_n(self.saved_checkpoints, path)
 
 
     def save_svg(self, svg, file_name: str):
@@ -131,6 +134,24 @@ class CheckPointer:
                 tmp.write(svg)
             self._upload_to_gcs(local_tmp_path, path)
 
+        print(f"Saved SVG       : {path}")
+        self._keep_only_last_n(self.saved_svgs, path)
+
+
+    def _upload_to_gcs(self, local_tmp_path: str, path: str):
+        bucket_name, blob_name = _gcs_bucket_blob(path)
+        bucket = self.storage_client.bucket(bucket_name)
+        blob = bucket.blob(blob_name)
+        blob.upload_from_filename(local_tmp_path)
+        Path(local_tmp_path).unlink()
+
+
+    def _keep_only_last_n(self, saved_paths, path: str):
+        saved_paths.append(path)
+        while len(saved_paths) > self.keep_last_n:
+            to_remove = saved_paths.pop(0)
+            self._delete_resource(to_remove)
+            print(f" - Deleted      : {to_remove}")
 
     def _delete_resource(self, path: str):
         if self.is_local:
@@ -148,16 +169,6 @@ class CheckPointer:
 
         except Exception as e:
             print(f"Warning: Failed to delete {path}: {e}")
-
-
-    def _upload_to_gcs(self, local_tmp_path: str, path: str):
-        bucket_name, blob_name = _gcs_bucket_blob(path)
-        bucket = self.storage_client.bucket(bucket_name)
-        blob = bucket.blob(blob_name)
-        blob.upload_from_filename(local_tmp_path)
-        print(f"Uploaded {path}")
-
-        Path(local_tmp_path).unlink()
 
 
 def _gcs_bucket_blob(path: str):

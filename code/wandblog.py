@@ -89,7 +89,6 @@ class WandBLog:
             return
         try:
             self.run.log(new_dict, step=step) # type: ignore
-            print(f"✓ WandB logged at {step}: ", new_dict)
         except Exception as e:
             warnings.warn(f"Failed to log: {e}")
 
