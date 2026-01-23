@@ -123,7 +123,8 @@ class SampleAssistedLoss(AbstractLoss):
 
 #------------------------------------------------------------------------------
 # Linear Sum Assignment Loss (Serial) CUDA/Scipy
-#------------------------------------------------------------------------------@register_loss('lsl', 'lsas', 'lsaserial')
+#------------------------------------------------------------------------------
+@register_loss('lsl', 'lsas', 'lsaserial')
 class LSALossSerial(AbstractLoss):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)

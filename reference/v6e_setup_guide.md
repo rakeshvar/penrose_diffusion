@@ -3,6 +3,8 @@
 
 ### Setup
 ```bash
+sudo timedatectl set-timezone Asia/Kolkata
+export WANDB_API_KEY=$(gsutil cat gs://penrose_diffusion/wandb_api_key.txt)
 sudo NEEDRESTART_MODE=a apt update
 sudo NEEDRESTART_MODE=a apt install -y python3.10-venv
 python3 -m venv ~/tpu-env
@@ -11,11 +13,16 @@ source ~/tpu-env/bin/activate
 pip install --upgrade pip
 pip install fsspec gcsfs
 pip install tqdm scipy wandb
+pip install torch~=2.6.0 --index-url https://download.pytorch.org/whl/cpu
+pip install torch_xla[tpu]~=2.6.0 \
+  -f https://storage.googleapis.com/libtpu-releases/index.html \
+  -f https://storage.googleapis.com/libtpu-wheels/index.html
+```
+
+```
 pip install torch~=2.6.0 torch_xla[tpu]~=2.6.0 \
   -f https://storage.googleapis.com/libtpu-releases/index.html \
   -f https://storage.googleapis.com/libtpu-wheels/index.html
-sudo timedatectl set-timezone Asia/Kolkata
-export WANDB_API_KEY=$(gsutil cat gs://penrose_diffusion/wandb_api_key.txt)
 ```
 
 ### Clone

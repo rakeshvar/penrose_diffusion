@@ -12,10 +12,10 @@ from code.data.load import MyDataset
 from code.filesystem import CheckPointer, load_model_state
 from code.model.augment import GeometryAugment
 from code.model.ddim import DDIMDiffuser, TransformerDenoiser
-from code.model.loss_helpers import circle_loss, lattice_loss
+from code.model.loss_helpers import circle_loss, lattice_loss, equal_angle_loss_var, equal_angle_loss_circular
 from code.model.sampler import save_sample
 from code.model.losses import get_loss
-from code.utils import safe_path
+from code.utils import pairwise_compare, safe_path
 from code.wandblog import WandBLog
 
 # Suppress nested tensor warnings
@@ -139,10 +139,9 @@ def train_fn(rank:int, config:Config):
         
         scheduler.step()
         avg_loss = total_loss / count if count > 0 else 0
-        mprint(f"Epoch {epoch} Done. Avg Loss: {avg_loss:.4f}", rank)
 
         wandblog.log_step({
-            'loss_avg': avg_loss,
+            'loss': avg_loss,
             'learning_rate': optimizer.param_groups[0]['lr']
         }, step=epoch)
         wandblog.lsgradient_norm(epoch, denoiser)
@@ -162,9 +161,12 @@ def train_fn(rank:int, config:Config):
                 # Save some special losses
                 latticeloss = lattice_loss(xysc_hat, dataset.side, dataset.symmetry).item()
                 circleloss = circle_loss(xysc_hat).item()
-                wandblog.log_step({'lattice_loss': latticeloss, 'circle_loss': circleloss}, step=epoch)
+                ealoss_var = equal_angle_loss_var(xysc_hat).item()
+                ealoss_cir = equal_angle_loss_circular(xysc_hat).item()
+                wandblog.log_step({'lattice_loss': latticeloss, 'circle_loss': circleloss, 'equal_angle_loss_var': ealoss_var, 'equal_angle_loss_circular': ealoss_cir}, step=epoch)
+                pairwise_compare([latticeloss, circleloss, ealoss_var, ealoss_cir], ["lattice", "circle", "eal_var", "eal_cir"], f"Losses")
 
-            print()
+        mprint(f"Epoch {epoch} done. Average Loss: {avg_loss:.4f}\n", rank)
 
     wandblog.finish()
     mprint("\n======\nDone!\n======", rank)

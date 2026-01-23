@@ -283,7 +283,7 @@ def f(v, N:int|str = ""):
     Returns:
         str: Formatted string
     """
-    if isinstance(v, int) or (isinstance(v, float) and v.is_integer()):
+    if isinstance(v, int):
         return f"{v:{N}d}"
 
     if 0 < v < 2:

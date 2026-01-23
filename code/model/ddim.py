@@ -177,7 +177,8 @@ class DDIMDiffuser(nn.Module):
 
 
         if t[0] == 0:
-            xysc_0_pred[..., 2:] = F.normalize(xysc_0_pred[..., 2:], dim=2)
+            # Circle Project
+            # xysc_0_pred[..., 2:] = F.normalize(xysc_0_pred[..., 2:], dim=2)
             return xysc_0_pred
 
         # xₜ₋₁ = √(ᾱₜ₋₁) x̂₀ + √(1 − ᾱₜ₋₁ − σₜ²) ε_θ(xₜ) + σₜεₜ
