@@ -93,7 +93,7 @@ def main():
 
         # Augmented
         xysc_aug = augmenter(xya_0)
-        xyac_aug = xysc_to_xyac(xysc_aug, colors[..., np.newaxis])[0] 
+        xyac_aug = xysc_to_xyac(xysc_aug, colors[..., np.newaxis])[0]
 
         save_grid_svg(xyac_aug, dataset.symmetry, dataset.side,
                       out_dir / f"{idx:2d}_{label}_01_augmented.svg", "augm")

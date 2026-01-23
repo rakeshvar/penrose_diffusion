@@ -9,8 +9,8 @@ from code.pen.svg import save_svg
 
 configs = [
     {'draw-arcs': False},
-    
-    {'tile-opacity': 1.0, 
+
+    {'tile-opacity': 1.0,
      'Aarc-colour': '#f04040',
      'Carc-colour': '#4040f0'
     },

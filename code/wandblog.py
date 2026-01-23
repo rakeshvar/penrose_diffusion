@@ -20,10 +20,10 @@ class WandBLog:
         if not WANDB_AVAILABLE:
             print("WandB logging disabled: wandb module not found.")
             return
-        
+
         if not self.is_master:
             return
-            
+
         if not wbconfig['enabled']:
             print("WandB logging disabled by config.")
             return
@@ -34,11 +34,11 @@ class WandBLog:
             'id': wbconfig['run_id'],
             'resume': wbconfig['run_id'] is not None,
         }
-        
-        self.run = wandb.init(**init_args) # type: ignore            
+
+        self.run = wandb.init(**init_args) # type: ignore
         self.enabled = True
-        print(f"✓ WandB initialized: {self.run.url}")                   
-    
+        print(f"✓ WandB initialized: {self.run.url}")
+
     #---------------------------------------
     # Log once by updating config
     #---------------------------------------
@@ -49,11 +49,11 @@ class WandBLog:
              self.run.config.update(new_dict, allow_val_change=True) # type: ignore
          except Exception as e:
              warnings.warn(f"Failed to log: {e}")
-    
+
     def info(self, tr_conf, compat, dataset, denoiser, loss_functor):
         if not self.enabled:
             return
-        
+
         self.update_run_config({
             **tr_conf.config,
             'timestamp': tr_conf.timestamp,
@@ -65,10 +65,9 @@ class WandBLog:
             'num_tiles': dataset.num_tiles,
             'symmetry': dataset.symmetry,
             'side': dataset.side,
-            'num_classes': dataset.num_classes,
             'dataset_size': len(dataset),
         })
-    
+
         num_params = sum(p.numel() for p in denoiser.parameters())
         num_trainable = sum(p.numel() for p in denoiser.parameters() if p.requires_grad)
         self.update_run_config({
@@ -76,12 +75,12 @@ class WandBLog:
             'num_parameters': num_params,
             'num_trainable_parameters': num_trainable,
         })
-            
+
         if self.config['watch_freq'] > 0:
             watch_freq = self.config['watch_freq']
             self.run.watch(denoiser, log='all', log_freq=watch_freq) #type: ignore
             print(f"✓ WandB watching model (freq={watch_freq})")
-    
+
     #--------------------------------------
     # Log every epoch
     #--------------------------------------
@@ -90,13 +89,14 @@ class WandBLog:
             return
         try:
             self.run.log(new_dict, step=step) # type: ignore
+            print(f"✓ WandB logged at {step}: ", new_dict)
         except Exception as e:
             warnings.warn(f"Failed to log: {e}")
-    
+
     def lsgradient_norm(self, epoch: int, model):
         if not self.enabled:
             return
-        
+
         total_norm = 0.0
         for p in model.parameters():
             if p.grad is not None:
@@ -105,11 +105,11 @@ class WandBLog:
         total_norm = total_norm ** 0.5
         self.log_step({'gradient_norm': total_norm}, step=epoch)
 
-    
+
     def lsvg(self, epoch: int, svg_content: str, class_label: int, class_name: str):
         if not self.enabled:
             return
-        
+
         self.log_step({
             f'samples/epoch_{epoch}': wandb.Html(svg_content),
             f'samples/class_label': class_label,
@@ -125,7 +125,7 @@ class WandBLog:
         if self.enabled and self.run:
             return self.run.id
         return None
-    
+
     def finish(self):
         """Finish WandB run."""
         if self.enabled and self.run:
@@ -134,11 +134,11 @@ class WandBLog:
                 self.run.finish()
             except Exception as e:
                 warnings.warn(f"Failed to finish WandB run: {e}")
-    
+
     def __enter__(self):
         """Context manager entry."""
         return self
-    
+
     def __exit__(self, exc_type, exc_val, exc_tb):
         """Context manager exit."""
         self.finish()

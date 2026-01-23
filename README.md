@@ -8,7 +8,7 @@ This is a geometric **Denoising Diffusion Probabilistic Model (DDPM/DDIM)** that
 - Periodic Hexagonal tilings with *6-fold symmetry*
 
 
-The tiles form an overall shape dictated by semantic class labels. The shapes come from silhouettes of the **MPEG-7 Core Experiment Shape-1 Part B**. 
+The tiles form an overall shape dictated by semantic class labels. The shapes come from silhouettes of the **MPEG-7 Core Experiment Shape-1 Part B**.
 
 ## Data
 
@@ -23,7 +23,7 @@ The tiles form an overall shape dictated by semantic class labels. The shapes co
 ### Data Generation
 
 - **Mimic**ing a single silhoutte, tiles are ‘cut out’ of a mother canvas of rhombuses or hexagons.
-- **Endless** amount of tessellations can be generated to mimic one silhoutte by snipping from different parts of the canvas and by rotating it at different angles 
+- **Endless** amount of tessellations can be generated to mimic one silhoutte by snipping from different parts of the canvas and by rotating it at different angles
 
 - **Dual Rotation** for every training step, we apply random rotations to both the underlying tile canvas and the target silhouette mask independently.
 
@@ -37,13 +37,13 @@ A major challenge in geometric modeling is varying density amongst silhouettes. 
 - This ensures we have the exact same dimension for every data sample.
 
 ### Representation
-- A single sample represented as N (say 768) pentagons. 
+- A single sample represented as N (say 768) pentagons.
 - Each pentagon is represented as a center and an orientation
-- One sample is N x 4 matrix of (x, y, angle and color) 
-  
+- One sample is N x 4 matrix of (x, y, angle and color)
+
   * `(x, y)` have zero-mean and unit variance
   * `angle` $\in [-\pi, \pi]$
-  * `color` $\in \{0, 1\}$ 
+  * `color` $\in \{0, 1\}$
 
 #### Color Constraint
 - Each pentagon also has a **binary** color property
@@ -55,8 +55,8 @@ A major challenge in geometric modeling is varying density amongst silhouettes. 
 ![Hexagonal Horse](reference/images/horse-07.svg)
 
 - For *5-fold* symmetry
-    
-  * `Fatt` tiles are 0 (61.8%) 
+
+  * `Fatt` tiles are 0 (61.8%)
   * `Thin` tiles are 1 (38.2%)
   * Together they should obey the Penrose P3 rules
 ![Pentagonal Bird](reference/images/bird-15.svg)
@@ -136,7 +136,7 @@ python -m scripts.create_dataset <symmetry> <num_tiles> <num_copies> [unit_side]
 # Hexagonal tilings with 96 tiles, 100 copies per silhoutte
 python -m scripts.create_dataset 6 96 100 0.18
 
-# Penrose tilings with 512 tiles, 50 copies per silhoutte  
+# Penrose tilings with 512 tiles, 50 copies per silhoutte
 python -m scripts.create_dataset 5 512 50 0.1
 ```
 
@@ -147,10 +147,10 @@ This creates an `.npz` file in `datasets/` containing:
 - Metadata
   - `symmetry`: 5=Penrose, 6=Hexagons
   - `side_length`: of each rhombus or hexagon (defaults to a value that leads to unit variance for `x`, `y`)
-  - `class_lookup_table` 
+  - `class_lookup_table`
 
 where:
- - `B` = 70 * 20 * num_copies 
+ - `B` = 70 * 20 * num_copies
  - `N` = number of tiles in each sample
 
 ### 2. Train Model
@@ -272,13 +272,13 @@ Unlike traditional approaches that cache a fixed dataset, our generator creates 
 
 #### Exact Coverage
 We want each sample to have exactly `N` hexagons:
-- We scale the silhoutte up by the proper value inversely proportional to its density. 
-  - The sparser the silhoutte, the more we have to scale it up 
+- We scale the silhoutte up by the proper value inversely proportional to its density.
+  - The sparser the silhoutte, the more we have to scale it up
   - and viceversa
 - Now we collect all the pentagons that have all the four ‘pseudo’ vertices within mask
 - That is usually not enough then we add more pentagons that have three ‘pseudo’ vertices within mask
 - If that is not enough — two. These are exactly on the border
-- Rarely do we have those with only one within the mask 
+- Rarely do we have those with only one within the mask
 
 
 This is well-vectorized, but we do it only once on the CPU apriori and save it to an `npz` file, as it could be a speed bottle neck to do this coverage algorithm for every single data sample.

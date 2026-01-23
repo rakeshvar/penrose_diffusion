@@ -9,6 +9,7 @@ import code.compatibility as compat
 from code.compatibility import master_print as mprint
 from code.config import Config
 from code.data.load import MyDataset
+from code.filesystem import CheckPointer, load_model_state
 from code.model.augment import GeometryAugment
 from code.model.ddim import DDIMDiffuser, TransformerDenoiser
 from code.model.loss_helpers import circle_loss, lattice_loss
@@ -30,7 +31,7 @@ def train_fn(rank:int, config:Config):
         config: Instance of config.Config containing parsed settings.
     """
     device = compat.get_device()
-    print(f"Process {rank} initialized on {device}", rank)
+    print(f"Process {rank} initialized on {device}")
     compat.print_env(rank)
     is_master = compat.is_master()
 
@@ -64,16 +65,14 @@ def train_fn(rank:int, config:Config):
     optimizer = torch.optim.AdamW(denoiser.parameters(), lr=config.train['lr'])
 
     # 2. Init Scheduler (Create it NOW, before loading state)
-    warmup_epochs = min(10, int(config.train['num_epochs'] * 0.05)) 
+    warmup_epochs = min(10, int(config.train['num_epochs'] * 0.05))
     decay_epochs = config.train['num_epochs'] - warmup_epochs
 
     scheduler1 = LinearLR(optimizer, start_factor=0.01, total_iters=warmup_epochs)
     scheduler2 = CosineAnnealingLR(optimizer, T_max=decay_epochs)
     scheduler = SequentialLR(optimizer, schedulers=[scheduler1, scheduler2], milestones=[warmup_epochs])
 
-    # 3. Load State (Pass scheduler so it can load its internal counter/state)
-    # You will need to update config.load_model_state to accept this argument
-    config.load_model_state(denoiser, optimizer, scheduler) 
+    load_model_state(config.checkpoint_path, denoiser, optimizer, scheduler, rank)
 
     # Move to device
     for state in optimizer.state.values():
@@ -84,24 +83,31 @@ def train_fn(rank:int, config:Config):
                 warnings.warn(f"Unexpected optimizer state type: '{type(v)}' for key '{k}'")
 
     # Select Loss Function
-    lossfunctor = get_loss(config.train['loss'], 
-                      denoiser, diffuser, optimizer, device)
+    lossfunctor = get_loss(config.train['loss'], denoiser, diffuser, optimizer, device)
     mprint(f"Loss function: {lossfunctor} ({lossfunctor.abbr})", rank)
 
-    # We are ready to set an identifier based on timestamp, loss and num_tiles    
-    config.set_identifier(lossfunctor.abbr, dataset.num_tiles)
-    mprint(f"Identifier for this run: {config.identifier}", rank)
+    #--------------------------------------------
+    # Set an identifier for the run
+    #--------------------------------------------
+    identifier = f"{config.timestamp}_d{config.denoiser['d_model']}_{lossfunctor.abbr}_t{dataset.num_tiles:03d}"
+    mprint(f"Identifier for this run: {identifier}", rank)
 
     #--------------------------------------------
     # Initialize WandB Logger
     #--------------------------------------------
-    mprint("Initializing WandB...", rank)
+    mprint("Initializing WandB (Maybe)...", rank)
     if not config.wandb['run_name']:
-        config.wandb['run_name'] = config.identifier
+        config.wandb['run_name'] = identifier
 
     wandblog = WandBLog(rank, config.wandb)
     wandblog.info(config, compat, dataset, denoiser, lossfunctor)
-    mprint("WandB initialized.", rank)
+
+    #--------------------------------------------
+    # Initialize Checkpointer
+    #--------------------------------------------
+    if is_master:
+        ckptr = CheckPointer(config.output_base_dir, identifier, rank)
+        ckptr.add_fixed_ckpt_data(dataset, config.config, wandblog.get_run_id)
 
     #--------------------------------------------
     # Training Loop
@@ -117,58 +123,52 @@ def train_fn(rank:int, config:Config):
 
     for epoch in iterator:
         total_loss = 0
-        min_loss, max_loss = 1e9, -1e9
         count = 0
 
         # Enable progress bar only on master process
         progressbar = tqdm(train_loader, disable=(rank != 0))
 
-        for batch_idx, batch in enumerate(progressbar):
+        for batch in progressbar:
             xya, colors, labels = batch
             xysc_hat = augmenter(xya)
             loss = lossfunctor(xysc_hat, colors, labels)
             total_loss += loss
-            min_loss = min(min_loss, loss)
-            max_loss = max(max_loss, loss)
             count += 1
 
             progressbar.set_description(f"Epoch {epoch} | Loss: {loss:.4f}")
+        
         scheduler.step()
         avg_loss = total_loss / count if count > 0 else 0
         mprint(f"Epoch {epoch} Done. Avg Loss: {avg_loss:.4f}", rank)
 
         wandblog.log_step({
             'loss_avg': avg_loss,
-            'loss_min': min_loss,
-            'loss_max': max_loss,
             'learning_rate': optimizer.param_groups[0]['lr']
         }, step=epoch)
         wandblog.lsgradient_norm(epoch, denoiser)
 
         if is_master:
-            config.save_checkpoint(epoch, denoiser, optimizer, scheduler, avg_loss, dataset, wandblog)
+            ckptr.save_checkpoint(epoch, denoiser, optimizer, scheduler, avg_loss) # type: ignore
 
             if config.train['save_samples']:
                 # Sample via the diffuser (using the denoiser)
-                svg_name = f"sv{config.timestamp}_e{epoch:03d}_c{sample_label:02d}_{sample_name}.svg"
-                svg_path = safe_path(config.samples_dir, svg_name)
                 svg, xysc_hat = save_sample(denoiser, diffuser, device, None,
-                                    dataset.num_tiles, dataset.symmetry, dataset.side,
-                                    sample_label)
-                compat.write(svg, svg_path)
-                mprint(f"Saved SVG       : {svg_path}", rank)
+                    dataset.num_tiles, dataset.symmetry, dataset.side, sample_label)
+                
+                svg_fname = f"sv{config.timestamp}_e{epoch:03d}_{sample_name}.svg"
+                ckptr.save_svg(svg, svg_fname)
+                mprint(f"Saved SVG       : {svg_fname} to {ckptr.svg_folder}", rank)
                 wandblog.lsvg(epoch, svg, sample_label, sample_name)
 
                 # Save some special losses
                 latticeloss = lattice_loss(xysc_hat, dataset.side, dataset.symmetry).item()
                 circleloss = circle_loss(xysc_hat).item()
-                
                 wandblog.log_step({'lattice_loss': latticeloss, 'circle_loss': circleloss}, step=epoch)
 
             print()
 
     wandblog.finish()
-            
+
 #------
 # Main
 #------
@@ -176,9 +176,3 @@ if __name__ == "__main__":
     config = Config()
     print(config)
     compat.launch(train_fn, (config,))
-
-# TODO:
-# delete checkpoint in compat (gs://)
-# add artifcat to wandb ckpt.pt
-# softmin loss
-# lattice loss wandb

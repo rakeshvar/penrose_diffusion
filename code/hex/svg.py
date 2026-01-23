@@ -41,7 +41,7 @@ def save_svg(hexgrid, filename, ndigits=3, print_ok=True):
         <svg preserveAspectRatio="xMidYMid meet" version="1.1" baseProfile="full" xmlns="http://www.w3.org/2000/svg"
              width="{int(1080*wd/ht)}" height="1080"
              viewBox="{viewbox}">
-          
+
         <style>
           .colored {{
             fill: {config["colors"][1]};
@@ -59,7 +59,7 @@ def save_svg(hexgrid, filename, ndigits=3, print_ok=True):
         <rect x="{xmin:.3f}" y="{ymin:.3f}" width="{wd:.3f}" height="{ht:.3f}" fill="{config["background"]}"/>
         <g style="stroke:{config["stroke-colour"]}; stroke-width: {hexgrid.side/20:.4f};
            stroke-linejoin: round; vector-effect: non-scaling-stroke;">
-        # {len(hexgrid)} hexagons 
+        # {len(hexgrid)} hexagons
         # x {xmin:.2f} to {xmax:.2f} ({wd:.2f})
         # y {ymin:.2f} to {ymax:.2f} ({ht:.2f})
         """)
@@ -70,7 +70,7 @@ def save_svg(hexgrid, filename, ndigits=3, print_ok=True):
         css_class = "colored" if h.color else "uncolor"
         path = svg_path(h, ndigits=ndigits)
         hexagon_paths.append(f'<path class="{css_class}" d="{path}" />')
-    
+
     hexagons = '\n'.join(hexagon_paths)
 
     # SVG footer

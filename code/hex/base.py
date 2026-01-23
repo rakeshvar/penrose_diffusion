@@ -39,7 +39,7 @@ class Hexagon:
 
     def scale(self, factor):
         self.side *= factor
-    
+
     def __add__(self, direction):
         dq, dr, ds = direction
         return Hexagon(self.q + dq, self.r + dr, self.s + ds, self.side, self.angle)
@@ -63,7 +63,7 @@ def get_hex_ring(degree):
     for direction in directions:
         for step in range(degree):
             hexes.append(hexes[-1] + direction)
-    
+
     if degree:       # You end up at the beginning of the ring
         hexes.pop()
 
@@ -85,7 +85,7 @@ class HexagonGrid:
             all_hexes.extend(get_hex_ring(degree))
             degree += 1
         return cls(all_hexes)
-    
+
     @classmethod
     def from_halfside(cls, target_hexside, target_halfside):
         """
@@ -95,7 +95,7 @@ class HexagonGrid:
         degree = 0
         all_hexes = get_hex_ring(degree)
         unscaled_halfside = target_halfside * all_hexes[0].side / target_hexside
-        
+
         while inscribed_square_halfside(all_hexes) < unscaled_halfside:
             degree += 1
             all_hexes.extend(get_hex_ring(degree))
@@ -106,7 +106,7 @@ class HexagonGrid:
 
     def __iter__(self):
         return iter(self.hexes)
-    
+
     def __len__(self):
         return len(self.hexes)
 
@@ -116,7 +116,7 @@ class HexXYA:
         self.color = hexagon.color
         self.angle = hexagon.angle
         self.side = hexagon.side
-    
+
     def rotate(self, alpha):
         self.x, self.y = (
             self.x * math.cos(alpha) - self.y * math.sin(alpha),
@@ -126,22 +126,22 @@ class HexXYA:
 
     def translate(self, dx, dy):
         self.x += dx
-        self.y += dy    
-    
+        self.y += dy
+
     def scale(self, factor):
         self.x *= factor
-        self.y *= factor    
+        self.y *= factor
         self.side *= factor
-    
+
     @property
     def center(self):
         return self.x, self.y
-    
+
     @property
     def vertices(self):
         vertices0 = Hexagon(0, 0, 0, self.side, self.angle).vertices
         return [(vx + self.x, vy + self.y) for vx, vy in vertices0]
-    
+
     def __str__(self) -> str:
         return f"HexXYA {self.x:7.2f} {self.y:7.2f} {self.angle:7.2f} ({math.degrees(self.angle):+3.0f}) {self.color} {self.side:.1f}"
 
@@ -169,21 +169,21 @@ class HexGrid:
     def rotate(self, alpha):
         for h in self.hexxyas:
             h.rotate(alpha)
-    
+
     def translate(self, dx, dy):
         for h in self.hexxyas:
             h.translate(dx, dy)
-    
+
     def scale(self, factor):
         for h in self.hexxyas:
             h.scale(factor)
-    
+
     def __iter__(self):
         return iter(self.hexxyas)
-    
+
     def __len__(self):
         return len(self.hexxyas)
-    
+
     @property
     def side(self):
         return self.hexxyas[0].side   

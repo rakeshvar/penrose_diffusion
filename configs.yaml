@@ -1,16 +1,16 @@
 # configs.yaml
 
 # ---------------------------------------------------------
-# denoisers 
+# denoisers
 # ---------------------------------------------------------
 denoiser32: &denoiser32
   num_classes: 70
   class_embed_dim: 8
-  time_embed_dim: 16 
-  d_model: 32             
-  num_heads: 4             
+  time_embed_dim: 16
+  d_model: 32
+  num_heads: 4
   num_layers: 2
-  dropout: 0.            
+  dropout: 0.
 
 denoiser64: &denoiser64
   num_classes: 70
@@ -72,7 +72,7 @@ no_wandb:
 nowatch_wandb:
   <<: *default_wandb
   enabled: true
-  watch_freq: 0     
+  watch_freq: 0
 
 # ----------------------------------------------------------------
 # EXPERIMENT GROUPS
@@ -110,7 +110,7 @@ model64:
   denoiser:
     <<: *denoiser64
   train:
-    <<: *default_train    
+    <<: *default_train
   wandb:
     <<: *default_wandb
 
@@ -118,7 +118,7 @@ model128:
   denoiser:
     <<: *denoiser128
   train:
-    <<: *default_train    
+    <<: *default_train
   wandb:
     <<: *default_wandb
 

@@ -38,5 +38,5 @@ def save_sample(denoiser, diffuser, device, save_path,
         else:
             grid = PenGrid(sample_np, from_np=True, side=side)
             svg = pen_save_svg(grid, save_path)
-    
+
     return svg, xysc

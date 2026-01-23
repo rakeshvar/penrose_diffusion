@@ -24,7 +24,7 @@ def print_reparametrize():
 
 def print_reparametrize_roundtrip(t):
         rh = Rhombus(t)
-        print(f"center: {rh.center:6.0f} tilt: {rh.tilt:6.2f}({deg(rh.tilt):.0f})" 
+        print(f"center: {rh.center:6.0f} tilt: {rh.tilt:6.2f}({deg(rh.tilt):.0f})"
             f"side: {rh.side:6.2f} topangle: {rh.topangle:6.2f}({rh.topangle*180/math.pi:.0f}) ")
 
         recreated = rh.triangle()

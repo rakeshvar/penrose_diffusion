@@ -15,7 +15,7 @@ def get_user_class(num_classes, class_lookup):
     prompt = f"Generate Class (default {rand_label} aka '{class_lookup.get(rand_label, '?')}'): "
     inp = input(prompt)
 
-    if inp.lower() == 'q': 
+    if inp.lower() == 'q':
         sys.exit()
 
     if inp == '':
@@ -27,16 +27,16 @@ def get_user_class(num_classes, class_lookup):
         return label, class_lookup.get(label, str(label))
     except ValueError:
         pass
-    
+
     # Try parsing as string name
     cname = inp.lower()
     # Invert lookup: name -> index
     # Assuming class_lookup is {index: name}
     name_to_idx = {v.lower(): k for k, v in class_lookup.items()}
-    
+
     if cname in name_to_idx:
         return name_to_idx[cname], class_lookup[name_to_idx[cname]]
-        
+
     print(f"Could not find class '{cname}'. Using random.")
     return rand_label, class_lookup.get(rand_label, str(rand_label))
 
@@ -47,11 +47,16 @@ if __name__ == "__main__":
     print(f"Using device: {device}")
 
     if len(sys.argv) < 2:
-        print(f"Usage: python {sys.argv[0]} checkpoint.pt")
+        print(f"Usage: python {sys.argv[0]} checkpoint.pt [num_steps=50]")
         sys.exit()
 
     cp_path = Path(sys.argv[1])
     assert cp_path.exists(), f"Checkpoint {cp_path} not found."
+
+    if len(sys.argv) > 2:
+        num_steps = int(sys.argv[2])
+    else:
+        num_steps = 50
 
     # 2. Load Checkpoint
     print(f"Loading {cp_path}...")
@@ -88,15 +93,15 @@ if __name__ == "__main__":
 
     # 5. Interactive Loop
     i = 0
-    
+
     print("\n--- Interactive Sampler ---")
     print("Press Enter to use random class, type a number/name to select, or 'q' to quit.")
-    
+
     while True:
         label, cname = get_user_class(num_classes, class_lookup)
-        
+
         fname = f"library/samples/{cp_path.stem}_i{i:02d}_{cname}.svg"
-        
+
         save_sample(
             denoiser=denoiser,
             diffuser=diffuser,
@@ -105,6 +110,7 @@ if __name__ == "__main__":
             num_tiles=num_tiles,
             symmetry=symmetry,
             side=side,
-            label=label
+            label=label,
+            num_steps=num_steps
         )
         i += 1

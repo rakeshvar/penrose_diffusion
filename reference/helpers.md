@@ -19,7 +19,7 @@ gcloud auth login
 gcloud config set project penrose-diffusion
 ```
 
-## Request 
+## Request
 
 ### TRC-APPROVED TPU CREATE COMMANDS (SAFE TO USE)
 
@@ -334,4 +334,85 @@ Delete TPU VM
 gcloud compute tpus tpu-vm delete penrose-train \
   --project penrose-diffusion \
   --zone <TPU_ZONE>
+```
+
+
+# Reference
+## Enter
+
+```bash
+gcloud compute tpus tpu-vm create penrose-train \
+  --zone=europe-west4-a \
+  --accelerator-type=v6e-8 \
+  --version=v2-alpha-tpuv6e \
+  --preemptible
+```
+
+
+```bash
+gcloud compute tpus tpu-vm ssh penrose-train --zone=europe-west4-a
+```
+
+### Python & Venv & pip
+
+```bash
+python3 --version
+```
+
+Expected output: `Python 3.10.6`
+
+
+## Test
+### Test TPU Detection
+
+
+```bash
+PJRT_DEVICE=TPU python3 -c "import torch_xla.core.xla_model as xm; print('TPU device:', xm.xla_device())"
+```
+
+Expected output:
+```
+TPU device: xla:0
+```
+
+
+### Test Computation
+
+
+```bash
+PJRT_DEVICE=TPU python3 << 'EOF'
+import torch
+import torch_xla.core.xla_model as xm
+
+device = xm.xla_device()
+print(f"Device: {device}")
+
+# Simple computation on TPU
+x = torch.randn(3, 3).to(device)
+y = torch.randn(3, 3).to(device)
+z = x + y
+
+xm.mark_step()  # Execute the computation
+print(f"Result shape: {z.shape}")
+print("✅ TPU computation successful!")
+EOF
+```
+
+Expected output:
+```
+Device: xla:0
+Result shape: torch.Size([3, 3])
+✅ TPU computation successful!
+```
+## Others
+### Copy Datasets
+```bash
+mkdir -p datasets
+gsutil -m cp gs://penrose_diffusion/datasets/*.npz datasets
+```
+
+###  PJRT_DEVICE
+
+```bash
+export PJRT_DEVICE=TPU
 ```

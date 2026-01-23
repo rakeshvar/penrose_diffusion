@@ -139,10 +139,10 @@ def print_tile_stats(grid):
     ymin, ymax = min(ys), max(ys)
     colors = Counter(h.color for h in grid)
 
-    print(f"""Tile 
+    print(f"""Tile
           Count: {len(grid)}
-          Colors: {dict(colors)}  
-          xmin: {xmin:.4f} xmax: {xmax:.4f}   
+          Colors: {dict(colors)}
+          xmin: {xmin:.4f} xmax: {xmax:.4f}
           ymin: {ymin:.4f} ymax: {ymax:.4f}
     """)
 
@@ -321,3 +321,20 @@ def safe_path(folder, fname):
         return f"{folder.rstrip('/')}/{fname}"
     else:
         return folder / fname
+
+def infer_type(val_str):
+    if val_str.lower() == 'true':
+        return True
+    
+    if val_str.lower() == 'false':
+        return False
+    
+    try:
+        return int(val_str)
+    
+    except ValueError:
+        try:
+            return float(val_str)
+    
+        except ValueError:
+            return val_str

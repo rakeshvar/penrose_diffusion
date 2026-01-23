@@ -103,12 +103,12 @@ def lattice_loss(xy_hat, unit_side, symmetry):
     """
     0 when all nearest neighbors are exactly s units away.
     """
-    side2nearest = {6: 3**0.5}[symmetry]    
+    side2nearest = {6: 3**0.5}[symmetry]
     to_nearest = unit_side * side2nearest
 
     B, N, D = xy_hat.shape
     if D > 2: xy_hat = xy_hat[..., :2]
-    
+
     sq_dist = ((xy_hat.unsqueeze(2) - xy_hat.unsqueeze(1)) ** 2).sum(-1)
     sq_dist += torch.eye(N, device=xy_hat.device).unsqueeze(0) * 1e6
     min_sq_dist = sq_dist.min(-1)[0]

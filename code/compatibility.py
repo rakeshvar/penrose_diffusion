@@ -53,7 +53,7 @@ IS_GPU = torch.cuda.is_available()
 IS_CPU = not (IS_TPU or IS_GPU)
 
 # -------------------------------------------------
-# PJRT check 
+# PJRT check
 # -------------------------------------------------
 
 if IS_TPU:
@@ -189,99 +189,6 @@ def launch(train_fn, args=()):
 # Load
 # -------------------------------------------------
 
-
-def load(path, map_location="cpu"):
-    p = str(path)
-    if p.startswith("gs://"):
-        with fsspec.open(p, "rb") as f:
-            ckpt = torch.load(f, map_location=map_location) # type: ignore  
-
-    else:
-        ckpt = torch.load(p, map_location=map_location)
-
-    return ckpt
-
-
-def download_to_local(path, suffix=""):
-    p = str(path)
-    if not p.startswith("gs://"):
-        return p
-
-    tf = tempfile.NamedTemporaryFile(delete=False, suffix=suffix)
-    tf.close()
-    tmp_path = tf.name
-
-    with fsspec.open(p, "rb") as src, open(tmp_path, "wb") as dst:
-        shutil.copyfileobj(src, dst) # type: ignore
-
-    return tmp_path
-
-# -------------------------------------------------
-# Write / Save
-# -------------------------------------------------
-def _upload_to_gcs(local_path: str, gcs_path: str, verify: bool, remove_local: bool) -> None:
-    try:
-        subprocess.check_call(["gsutil", "-q", "cp", local_path, gcs_path])
-        print(f"\tgsutil: Uploaded {local_path} to {gcs_path}")
-    except subprocess.CalledProcessError as e:
-        raise RuntimeError(f"gsutil cp failed for {gcs_path}") from e
-    except Exception as e:
-        raise RuntimeError(f"Unexpected error during GCS upload to {gcs_path}") from e
-    finally:
-        try:
-            if verify:
-                ls_result = subprocess.run(["gsutil", "ls", "-l", gcs_path], capture_output=True, text=True)
-                if ls_result.returncode != 0:
-                    print(f"[compat.upload] WARNING: Verification failed for {gcs_path}: {ls_result.stderr.strip()}")
-            if remove_local:
-                os.remove(local_path)
-        except Exception:
-            pass  
-    
-
-def write(text: str, path, verify: bool = False):
-    """
-    Write text (e.g., SVG string) to path.
-    - Local paths → direct write
-    - GCS (gs://) → write to temp local file, then gsutil cp
-    """
-    path_str = str(path)
-
-    if path_str.startswith("gs://"):
-        with tempfile.NamedTemporaryFile(delete=False, suffix=path_str[-4:], mode="w", encoding="utf-8") as tmp:
-            local_path = tmp.name
-            tmp.write(text)
-            print(f"[compat.write] Wrote {len(text)} bytes to {local_path}. Uploading to {path_str}")
-
-        _upload_to_gcs(local_path, path_str, verify, remove_local=True)
-
-        print(f"[compat.write] Wrote {len(text)} bytes to {path_str}")
-
-    else:
-        with open(path_str, "w", encoding="utf-8") as f:
-            f.write(text)
-
-
-def save(data, path, verify: bool = False):
-    """
-    Save checkpoint 'data' to path.
-    - Local paths → direct xm.save / torch.save
-    - GCS (gs://) → save to temp local file first, then gsutil cp
-    """
-    path_str = str(path)
-
-    if path_str.startswith("gs://"):
-        with tempfile.NamedTemporaryFile(delete=False, suffix=".pt") as tmp:
-            local_path = tmp.name
-
-        if IS_TPU:       xm.save(data, local_path)
-        else:            torch.save(data, local_path)
-
-        _upload_to_gcs(local_path, path_str, verify, remove_local=True)
-
-    else:
-        try:
-            if IS_TPU:     xm.save(data, path_str)
-            else:          torch.save(data, path_str)
-        except Exception as e:
-            raise RuntimeError(f"Failed to save checkpoint to local path {path_str}") from e
+def local_save(data, local_path):
+    if IS_TPU:       xm.save(data, local_path)
+    else:            torch.save(data, local_path)

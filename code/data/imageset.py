@@ -66,7 +66,7 @@ class ImageSet:
     def get_random_sample(self):
         idx = np.random.randint(0, len(self))
         return self[idx]
-    
+
     def get_particular_sample(self, class_id, inclassid):   # inclassid is indexed from 1 in the data folder
         try:
             return self.samples_lookup[class_id][inclassid+1]

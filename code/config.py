@@ -3,12 +3,11 @@ import argparse
 from textwrap import dedent
 import yaml
 from datetime import datetime
-from pathlib import Path
 
 import code.compatibility as compat
-from code.utils import safe_path
+from code.filesystem import safe_torch_load, maybe_download
+from code.utils import infer_type
 
-VALID_SUBCONFIGS = ['train', 'denoiser', 'wandb']
 
 def deep_merge_dict(target, source):
     """Helper: Merges update into base recursively."""
@@ -20,18 +19,22 @@ def deep_merge_dict(target, source):
                 print(f"WARNING: Adding new/unrecognized config key: {k}")
             target[k] = v
 
+
+VALID_SUBCONFIGS = ['train', 'denoiser', 'wandb']
+
 def update_config(target, source):
     for subconfig in source:
         if subconfig not in VALID_SUBCONFIGS:
             print(f"WARNING: Unknown config section: {subconfig}. Ignoring.")
             continue
-        
+
         assert isinstance( source[subconfig], dict), f"Sub-Config {subconfig} is not a dictionary. Got {source[subconfig]}."
 
         if subconfig not in target:
             target[subconfig] = {}
-        
+
         deep_merge_dict(target[subconfig], source[subconfig])
+
 
 class Config:
     def __init__(self):
@@ -47,7 +50,7 @@ class Config:
         parser.add_argument('-t', '--train', action='append', help="Override train config (key=value)")
         parser.add_argument('-d', '--denoiser', action='append', help="Override denoiser config (key=value)")
         parser.add_argument('-w', '--wandb', action='append', help="Override wandb config (key=value)")
-        parser.add_argument('-o', '--output_base_dir', help="Base directory for checkpoints, samples, etc.", 
+        parser.add_argument('-o', '--output_base_dir', help="Base directory for checkpoints, samples, etc.",
                             default=compat.OUTPUT_BASE_DIR)
 
         # Parse
@@ -78,18 +81,18 @@ class Config:
         self.config = self.library['default']
 
         if self.checkpoint_path:
-            ckpt = compat.load(self.checkpoint_path, map_location='cpu')
-            update_config(self.config, ckpt['config']) 
-            
+            ckpt = safe_torch_load(self.checkpoint_path, map_location='cpu')
+            update_config(self.config, ckpt['config'])
+
             if 'data_path' in ckpt:
                 self.data_path_orig = ckpt['data_path']
             self.resume_epoch = ckpt.get('epoch', -1) + 1
-            
+
             # Preserve wandb run_id for resuming
             if 'wandb_run_id' in ckpt:
                 if ckpt['wandb_run_id']:
                     self.config.setdefault('wandb', {})['run_id'] = ckpt['wandb_run_id']
-            
+
             del ckpt
 
         # link to sub configs (initialize if they don't exist)
@@ -104,7 +107,7 @@ class Config:
             # Checkpoint already handled
             if arg == self.checkpoint_path:
                 continue
-            
+
             # Data file
             if arg.endswith('.npz'):
                 self.data_path_orig = arg
@@ -125,53 +128,29 @@ class Config:
         # Apply Flag Overrides (-t, -d, -w)
         #-----------------------
         if self.parsed.train:
-            print("Train Config applying:")
+            print("Train config overrides:")
             for kv in self.parsed.train:
                 self._update_from_kv(kv, self.train)
 
         if self.parsed.denoiser:
-            print("Denoiser Config applying:")
+            print("Denoiser config overrides:")
             for kv in self.parsed.denoiser:
                 self._update_from_kv(kv, self.denoiser)
 
         if self.parsed.wandb:
-            print("WandB Config applying:")
+            print("WandB config overrides:")
             for kv in self.parsed.wandb:
                 self._update_from_kv(kv, self.wandb)
-                
-        # Setup Naming Template
+
         self.timestamp = datetime.now().strftime("%m%d_%H%M")
-
-        # Track saved checkpoints to prevent clutter (Keep Max 2)
-        self.saved_checkpoints = []
-
-        #----------------------------
-        # Setup Directories
-        #----------------------------
-        out = self.parsed.output_base_dir
-        if isinstance(out, Path):
-            out = str(out)
-        self.output_base_dir = out  # keep string
-
-        # If remote GCS, create remote paths as strings and don't try to mkdir using pathlib
-        if self.output_base_dir.startswith("gs://"):
-            self.checkpoints_dir = f"{self.output_base_dir.rstrip('/')}/checkpoints"
-            self.samples_dir = f"{self.output_base_dir.rstrip('/')}/samples"
-            print(f"Using remote GCS output base: {self.output_base_dir}")
-        else:
-            # local filesystem: continue to use Path and mkdir
-            self.output_base_dir = Path(self.output_base_dir)
-            self.output_base_dir.mkdir(parents=True, exist_ok=True)
-            self.checkpoints_dir = self.output_base_dir / 'checkpoints'
-            self.checkpoints_dir.mkdir(parents=True, exist_ok=True)
-            self.samples_dir = self.output_base_dir / 'samples'
-            self.samples_dir.mkdir(parents=True, exist_ok=True)
+        self.output_base_dir = self.parsed.output_base_dir
 
         if not self.data_path_orig:
             raise ValueError("Must specify either a checkpoint or data path.\n"
                              f" (e.g., python {sys.argv[0]} checkpoint.pt data.npz)")
-        
-        self.data_path = compat.download_to_local(self.data_path_orig, suffix='.npz')
+
+        self.data_path = maybe_download(self.data_path_orig, suffix='.npz')
+
 
     def _update_from_kv(self, kv_str, target_dict):
         """Parses key=value and updates target_dict with type inference."""
@@ -180,98 +159,25 @@ class Config:
             return
 
         key, val_str = kv_str.split('=', 1)
-
-        # Type Inference
-        val = val_str
-        if val_str.lower() == 'true':
-            val = True
-        elif val_str.lower() == 'false':
-            val = False
+        val = infer_type(val_str)
+        print(f"\t{key} = {val} ({type(val).__name__})", end=' ')
+        if key in target_dict:
+            print(f"(overrides {target_dict[key]})")
         else:
-            try:
-                val = int(val_str)
-            except ValueError:
-                try:
-                    val = float(val_str)
-                except ValueError:
-                    pass # keep as string
-
-        print(f"  Override: {key} = {val} ({type(val).__name__})")
-        if key not in target_dict:
-            print(f"!!! Warning: Adding new/unrecognized config key: {key} not found in configs.yaml")
+            print(f"(Warning: Adding anew, not found in configs.yaml)")
         target_dict[key] = val
-
-    def load_model_state(self, denoiser, optimizer, scheduler=None):
-        if self.checkpoint_path:
-            print(f"Loading weights from {self.checkpoint_path}...")
-            ckpt = compat.load(self.checkpoint_path, map_location='cpu')
-            denoiser.load_state_dict(ckpt['denoiser_state_dict'], strict=True)
-    
-            if optimizer and 'optimizer_state_dict' in ckpt:
-                optimizer.load_state_dict(ckpt['optimizer_state_dict'])
-
-            if scheduler and 'scheduler_state_dict' in ckpt:
-                scheduler.load_state_dict(ckpt['scheduler_state_dict'])
-
-            print(f"Resumed weights from Epoch {ckpt.get('epoch', 0)}.")
-
-
-    def set_identifier(self, lossname, num_tiles):
-        self.identifier = f"{self.timestamp}_d{self.denoiser['d_model']}_{lossname}_t{num_tiles:03d}"
-    
-    def save_checkpoint(self, epoch, denoiser, optimizer, scheduler, loss, dataset, wandblog=None):
-        ckpt_fname = "cp" + self.identifier + f"_e{epoch:03d}.pt"
-        ckpt_fpath = safe_path(self.checkpoints_dir, ckpt_fname)
-
-        checkpoint_data = {
-            'epoch': int(epoch),
-            'denoiser_state_dict': denoiser.state_dict(),
-            'optimizer_state_dict': optimizer.state_dict(),
-            'scheduler_state_dict': scheduler.state_dict(),
-            'config': self.config,
-            'loss': loss,
-            'data_path': str(self.data_path_orig),
-            # Metadata for inference/sampling
-            'symmetry': dataset.symmetry,
-            'num_tiles': dataset.num_tiles,
-            'side': dataset.side,
-            'num_classes': dataset.num_classes,
-            'class_lookup': dataset.class_lookup,
-        }
-        
-        # Save WandB run ID for resuming
-        if wandblog:
-            run_id = wandblog.get_run_id()
-            if run_id:
-                checkpoint_data['wandb_run_id'] = run_id
-
-        compat.save(checkpoint_data, ckpt_fpath)
-        print(f"Saved checkpoint: {ckpt_fpath}")
-        self.saved_checkpoints.append(ckpt_fpath)
-
-        # Keep only the last two checkpoints
-        while len(self.saved_checkpoints) > 2:
-            to_remove = self.saved_checkpoints.pop(0)
-            try:
-                if to_remove.exists():
-                    to_remove.unlink()
-                    print(f"Deleted old checkpoint: {to_remove.name}")
-            except (OSError, AttributeError) as e:
-                print(f"Error deleting checkpoint {to_remove}: {e}")
 
 
     def __str__(self):
         return dedent(f"""
         ================================
-                Configuration         
+                Configuration
         ================================
         Timestamp        : {self.timestamp}
         Checkpoint Path  : {self.checkpoint_path}
         Data Path        : {self.data_path_orig}
-        Data Path (Local): {self.data_path}
+                ⤷        : {self.data_path}
         Output Base Dir  : {self.output_base_dir}
-        Checkpoints Dir  : {self.checkpoints_dir}
-        Samples Dir      : {self.samples_dir}
         Resume Epoch     : {self.resume_epoch}
         ---------------------------------
         """) + \
