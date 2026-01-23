@@ -54,7 +54,7 @@ default_train: &default_train
 #---------------------------------------------------------
 default_wandb: &default_wandb
   enabled: true
-  project: 'penrose-diffusion'
+  project: 'penrose-train'
   run_name: null        # Auto-generated if null
   run_id: null          # Specify to resume a specific run
   watch_freq: 100       # Frequency to log gradients and parameters
