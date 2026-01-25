@@ -138,8 +138,6 @@ class DDIMDiffuser(nn.Module):
         ᾱ = torch.cumprod(α, dim=0)
         ᾱtm1 = torch.cat([torch.tensor([[[1.]]]), ᾱ[:-1]])
 
-        self.register_buffer('β', β)
-        self.register_buffer('α', α)
         self.register_buffer('ᾱ', ᾱ)
         self.register_buffer('ᾱtm1', ᾱtm1)
         self.register_buffer('rtᾱ', torch.sqrt(ᾱ))
@@ -152,6 +150,7 @@ class DDIMDiffuser(nn.Module):
         if noise is None:
             noise = torch.randn_like(xysc_0)
 
+        # xₜ = √ᾱₜ x₀ + √(1 − ᾱₜ) ε
         xysc_t = self.rtᾱ[t] * xysc_0 + self.r1mᾱ[t] * noise
 
         return xysc_t, noise
@@ -159,6 +158,10 @@ class DDIMDiffuser(nn.Module):
     def recover_xysc(self, xysc_t, t, noise):
         #  x̂₀ = (xₜ -  √(1 − ᾱₜ) ̂ϵ) / √ᾱₜ
         return (xysc_t - self.r1mᾱ[t] * noise) / self.rtᾱ[t]
+
+    def recover_noise(self, xysc_t, t, xysc_0):
+        #  ̂ϵ = (xₜ -  √ᾱₜ x̂₀) / √(1 − ᾱₜ)
+        return (xysc_t - self.rtᾱ[t]*xysc_0) / self.r1mᾱ[t]
 
     @torch.no_grad()
     def p_sample(self, denoiser, xysc_t, colors, t, class_labels, ddpm=0.0):
@@ -176,7 +179,7 @@ class DDIMDiffuser(nn.Module):
             #  x̂₀ = (xₜ -  √(1 − ᾱₜ) ̂ϵ) / √ᾱₜ
 
 
-        if t[0] == 0:
+        if t[0] == 0:               # All t's are same in a prediction batch
             # Circle Project
             # xysc_0_pred[..., 2:] = F.normalize(xysc_0_pred[..., 2:], dim=2)
             return xysc_0_pred

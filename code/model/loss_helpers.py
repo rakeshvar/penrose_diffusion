@@ -57,59 +57,65 @@ def lattice_loss(xy_hat, unit_side, symmetry):
     target = torch.full_like(min_dist, fill_value=to_nearest)
     return F.mse_loss(min_dist, target) / to_nearest**2
 
+def geodesic_loss(xysc_0, xysc_0_hat):
+    sc_0 = xysc_0[..., -2:]
+    sc_0_hat = xysc_0_hat[..., -2:]
+    
+    u_0 = sc_0 / (sc_0.norm(dim=-1, keepdim=True) + 1e-6)
+    u_0_hat = sc_0_hat / (sc_0_hat.norm(dim=-1, keepdim=True) + 1e-6)
+
+    # cosine similarity
+    cos_dtheta = (u_0 * u_0_hat).sum(dim=-1)  # (B, N)
+
+    # geodesic loss on S¹
+    loss_angle = (1.0 - cos_dtheta).mean()
+
+def tangent_space_score_loss(xysc_t, noise, noise_hat):
+    # angular components
+    sincos_t = xysc_t[..., 2:]          # (B, N, 2)
+    eps_true = noise[..., 2:]
+    eps_hat = noise_hat[..., 2:]
+
+    # unit direction (safe)
+    u = sincos_t / (sincos_t.norm(dim=-1, keepdim=True) + 1e-6)
+
+    # project noise to tangent space
+    def project_tangent(eps, u):
+        return eps - (eps * u).sum(dim=-1, keepdim=True) * u
+
+    eps_true_tan = project_tangent(eps_true, u)
+    eps_hat_tan = project_tangent(eps_hat, u)
+
+    # final loss (add x,y MSE normally)
+    loss_angle = F.mse_loss(eps_hat_tan, eps_true_tan)
+
 #-----------------------------------------------------------------------------
-# LSA Loss (CUDA)
+# Sinkhorn Soft-Permutation Calculation
 #-----------------------------------------------------------------------------
-def lsa_loss_cuda(truth, preds, colors):
-    try:
-        from torch_linear_assignment import batch_linear_assignment, assignment_to_indices
-    except ModuleNotFoundError as e:
-        print(
-            "Please install torch-linear-assignment as"
-            " `pip install torch-linear-assignment`"
-            " to use LSA loss with Torch.")
-        raise e
+def sinkhorn_permutation(sq_dist, scaling, n_iters=100):
+    N = sq_dist.shape[0]
+    device = sq_dist.device
 
-    total_loss = torch.tensor(0.0, device=preds.device)
+    # log-domain Sinkhorn
+    log_K = -sq_dist / scaling            # N, N
+    log_u = torch.zeros(N, device=device)  # u = row sums = 1
+    log_v = torch.zeros(N, device=device)  # v = col sums = 1
 
-    for color in [0, 1]:
-        mask = (colors == color)
+    log_a = -torch.log(torch.tensor(N, device=device, dtype=sq_dist.dtype)) # log (1/N)
+    log_b = log_a
 
-        counts = mask.sum(dim=1)
-        unique_counts = torch.unique(counts)
+    for _ in range(n_iters):
+        log_u = log_a - torch.logsumexp(log_K + log_v[None, :], dim=1)
+        log_v = log_b - torch.logsumexp(log_K + log_u[:, None], dim=0)
 
-        for k in unique_counts:
-            k = k.item()
-            if k == 0: continue
-
-            batch_mask = (counts == k)
-
-            sub_p = preds[batch_mask][mask[batch_mask]].view(-1, k, preds.shape[-1])
-            sub_t = truth[batch_mask][mask[batch_mask]].view(-1, k, truth.shape[-1])
-
-            # 1. Cost on [..., :3] (XYZ). This tensor HAS gradients.
-            # dist_mat[b, i, j] = distance (i-th predicted , j-th truth) of b.
-            dist_mat = ((sub_p.unsqueeze(2) - sub_t.unsqueeze(1)) ** 2).sum(dim=-1)
-                # 21 x 257 x 257 say
-
-            # 2. Solve Assignment
-            assignment = batch_linear_assignment(dist_mat.detach()) # type: ignore
-            _, col_ind = assignment_to_indices(assignment)          # type: ignore
-                # 21 x 257
-
-            # 3. Gather Loss directly using indices
-            # We gather from the ORIGINAL 'dist_mat' to keep gradients flowing.
-            matched_costs = dist_mat.gather(2, col_ind.unsqueeze(2).long()).squeeze(2)
-                                                    #  | 21 x 257 x 1     -> 21 x 257
-            total_loss += matched_costs.sum()
-
-    return total_loss / truth.numel()
+    # P = diag(u) K diag(v) in log-space
+    log_P = log_K + log_u[:, None] + log_v[None, :]
+    P = torch.exp(log_P)
+    return P
 
 #-----------------------------------------------------------------------------
 # LSA Loss (Scipy)
 #-----------------------------------------------------------------------------
-
-
 def lsa_ordering_scipy(cost_np, colors_np):
     """
     Computes optimal assignment indices using scipy's linear_sum_assignment.

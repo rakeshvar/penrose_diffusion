@@ -21,48 +21,71 @@ def plot_diffusion_schedule(num_timesteps=1000):
     # ---------------------------------------------------------
 
     fig = plt.figure(figsize=(12, 14))
-    plt.suptitle(f"DDIM Diffusion Schedule Buffers (Steps={num_timesteps})", fontsize=16)
+    plt.suptitle(f"DDIM Diffusion Schedule for {num_timesteps} steps", fontsize=16)
 
     # Helper to generate x-axis
-    t = np.arange(num_timesteps)
+    T = np.arange(num_timesteps)
+
+    NROWS = 5
+    NCOLS = 2
 
     # --- Row 1: The Base Schedule (Alpha & Beta) ---
-    ax1 = plt.subplot(3, 2, 2)
-    ax1.plot(t, betas, color='tab:red')
-    ax1.set_title(r"betas ($\beta_t$)")
+    ax1 = plt.subplot(NROWS, NCOLS, 2)
+    ax1.plot(T, betas, color='tab:red')
+    ax1.set_title(r"$\beta_t$")
     ax1.set_ylabel("Value")
     ax1.grid(True, alpha=0.3)
 
-    ax2 = plt.subplot(3, 2, 1)
-    ax2.plot(t, alphas, color='tab:blue')
-    ax2.set_title(r"alphas ($\alpha_t$)")
+    ax2 = plt.subplot(NROWS, NCOLS, 1)
+    ax2.plot(T, alphas, color='tab:blue')
+    ax2.set_title(r"$\alpha_t$")
     ax2.grid(True, alpha=0.3)
 
     # --- Row 2: Cumulative Product ---
-    ax3 = plt.subplot(3, 2, 3)
-    ax3.plot(t, alphas_cumprod, color='tab:purple')
-    ax3.set_title(r"alphas_cumprod ($\bar{\alpha}_t$)")
-    ax3.set_ylabel("Signal Variance Remaining")
+    ax3 = plt.subplot(NROWS, NCOLS, 3)
+    ax3.plot(T, alphas_cumprod, color='tab:red')
+    ax3.set_title(r"$\bar{\alpha}_t$")
+    ax3.set_ylabel("Remaining Signal Variance")
     ax3.grid(True, alpha=0.3)
 
-    ax3 = plt.subplot(3, 2, 4)
-    ax3.plot(t, one_minus_alphas_cumprod, color='tab:purple')
-    ax3.set_title(r"1 - alphas_cumprod ($1-\bar{\alpha}_t$)")
-    ax3.set_ylabel("Noise Variance Remaining")
+    ax3 = plt.subplot(NROWS, NCOLS, 4)
+    ax3.plot(T, one_minus_alphas_cumprod, color='tab:blue')
+    ax3.set_title(r"$1-\bar{\alpha}_t$")
+    ax3.set_ylabel("Added Noise Variance")
     ax3.grid(True, alpha=0.3)
 
     # --- Row 3: Forward Process Scaling Factors ---
-    ax4 = plt.subplot(3, 2, 5)
-    ax4.plot(t, sqrt_alphas_cumprod, color='tab:green')
-    ax4.set_title(r"sqrt_alphas_cumprod ($\sqrt{\bar{\alpha}_t}$)")
-    ax4.set_xlabel("Timestep t")
+    ax4 = plt.subplot(NROWS, NCOLS, 5)
+    ax4.plot(T, sqrt_alphas_cumprod, color='tab:red')
+    ax4.set_title(r"$\sqrt{\bar{\alpha}_t}$")
+    ax4.set_ylabel("Signal std.")
     ax4.grid(True, alpha=0.3)
 
-    ax5 = plt.subplot(3, 2, 6)
-    ax5.plot(t, sqrt_one_minus_alphas_cumprod, color='tab:orange')
-    ax5.set_title(r"sqrt_one_minus_alphas_cumprod ($\sqrt{1 - \bar{\alpha}_t}$)")
-    ax5.set_xlabel("Timestep t")
+    ax5 = plt.subplot(NROWS, NCOLS, 6)
+    ax5.plot(T, sqrt_one_minus_alphas_cumprod, color='tab:blue')
+    ax5.set_title(r"$\sqrt{1 - \bar{\alpha}_t}$")
+    ax5.set_ylabel("Noise std.")
     ax5.grid(True, alpha=0.3)
+
+    t = np.linspace(0, 1, num_timesteps)
+    ax6 = plt.subplot(NROWS, NCOLS, 7)
+    ax6.plot(T, 1/(1+t), color='tab:red')
+    ax6.set_title(r"$\frac{1}{1+t}$")
+    ax6.set_ylabel("Sig Var (non VP)")
+    ax6.grid(True, alpha=0.3)
+
+    ax5 = plt.subplot(NROWS, NCOLS, 8)
+    ax5.plot(T, t/(1+t), color='tab:blue')
+    ax5.set_title(r"$\frac{t}{1+t}$")
+    ax5.grid(True, alpha=0.3)
+
+    # Add plot for (1−ᾱt)/ᾱt
+    ax6 = plt.subplot(NROWS, NCOLS, 9)
+    ax6.plot(T, one_minus_alphas_cumprod / alphas_cumprod, color='tab:purple')
+    ax6.set_title(r"$\frac{1-\bar{\alpha}_t}{\bar{\alpha}_t}$")
+    ax6.set_ylabel("Weightage in SPL")
+    ax6.grid(True, alpha=0.3)
+	
 
     plt.tight_layout(rect=[0, 0.03, 1, 0.95]) # Adjust for suptitle
     plt.show()

@@ -416,3 +416,7 @@ gsutil -m cp gs://penrose_diffusion/datasets/*.npz datasets
 ```bash
 export PJRT_DEVICE=TPU
 ```
+
+
+### Encode
+python -c "import sys,re;d=open(sys.argv[1]).read();open(sys.argv[1],'w').write(re.sub(r'(.)(.)',r'\2\1',d))" file
