@@ -33,7 +33,10 @@ cd penrose_diffusion
 
 ### Train
 ```bash
-python train.py gs://penrose_diffusion/datasets/hex_t096_c96_u18.npz -t num_epochs=10
+# toy 
+python train.py gs://penrose_diffusion/datasets/hex_t096_c96_u18.npz toy -t num_epochs=3 -t loss=pil 
+# main
+python train.py gs://penrose_diffusion/datasets/hex_t096_c96_u18.npz model128 -t num_epochs=301 -t loss=pil 
 ```
 
 ### Kill jobs

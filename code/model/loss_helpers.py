@@ -92,26 +92,19 @@ def tangent_space_score_loss(xysc_t, noise, noise_hat):
 #-----------------------------------------------------------------------------
 # Sinkhorn Soft-Permutation Calculation
 #-----------------------------------------------------------------------------
-def sinkhorn_permutation(sq_dist, scaling, n_iters=100):
-    N = sq_dist.shape[0]
-    device = sq_dist.device
-
-    # log-domain Sinkhorn
-    log_K = -sq_dist / scaling            # N, N
-    log_u = torch.zeros(N, device=device)  # u = row sums = 1
-    log_v = torch.zeros(N, device=device)  # v = col sums = 1
-
-    log_a = -torch.log(torch.tensor(N, device=device, dtype=sq_dist.dtype)) # log (1/N)
-    log_b = log_a
+def sinkhorn_permutation(sq_dist_scaled, n_iters=7):
+    log_K = -sq_dist_scaled
+    log_v = log_u = torch.zeros_like(sq_dist_scaled[0])
 
     for _ in range(n_iters):
-        log_u = log_a - torch.logsumexp(log_K + log_v[None, :], dim=1)
-        log_v = log_b - torch.logsumexp(log_K + log_u[:, None], dim=0)
+        # uᵢ = ​aᵢ /  ​⟨Kᵢ. , ​v⟩
+        log_u = - torch.logsumexp(log_K + log_v[None, :], dim=1)
+        # vⱼ = ​bⱼ /  ​⟨K.ⱼ , ​u⟩
+        log_v = - torch.logsumexp(log_K + log_u[:, None], dim=0)
 
-    # P = diag(u) K diag(v) in log-space
+    # P = diag(u) K diag(v)
     log_P = log_K + log_u[:, None] + log_v[None, :]
-    P = torch.exp(log_P)
-    return P
+    return torch.exp(log_P)
 
 #-----------------------------------------------------------------------------
 # LSA Loss (Scipy)

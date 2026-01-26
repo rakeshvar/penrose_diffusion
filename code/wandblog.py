@@ -92,18 +92,6 @@ class WandBLog:
         except Exception as e:
             warnings.warn(f"Failed to log: {e}")
 
-    def lsgradient_norm(self, epoch: int, model):
-        if not self.enabled:
-            return
-
-        total_norm = 0.0
-        for p in model.parameters():
-            if p.grad is not None:
-                param_norm = p.grad.data.norm(2)
-                total_norm += param_norm.item() ** 2
-        total_norm = total_norm ** 0.5
-        self.log_step({'gradient_norm': total_norm}, step=epoch)
-
 
     def lsvg(self, epoch: int, svg_content: str, class_label: int, class_name: str):
         if not self.enabled:

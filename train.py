@@ -15,7 +15,7 @@ from code.model.ddim import DDIMDiffuser, TransformerDenoiser
 from code.model.loss_helpers import circle_loss, lattice_loss, equal_angle_loss_var, equal_angle_loss_circular
 from code.model.sampler import save_sample
 from code.model.losses import get_loss
-from code.utils import pairwise_compare, safe_path
+from code.utils import pairwise_compare
 from code.wandblog import WandBLog
 
 # Suppress nested tensor warnings
@@ -140,11 +140,11 @@ def train_fn(rank:int, config:Config):
         scheduler.step()
         avg_loss = total_loss / count if count > 0 else 0
 
-        wandblog.log_step({
+        to_log = {
             'loss': avg_loss,
+            'grad_norm': lsgradient_norm(denoiser),
             'learning_rate': optimizer.param_groups[0]['lr']
-        }, step=epoch)
-        wandblog.lsgradient_norm(epoch, denoiser)
+        }
 
         if is_master:
             ckptr.save_checkpoint(epoch, denoiser, optimizer, scheduler, avg_loss) # type: ignore
@@ -155,7 +155,7 @@ def train_fn(rank:int, config:Config):
                     dataset.num_tiles, dataset.symmetry, dataset.side, sample_label)
                 
                 svg_fname = f"sv{config.timestamp}_e{epoch:03d}_{sample_name}.svg"
-                ckptr.save_svg(svg, svg_fname)
+                ckptr.save_svg(svg, svg_fname)                                  # type: ignore
                 wandblog.lsvg(epoch, svg, sample_label, sample_name)
 
                 # Save some special losses
@@ -163,13 +163,24 @@ def train_fn(rank:int, config:Config):
                 circleloss = circle_loss(xysc_hat).item()
                 ealoss_var = equal_angle_loss_var(xysc_hat).item()
                 ealoss_cir = equal_angle_loss_circular(xysc_hat).item()
-                wandblog.log_step({'lattice_loss': latticeloss, 'circle_loss': circleloss, 'equal_angle_loss_var': ealoss_var, 'equal_angle_loss_circular': ealoss_cir}, step=epoch)
+                to_log.update({'lattice_loss': latticeloss, 'circle_loss': circleloss, 
+                               'equal_angle_loss_var': ealoss_var, 'equal_angle_loss_circular': ealoss_cir})
                 pairwise_compare([latticeloss, circleloss, ealoss_var, ealoss_cir], ["lattice", "circle", "eal_var", "eal_cir"], f"Losses")
 
+        wandblog.log_step(to_log, step=epoch)
         mprint(f"Epoch {epoch} done. Average Loss: {avg_loss:.4f}\n", rank)
 
     wandblog.finish()
     mprint("\n======\nDone!\n======", rank)
+
+
+def lsgradient_norm(denoiser):
+    total_sq_norm = 0.0
+    for p in denoiser.parameters():
+        if p.grad is not None:
+            param_norm = p.grad.data.norm(2)
+            total_sq_norm += param_norm.item() ** 2
+    return total_sq_norm ** 0.5
 
 #------
 # Main

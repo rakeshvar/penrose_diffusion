@@ -184,33 +184,28 @@ class SinkhornLossCPU(AbstractLoss):
 
     def compute_loss(self, xysc_0, xysc_t, noise, noise_hat, colors, t):
         B = xysc_t.shape[0]
-        σₓ = self.diffuser.rtᾱ[t]            # type: ignore
-        σₑ = self.diffuser.r1mᾱ[t]           # type: ignore
-        denom = 2*(σₑ ** 2.) # Var(noise) = 1-ᾱₜ
+        σₓ = self.diffuser.rtᾱ[t]       # B, 1, 1     # type: ignore
+        σₑ = self.diffuser.r1mᾱ[t]                    # type: ignore
+        twoσₑsqrd = 2.*(σₑ**2.)         # 2 *(1-ᾱₜ)
         total_loss = 0.
 
+        σₓxysc0 = σₓ * xysc_0
+
         for b in range(B):
-            xysc0_sqrtᾱ = σₓ[b] * xysc_0[b]
-            noise_target = torch.zeros_like(xysc_t[b])
+            noise_target = torch.zeros_like(xysc_t[0])
 
-            for col in colors[b].unique():
-                idxcol = (colors[b] == col).nonzero(as_tuple=False).squeeze(1)
-                if idxcol.numel() == 0:
-                    continue
+            for col in (0, 1):
+                this_color = (colors[b] == col).nonzero(as_tuple=False).squeeze(1)
 
-                xyscₜ_bc = xysc_t[b][idxcol]
-                xysc0_scaled_bc = xysc0_sqrtᾱ[idxcol]
-                diff = xyscₜ_bc[:, None, :] - xysc0_scaled_bc[None, :, :]   # N₀, N₀, d
-                cost = (diff ** 2).sum(dim=-1)                       # N₀, N₀
+                xyscₜ_bc = xysc_t[b, this_color, :]
+                σₓxysc0_bc = σₓxysc0[b, this_color, :]
+                diff = xyscₜ_bc[:, None, :] - σₓxysc0_bc[None, :, :]   # N₀, N₀, d
+                cost = (diff ** 2).sum(dim=-1)                         # N₀, N₀
 
-                # Sinkhorn barycenter = P * xysc0
-                xysc0_post_scaled = sinkhorn_permutation(
-                    cost.detach().cpu(),
-                    scaling=denom[b].item(),
-                    n_iters=100,
-                ).to(self.device) @ xysc0_scaled_bc
+                soft_assignment = sinkhorn_permutation(cost/twoσₑsqrd[b])
+                σₓxysc0_post = soft_assignment @ σₓxysc0_bc
 
-                noise_target[idxcol] = (xyscₜ_bc - xysc0_post_scaled) / σₑ[b]
+                noise_target[this_color] = (xyscₜ_bc - σₓxysc0_post) / σₑ[b]
 
             total_loss += F.mse_loss(noise_hat[b], noise_target)
 

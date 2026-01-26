@@ -57,7 +57,7 @@ default_wandb: &default_wandb
   project: 'penrose-train'
   run_name: null        # Auto-generated if null
   run_id: null          # Specify to resume a specific run
-  watch_freq: 100       # Frequency to log gradients and parameters
+  watch_freq: 0         # Frequency to log gradients and parameters
 
 verbose_wandb:
   <<: *default_wandb
