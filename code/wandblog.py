@@ -24,7 +24,7 @@ class WandBLog:
         if not self.is_master:
             return
 
-        if not wbconfig['enabled']:
+        if not wbconfig['enable']:
             print("WandB logging disabled by config.")
             return
 

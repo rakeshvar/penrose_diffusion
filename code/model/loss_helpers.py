@@ -92,6 +92,7 @@ def tangent_space_score_loss(xysc_t, noise, noise_hat):
 #-----------------------------------------------------------------------------
 # Sinkhorn Soft-Permutation Calculation
 #-----------------------------------------------------------------------------
+@torch.jit.script
 def sinkhorn_permutation(log_K: torch.Tensor, n_iters: int = 7) -> torch.Tensor:
     """
     Batched Sinkhorn in log-space.
@@ -109,6 +110,11 @@ def sinkhorn_permutation(log_K: torch.Tensor, n_iters: int = 7) -> torch.Tensor:
 
     # P = diag(u) K diag(v)
     return torch.exp(log_K + log_u[:, :, None] + log_v[:, None, :])
+
+def sinkhorn_permutation_onestep(log_P: torch.Tensor) -> torch.Tensor:
+    log_P = log_P - torch.logsumexp(log_P, dim=2, keepdim=True)  # rows
+    log_P = log_P - torch.logsumexp(log_P, dim=1, keepdim=True)  # cols
+    return torch.exp(log_P)
 
 #-----------------------------------------------------------------------------
 # LSA Loss (Scipy)

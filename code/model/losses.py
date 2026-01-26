@@ -149,21 +149,26 @@ class PermutationInvariantLoss(AbstractLoss):
         xysc_0 is posterior estimated (combined) given observed xysc_t
         prior is that a tile in xysc_t can be from any true tile in xysc_0
         Equivalent noise is calculated from xysc_0_posterior
+    Doubly stocastic version of this is Sinkhorn Loss
     Hard version of this is LSA Parallel
     """
     def compute_loss(self, xysc_0, xysc_t, noise, noise_hat, colors, t):
-        diff = xysc_t.unsqueeze(2) - xysc_0.unsqueeze(1)     # B, N, N, D
-        sq_dist = (diff ** 2).sum(dim=-1)                    # B, N, N
-        noise_variance = 1.-self.diffuser.ᾱ[t]               # Var(noise) = 1-ᾱₜ # type: ignore
-        logits = -sq_dist/(2.*noise_variance)
+        with torch.no_grad():
+            # TODO: Scale xysc_0 by σₓ = sqrt(ᾱₜ)
+            # TODO: use cost = a^2 + b^2 - 2ab
+            diff = xysc_t.unsqueeze(2) - xysc_0.unsqueeze(1)     # B, N, N, D
+            sq_dist = (diff ** 2).sum(dim=-1)                    # B, N, N
+            noise_variance = 1.-self.diffuser.ᾱ[t]               # Var(noise) = 1-ᾱₜ # type: ignore
+            logits = -sq_dist/(2.*noise_variance)
 
-        neginf = torch.tensor(-float("inf"), device=self.device)
-        color_mask = (colors.unsqueeze(2) == colors.unsqueeze(1)) # B, N, N
-        logits = torch.where(color_mask, logits, neginf)
-        soft_assignments = torch.softmax(logits, dim=-1)
-        xysc_0_posterior = torch.bmm(soft_assignments, xysc_0)    # Batch matmul
+            neginf = torch.tensor(-float("inf"), device=self.device)
+            color_mask = (colors.unsqueeze(2) == colors.unsqueeze(1)) # B, N, N
+            logits = torch.where(color_mask, logits, neginf)
+            soft_assignments = torch.softmax(logits, dim=-1)
+            xysc_0_posterior = torch.bmm(soft_assignments, xysc_0)    # Batch matmul
 
-        noise_target = self.diffuser.recover_noise(xysc_t, t, xysc_0_posterior)
+            noise_target = self.diffuser.recover_noise(xysc_t, t, xysc_0_posterior)
+
         return F.mse_loss(noise_hat, noise_target)
 
 #------------------------------------------------------------------------------
@@ -172,49 +177,39 @@ class PermutationInvariantLoss(AbstractLoss):
 @register_loss("shl", "sinkhorn")
 class SinkhornLoss(AbstractLoss):
     """
-    Sinkhorn-based permutation-invariant diffusion loss
-    with color-constrained doubly-stochastic transport.
     This is almost same as Permutation Invariant Loss
     But this enfoces that the Permutation Matrix is doubly stochastic
         All the columns and rows sum to 1
         Meaning all the truths are equally attended to
         So there is no danger of all the points collapsing to one
             while the rest of them are ignored
-    This is not fully differentiable as the posterior mean of truth
-        is not differentiable with the current package
     """
     def compute_loss(self, xysc_0, xysc_t, noise, noise_hat, colors, t):
-        B, N, D = xysc_t.shape
+        with torch.no_grad():
+            σₓ = self.diffuser.rtᾱ[t]          # B, 1, 1 # type: ignore
+            σₑ = self.diffuser.r1mᾱ[t]         # B, 1, 1 # type: ignore
+            twoσₑsqrd = 2.0 * (σₑ ** 2)        # B, 1, 1
+            σₓxysc0 = σₓ * xysc_0              # B, N, 4
 
-        σₓ = self.diffuser.rtᾱ[t]          # [B, 1, 1] # type: ignore
-        σₑ = self.diffuser.r1mᾱ[t]         # [B, 1, 1] # type: ignore
-        twoσₑsqrd = 2.0 * (σₑ ** 2)        # [B, 1, 1]
+            # ---- squared distance ----
+            a2 = (xysc_t ** 2).sum(dim=-1)[:, :, None]              # B, N, 1
+            b2 = (σₓxysc0 ** 2).sum(dim=-1)[:, None, :]             # B, 1, N
+            ab = torch.bmm(xysc_t, σₓxysc0.transpose(1, 2))         # B, N, N
+            sq_dist = a2 + b2 - 2.0 * ab                            # B, N, N
 
-        # σₓ x₀
-        σₓxysc0 = σₓ * xysc_0               # [B, N, 4]
+            # ---- color constraint via cost masking ----
+            diff_color = colors[:, :, None] != colors[:, None, :]   # B, N, N
+            # scale BIG with σₑ² (critical for stability)
+            BIG = 50. * twoσₑsqrd                                   # B, 1, 1
+            sq_dist = sq_dist + diff_color * BIG
 
-        # ---- squared distance without [B,N,N,4] ----
-        x2 = (xysc_t ** 2).sum(dim=-1)[:, :, None]              # [B, N, 1]
-        y2 = (σₓxysc0 ** 2).sum(dim=-1)[:, None, :]             # [B, 1, N]
-        xy = torch.bmm(xysc_t, σₓxysc0.transpose(1, 2))         # [B, N, N]
-        cost = x2 + y2 - 2.0 * xy                               # [B, N, N]
+            # ---- Sinkhorn barycenters ----
+            log_K = -sq_dist / twoσₑsqrd                             # B, N, N
+            P = sinkhorn_permutation(log_K)                          # B, N, N
+            σₓxysc0_post = torch.bmm(P, σₓxysc0)                     # B, N, 4
 
-        # ---- color constraint via cost masking ----
-        diff_color = colors[:, :, None] != colors[:, None, :]   # [B, N, N]
-
-        # scale BIG with σₑ² (critical for stability)
-        BIG = 50.0 * twoσₑsqrd                                   # [B, 1, 1]
-        cost = cost + diff_color * BIG
-
-        # ---- Sinkhorn ----
-        log_K = -cost / twoσₑsqrd                                # [B, N, N]
-        P = sinkhorn_permutation(log_K)                          # [B, N, N]
-
-        # ---- posterior mean ----
-        σₓxysc0_post = torch.bmm(P, σₓxysc0)                     # [B, N, 4]
-
-        # ---- noise target & loss ----
-        noise_target = (xysc_t - σₓxysc0_post) / σₑ              # [B, N, 4]
+            # ---- noise target & loss ----
+            noise_target = (xysc_t - σₓxysc0_post) / σₑ              # B, N, 4
         return F.mse_loss(noise_hat, noise_target)
 
 #------------------------------------------------------------------------------
@@ -229,16 +224,17 @@ class LSALossSerial(AbstractLoss):
     """
     def compute_loss(self, xysc_0, xysc_t, noise, noise_hat, colors, t):
         # Recover sample from predicted noise
-        xysc_0_hat = self.diffuser.recover_xysc(xysc_t, t, noise_hat)
-
-        # Cost Matrix for LSA
-        diff = xysc_0_hat.unsqueeze(2) - xysc_0.unsqueeze(1)
-        cost_matrix = (diff ** 2).sum(dim=-1)
-        cost_np = cost_matrix.detach().cpu().numpy()
-        colors_np = colors.detach().cpu().numpy()
-
-        bi, ti, pi = lsa_ordering_scipy(cost_np, colors_np)
         with torch.no_grad():
+            xysc_0_hat = self.diffuser.recover_xysc(xysc_t, t, noise_hat)
+
+            # Cost Matrix for LSA
+            # TODO: use cost = a^2 + b^2 - 2ab
+            diff = xysc_0_hat.unsqueeze(2) - xysc_0.unsqueeze(1)
+            cost_matrix = (diff ** 2).sum(dim=-1)
+            cost_np = cost_matrix.detach().cpu().numpy()
+            colors_np = colors.detach().cpu().numpy()
+
+            bi, ti, pi = lsa_ordering_scipy(cost_np, colors_np)
             bi = torch.from_numpy(bi).to(self.device, non_blocking=True)
             ti = torch.from_numpy(ti).to(self.device, non_blocking=True)
             pi = torch.from_numpy(pi).to(self.device, non_blocking=True)
@@ -282,6 +278,8 @@ class LSALossParallel(AbstractLoss):
 
         # Cost Matrix for LSA
         with maybe_stream(self.stream_cost, self.use_cuda):
+            # TODO: Need to scale xysc_0 by σₓ = sqrt(ᾱₜ)
+            # TODO: Calculate cost = a^2 + b^2 - 2ab
             diff = xysc_t.unsqueeze(2) - xysc_0.unsqueeze(1)
             cost_matrix = (diff ** 2).sum(dim=-1)
 

@@ -53,7 +53,7 @@ default_train: &default_train
 # WandB
 #---------------------------------------------------------
 default_wandb: &default_wandb
-  enabled: true
+  enable: true
   project: 'penrose-train'
   run_name: null        # Auto-generated if null
   run_id: null          # Specify to resume a specific run
@@ -61,17 +61,17 @@ default_wandb: &default_wandb
 
 verbose_wandb:
   <<: *default_wandb
-  enabled: true
+  enable: true
   project: 'penrose-debug'
   watch_freq: 10
 
 no_wandb:
   <<: *default_wandb
-  enabled: false
+  enable: false
 
 nowatch_wandb:
   <<: *default_wandb
-  enabled: true
+  enable: true
   watch_freq: 0
 
 # ----------------------------------------------------------------
@@ -94,7 +94,7 @@ toy:
     num_epochs: 3
   wandb:
     <<: *default_wandb
-    enabled: true
+    enable: true
     project: 'penrose-toy'
     watch_freq: 0
 
