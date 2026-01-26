@@ -166,6 +166,14 @@ Optimistic
   -f https://storage.googleapis.com/libtpu-releases/index.html
 ```
 
+with cuda
+```
+pip install torch~=2.6.0 torch_xla[tpu]~=2.6.0 \
+  -f https://storage.googleapis.com/libtpu-releases/index.html \
+  -f https://storage.googleapis.com/libtpu-wheels/index.html
+```
+
+
 Others
 ```
 pip install scipy tqdm

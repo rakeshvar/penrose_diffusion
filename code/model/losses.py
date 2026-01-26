@@ -167,11 +167,13 @@ class PermutationInvariantLoss(AbstractLoss):
         return F.mse_loss(noise_hat, noise_target)
 
 #------------------------------------------------------------------------------
-# Sinhorn Doubly Stochastic Permutation Invariant Loss
+# Sinkhorn Doubly Stochastic Permutation Invariant Loss
 #------------------------------------------------------------------------------
 @register_loss("shl", "sinkhorn")
-class SinkhornLossCPU(AbstractLoss):
+class SinkhornLoss(AbstractLoss):
     """
+    Sinkhorn-based permutation-invariant diffusion loss
+    with color-constrained doubly-stochastic transport.
     This is almost same as Permutation Invariant Loss
     But this enfoces that the Permutation Matrix is doubly stochastic
         All the columns and rows sum to 1
@@ -181,35 +183,39 @@ class SinkhornLossCPU(AbstractLoss):
     This is not fully differentiable as the posterior mean of truth
         is not differentiable with the current package
     """
-
     def compute_loss(self, xysc_0, xysc_t, noise, noise_hat, colors, t):
-        B = xysc_t.shape[0]
-        σₓ = self.diffuser.rtᾱ[t]       # B, 1, 1     # type: ignore
-        σₑ = self.diffuser.r1mᾱ[t]                    # type: ignore
-        twoσₑsqrd = 2.*(σₑ**2.)         # 2 *(1-ᾱₜ)
-        total_loss = 0.
+        B, N, D = xysc_t.shape
 
-        σₓxysc0 = σₓ * xysc_0
+        σₓ = self.diffuser.rtᾱ[t]          # [B, 1, 1] # type: ignore
+        σₑ = self.diffuser.r1mᾱ[t]         # [B, 1, 1] # type: ignore
+        twoσₑsqrd = 2.0 * (σₑ ** 2)        # [B, 1, 1]
 
-        for b in range(B):
-            noise_target = torch.zeros_like(xysc_t[0])
+        # σₓ x₀
+        σₓxysc0 = σₓ * xysc_0               # [B, N, 4]
 
-            for col in (0, 1):
-                this_color = (colors[b] == col).nonzero(as_tuple=False).squeeze(1)
+        # ---- squared distance without [B,N,N,4] ----
+        x2 = (xysc_t ** 2).sum(dim=-1)[:, :, None]              # [B, N, 1]
+        y2 = (σₓxysc0 ** 2).sum(dim=-1)[:, None, :]             # [B, 1, N]
+        xy = torch.bmm(xysc_t, σₓxysc0.transpose(1, 2))         # [B, N, N]
+        cost = x2 + y2 - 2.0 * xy                               # [B, N, N]
 
-                xyscₜ_bc = xysc_t[b, this_color, :]
-                σₓxysc0_bc = σₓxysc0[b, this_color, :]
-                diff = xyscₜ_bc[:, None, :] - σₓxysc0_bc[None, :, :]   # N₀, N₀, d
-                cost = (diff ** 2).sum(dim=-1)                         # N₀, N₀
+        # ---- color constraint via cost masking ----
+        diff_color = colors[:, :, None] != colors[:, None, :]   # [B, N, N]
 
-                soft_assignment = sinkhorn_permutation(cost/twoσₑsqrd[b])
-                σₓxysc0_post = soft_assignment @ σₓxysc0_bc
+        # scale BIG with σₑ² (critical for stability)
+        BIG = 50.0 * twoσₑsqrd                                   # [B, 1, 1]
+        cost = cost + diff_color * BIG
 
-                noise_target[this_color] = (xyscₜ_bc - σₓxysc0_post) / σₑ[b]
+        # ---- Sinkhorn ----
+        log_K = -cost / twoσₑsqrd                                # [B, N, N]
+        P = sinkhorn_permutation(log_K)                          # [B, N, N]
 
-            total_loss += F.mse_loss(noise_hat[b], noise_target)
+        # ---- posterior mean ----
+        σₓxysc0_post = torch.bmm(P, σₓxysc0)                     # [B, N, 4]
 
-        return total_loss / B
+        # ---- noise target & loss ----
+        noise_target = (xysc_t - σₓxysc0_post) / σₑ              # [B, N, 4]
+        return F.mse_loss(noise_hat, noise_target)
 
 #------------------------------------------------------------------------------
 # Linear Sum Assignment Loss (Serial) CUDA/Scipy

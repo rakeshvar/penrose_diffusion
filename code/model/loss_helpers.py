@@ -60,7 +60,7 @@ def lattice_loss(xy_hat, unit_side, symmetry):
 def geodesic_loss(xysc_0, xysc_0_hat):
     sc_0 = xysc_0[..., -2:]
     sc_0_hat = xysc_0_hat[..., -2:]
-    
+
     u_0 = sc_0 / (sc_0.norm(dim=-1, keepdim=True) + 1e-6)
     u_0_hat = sc_0_hat / (sc_0_hat.norm(dim=-1, keepdim=True) + 1e-6)
 
@@ -92,19 +92,23 @@ def tangent_space_score_loss(xysc_t, noise, noise_hat):
 #-----------------------------------------------------------------------------
 # Sinkhorn Soft-Permutation Calculation
 #-----------------------------------------------------------------------------
-def sinkhorn_permutation(sq_dist_scaled, n_iters=7):
-    log_K = -sq_dist_scaled
-    log_v = log_u = torch.zeros_like(sq_dist_scaled[0])
+def sinkhorn_permutation(log_K: torch.Tensor, n_iters: int = 7) -> torch.Tensor:
+    """
+    Batched Sinkhorn in log-space.
+        log_K: [B, N, N] : - ||xi - xj||^2 / 2*σ^2
+    Returns:
+        P: [B, N, N] doubly-stochastic matrices
+    """
+    log_u = log_v = torch.zeros_like(log_K[..., 0])
 
     for _ in range(n_iters):
-        # uᵢ = ​aᵢ /  ​⟨Kᵢ. , ​v⟩
-        log_u = - torch.logsumexp(log_K + log_v[None, :], dim=1)
-        # vⱼ = ​bⱼ /  ​⟨K.ⱼ , ​u⟩
-        log_v = - torch.logsumexp(log_K + log_u[:, None], dim=0)
+        # uᵢ = aᵢ /  ⟨Kᵢ. , v⟩
+        log_u = -torch.logsumexp(log_K + log_v[:, None, :], dim=2)
+        # vⱼ = bⱼ /  ⟨K.ⱼ , u⟩
+        log_v = -torch.logsumexp(log_K + log_u[:, :, None], dim=1)
 
     # P = diag(u) K diag(v)
-    log_P = log_K + log_u[:, None] + log_v[None, :]
-    return torch.exp(log_P)
+    return torch.exp(log_K + log_u[:, :, None] + log_v[:, None, :])
 
 #-----------------------------------------------------------------------------
 # LSA Loss (Scipy)
