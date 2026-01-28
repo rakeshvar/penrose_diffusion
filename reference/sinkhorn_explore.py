@@ -6,7 +6,7 @@ from matplotlib.patches import FancyArrowPatch
 class SinkhornLoss:
     def compute_loss(self, xysc_0, xysc_t, noise, noise_hat, colors, t):
         B = xysc_t.shape[0]
-        σₓ = self.diffuser.rtᾱ[t]       # B, 1, 1     # type: ignore
+        σₓ = self.diffuser.rᾱ[t]       # B, 1, 1     # type: ignore
         σₑ = self.diffuser.r1mᾱ[t]                    # type: ignore
         twoσₑsqrd = 2.*(σₑ**2.)         # 2 *(1-ᾱₜ)
         total_loss = 0.
@@ -60,11 +60,10 @@ def sinkhorn_permutation_iter(sq_dist, scaling, n_iters):
 
     P_history = []
     
-    for i in range(n_iters*2):
-        if i < n_iters-1 or i == n_iters*2-1:
-            log_P = log_K + log_u[:, None] + log_v[None, :]
-            P = torch.exp(log_P)
-            P_history.append(P.cpu().numpy())
+    for i in range(n_iters):
+        log_P = log_K + log_u[:, None] + log_v[None, :]
+        P = torch.exp(log_P)
+        P_history.append(P.cpu().numpy())
         
         log_u = log_a - torch.logsumexp(log_K + log_v[None, :], dim=1)
         log_v = log_b - torch.logsumexp(log_K + log_u[:, None], dim=0)
@@ -114,8 +113,8 @@ def pretty_print_P(P, iteration):
     
 
 def compute_errors(P_history):
-    P_final = P_history[-1]
-    errors = [np.linalg.norm(P - P_final, 'fro') for P in P_history[:-1]]
+    P_true = np.eye(P_history[0].shape[0])
+    errors = [np.linalg.norm(P - P_true, 'fro') for P in P_history]
     return errors
 
 
@@ -127,11 +126,11 @@ def draw_frame(ax_main, ax_error, x0, xt, colors, P, iteration, total_iters, lim
     ax_main.set_ylim(lim_min, lim_max)
     ax_main.set_aspect('equal')
     ax_main.grid(True, alpha=0.3)
-    ax_main.set_title(f'Sinkhorn Iteration {iteration}/{total_iters}, t={t:.2f} (Press Enter for next)', fontsize=14)
+    ax_main.set_title(f'Sinkhorn Iteration {iteration}/{total_iters}, t={t:.2f} (Press up/down to navigate)', fontsize=14)
 
     # Assignments and probabilities
     N = P.shape[0]
-    if N <= 120:
+    if N <= 12:
       Pr = (100*P).astype(int)
       for i in range(N):
         for j in range(N):
@@ -183,32 +182,34 @@ def draw_frame(ax_main, ax_error, x0, xt, colors, P, iteration, total_iters, lim
     ax_main.scatter(xt[colors==1, 0], xt[colors==1, 1], marker='8', c='orchid', s=100, label='xt', zorder=3)
     ax_main.legend(loc='upper right')
 
-
-    # Error
+    iteration += 1
+    # Error plot
     ax_error.clear()
-    if iteration > 1:
-        ax_error.plot(range(1, iteration), errors[:iteration-1], 'b-o', linewidth=2, markersize=4)
-        ax_error.set_xlabel('Iteration', fontsize=12)
-        ax_error.set_ylabel('||P - P*|| (Frobenius norm)', fontsize=12)
-        ax_error.set_title('Convergence to Final P', fontsize=12)
-        # ax_error.set_ylim(-10, np.log(max_error * 1.1))
-        ax_error.grid(True, alpha=0.3)
-        ax_error.set_yscale('log')
+    ax_error.plot(range(iteration), errors[:iteration], 'b-o', linewidth=2, markersize=4)
+    ax_error.set_xlabel('Iteration', fontsize=12)
+    ax_error.set_ylabel('||P - P*|| (Frobenius norm)', fontsize=12)
+    ax_error.set_title('Convergence to Final P', fontsize=12)
+    ax_error.grid(True, alpha=0.3)
+    # ax_error.set_yscale('log')
+    for i in range(iteration):
+        ax_error.text(i, errors[i], f'{errors[i]:.2f}', 
+                         fontsize=8, ha='center', va='bottom')
     
     plt.draw()
 
 
+import sys
 def main():
-    N = 6
-    var = 0.25
-    n_iters = 12
+    N = 96 if len(sys.argv) < 2 else int(sys.argv[1])
+    var = 1. if len(sys.argv) < 3 else float(sys.argv[2])
+    n_iters = 12 if len(sys.argv) < 4 else int(sys.argv[3])
     
     x0 = torch.randn(N, 2)
     xt = x0 + torch.randn(N, 2) * np.sqrt(var)
     colors = torch.arange(N) % 2
     sq_dist = torch.cdist(xt, x0, p=2) ** 2
     print((100*sq_dist).round().int())
-    sq_dist = torch.where(colors[None, :] == colors[:, None], sq_dist, 10)
+    sq_dist = torch.where(colors[None, :] == colors[:, None], sq_dist, 100*var)
     print((100*sq_dist).round().int())
     P_history = sinkhorn_permutation_iter(sq_dist, 2*var, n_iters)
     
@@ -225,20 +226,29 @@ def main():
     
     def on_key(event):
         nonlocal current_frame
-        if event.key in ('enter', 'down'):
-            current_frame = (current_frame+1) % len(P_history)
-        elif event.key in ('backspace', 'up'):
-            current_frame = (current_frame-1) % len(P_history)        
-        P = P_history[current_frame]
-        pretty_print_P(P, current_frame)
-        draw_frame(ax_main, ax_error, x0, xt, colors, P, current_frame, len(P_history), limits, var, errors, max_error)
+        
+        new_frame = current_frame
+        if event.key in ('enter', 'up'):
+            new_frame = (current_frame+1) % len(P_history)
+        elif event.key in ('backspace', 'down'):
+            new_frame = (current_frame-1) % len(P_history)        
+        elif event.key == 'home':
+            new_frame = 0
+        elif event.key == 'end':
+            new_frame = len(P_history)-1
+        
+        if new_frame != current_frame:
+            current_frame = new_frame
+            P = P_history[current_frame]
+            pretty_print_P(P, current_frame)
+            draw_frame(ax_main, ax_error, x0, xt, colors, P, current_frame, len(P_history), limits, var, errors, max_error)
     
     fig.canvas.mpl_connect('key_press_event', on_key)
+    print(f"{N} tiles, {var} variance, {n_iters} iterations, {len(P_history)} frames")
     
     P = P_history[0]
     pretty_print_P(P, "None")
     draw_frame(ax_main, ax_error, x0, xt, colors, P, current_frame, len(P_history), limits, var, errors, max_error)
-    
     plt.tight_layout()
     plt.show()
 

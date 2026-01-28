@@ -11,8 +11,8 @@ sys.path.append(str(parent_dir))
 
 # Project imports
 from code.data.load import MyDataset
-from code.model.augment import GeometryAugment
-from code.model.ddim import DDIMDiffuser
+from code.augment import GeometryAugment
+from code.model.diffusion import Diffuser
 from code.utils import xysc_to_xyac
 from code.hex.base import HexGrid
 from code.pen.base import PenGrid
@@ -59,7 +59,7 @@ def main():
 
     # Setup Models
     augmenter = GeometryAugment().to(device)
-    diffuser = DDIMDiffuser(num_timesteps=1000).to(device)
+    diffuser = Diffuser(num_timesteps=1000).to(device)
 
     # Output directory
     out_dir = Path("library/diffuser_output")

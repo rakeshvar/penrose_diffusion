@@ -4,7 +4,8 @@ import torch
 import torch.nn.functional as F
 import code.compatibility as compat
 
-from code.model.ddim import DDIMDiffuser, TransformerDenoiser
+from code.model.diffusion import Diffuser
+from code.model.transformer import TransformerDenoiser
 from code.model.loss_helpers import circle_loss, equal_angle_loss_circular, lattice_loss, lsa_ordering_scipy, sinkhorn_permutation
 
 #------------------------------------------------------------------------------
@@ -44,7 +45,7 @@ def list_losses():
 class AbstractLoss(ABC):
     def __init__(self,
                  denoiser: TransformerDenoiser,
-                 diffuser: DDIMDiffuser,
+                 diffuser: Diffuser,
                  optimizer,
                  device,
                  **kwargs_subclass):
@@ -92,6 +93,26 @@ class AbstractLoss(ABC):
 class NoisePredictionLoss(AbstractLoss):
     def compute_loss(self, xysc_0, xysc_t, noise, noise_hat, colors, t):
         return F.mse_loss(noise, noise_hat)
+
+import torch
+import torch.nn.functional as F
+
+class VPredictionLoss(AbstractLoss):
+    """
+    Assumes the denoiser predicts:
+        v = sqrt(alpha_t) * eps - sqrt(1 - alpha_t) * x0
+    This loss has stable scale across timesteps and does NOT require reweighting.
+    """
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.denoiser.predict = 'v'   
+
+    def compute_loss(self, xysc_0, xysc_t, noise, v_hat, colors, t):
+        α_t = self.diffuser.ᾱ[t]          # [B, 1, 1] # type: ignore
+        # TODO: make this a buffer in diffuser
+        σ_t = torch.sqrt(1.0 - α_t)       # [B, 1, 1]
+        v_0 = torch.sqrt(α_t) * noise - σ_t * xysc_0
+        return F.mse_loss(v_hat, v_0)
 
 #------------------------------------------------------------------------------
 # SamplePredictionLoss
@@ -186,7 +207,7 @@ class SinkhornLoss(AbstractLoss):
     """
     def compute_loss(self, xysc_0, xysc_t, noise, noise_hat, colors, t):
         with torch.no_grad():
-            σₓ = self.diffuser.rtᾱ[t]          # B, 1, 1 # type: ignore
+            σₓ = self.diffuser.rᾱ[t]          # B, 1, 1 # type: ignore
             σₑ = self.diffuser.r1mᾱ[t]         # B, 1, 1 # type: ignore
             twoσₑsqrd = 2.0 * (σₑ ** 2)        # B, 1, 1
             σₓxysc0 = σₓ * xysc_0              # B, N, 4

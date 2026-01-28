@@ -1,7 +1,7 @@
 import sys
 import numpy as np
 import torch
-from code.model.ddim import DDIMDiffuser  # Assumes ddim.py is in the same folder
+from code.model.diffusion import Diffuser  # Assumes ddim.py is in the same folder
 
 NBAR = 85
 
@@ -39,7 +39,7 @@ def analyze_dataset(data_path):
 
     # 4. Diffusion Process Check (Variance Preserving?)
     # ---------------------------------------------------------
-    diffuser = DDIMDiffuser(num_timesteps=1000)
+    diffuser = Diffuser(num_timesteps=1000)
 
     for i in range(5):
         print("\n" + "="*50)

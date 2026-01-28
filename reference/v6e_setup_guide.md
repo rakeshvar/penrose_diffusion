@@ -17,16 +17,7 @@ pip install torch~=2.6.0 --index-url https://download.pytorch.org/whl/cpu
 pip install torch_xla[tpu]~=2.6.0 \
   -f https://storage.googleapis.com/libtpu-releases/index.html \
   -f https://storage.googleapis.com/libtpu-wheels/index.html
-```
 
-```
-pip install torch~=2.6.0 torch_xla[tpu]~=2.6.0 \
-  -f https://storage.googleapis.com/libtpu-releases/index.html \
-  -f https://storage.googleapis.com/libtpu-wheels/index.html
-```
-
-### Clone
-```
 git clone https://github.com/rakeshvar/penrose_diffusion
 cd penrose_diffusion
 ```

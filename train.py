@@ -10,8 +10,9 @@ from code.compatibility import master_print as mprint
 from code.config import Config
 from code.data.load import MyDataset
 from code.filesystem import CheckPointer, load_model_state
-from code.model.augment import GeometryAugment
-from code.model.ddim import DDIMDiffuser, TransformerDenoiser
+from code.augment import GeometryAugment
+from code.model.diffusion import Diffuser
+from code.model.transformer import TransformerDenoiser
 from code.model.loss_helpers import circle_loss, lattice_loss, equal_angle_loss_var, equal_angle_loss_circular
 from code.model.sampler import save_sample
 from code.model.losses import get_loss
@@ -59,7 +60,7 @@ def train_fn(rank:int, config:Config):
     # Model Initialization
     #--------------------------------------------
     augmenter = GeometryAugment().to(device)
-    diffuser = DDIMDiffuser(num_timesteps=1000).to(device)
+    diffuser = Diffuser(num_timesteps=1000).to(device)
 
     denoiser = TransformerDenoiser(**config.denoiser).to(device)
     optimizer = torch.optim.AdamW(denoiser.parameters(), lr=config.train['lr'])

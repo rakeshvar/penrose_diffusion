@@ -3,7 +3,8 @@ import random
 import torch
 from pathlib import Path
 
-from code.model.ddim import DDIMDiffuser, TransformerDenoiser
+from code.model.diffusion import Diffuser
+from code.model.transformer import TransformerDenoiser
 from code.model.sampler import save_sample
 
 #--------------------------------------------
@@ -78,7 +79,7 @@ if __name__ == "__main__":
     denoiser.load_state_dict(cp['denoiser_state_dict'])
     denoiser.eval()
 
-    diffuser = DDIMDiffuser(num_timesteps=1000).to(device)
+    diffuser = Diffuser(num_timesteps=1000).to(device)
 
     # 4. Extract Metadata
     num_tiles = cp.get('num_tiles')
