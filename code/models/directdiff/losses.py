@@ -1,12 +1,10 @@
 from abc import ABC
 
-import torch
-import torch.nn.functional as F
 import code.compatibility as compat
 
-from code.model.diffusion import Diffuser
-from code.model.transformer import TransformerDenoiser
-from code.model.loss_helpers import circle_loss, equal_angle_loss_circular, lattice_loss, lsa_ordering_scipy, sinkhorn_permutation
+from ..diffuser import Diffuser
+from .denoiser import TransformerDenoiser
+from .loss_helpers import circle_loss, equal_angle_loss_circular, lattice_loss, lsa_ordering_scipy, sinkhorn_permutation
 
 #------------------------------------------------------------------------------
 # Registry & Factory for Selecting Losses
@@ -22,11 +20,11 @@ def register_loss(*aliases):
         return cls
     return decorator
 
-def get_loss(name: str, *args, **kwargs):
+def get_loss_functor_class(name: str):
     """Factory function to instantiate a loss by name (case-insensitive)."""
     key = name.lower()
     try:
-        return _LOSS_REGISTRY[key](*args, **kwargs)
+        return _LOSS_REGISTRY[key]
     except KeyError:
         error_msg = f"Loss '{name}' not found. Available losses:\n"
         for cls_name, alias_list in list_losses().items():
@@ -46,20 +44,17 @@ class AbstractLoss(ABC):
     def __init__(self,
                  denoiser: TransformerDenoiser,
                  diffuser: Diffuser,
-                 optimizer,
-                 device,
                  **kwargs_subclass):
         self.denoiser = denoiser
-        self.optimizer = optimizer
         self.diffuser = diffuser
-        self.device = device
+        self.device = next(denoiser.parameters()).device
 
     def __call__(self, xysc_0, colors, labels):
         self.denoiser.train()
         B = xysc_0.shape[0]
 
         # Forward pass - Add Noise
-        t = torch.randint(0, self.diffuser.num_timesteps, (B,), device=self.device).long()
+        t = torch.randint(0, self.diffuser.num_timesteps, (B,), device=xysc_0.device).long()
         xysc_t, noise = self.diffuser.q_sample(xysc_0, t)
 
         # Predict noise/sample
@@ -68,14 +63,7 @@ class AbstractLoss(ABC):
         # Compute loss (subclass-specific)
         loss = self.compute_loss(xysc_0, xysc_t, noise, prediction, colors, t) # type: ignore
 
-        # Backpropagate
-        self.optimizer.zero_grad()
-        loss.backward()
-
-        # Universal Step (TPU/GPU)
-        compat.optimizer_step(self.optimizer)
-
-        return loss.item()
+        return loss
 
     def __repr__(self):
         return f"{self.__class__.__name__}"
@@ -105,7 +93,7 @@ class VPredictionLoss(AbstractLoss):
     """
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.denoiser.predict = 'v'   
+        self.denoiser.predict = 'v'
 
     def compute_loss(self, xysc_0, xysc_t, noise, v_hat, colors, t):
         α_t = self.diffuser.ᾱ[t]          # [B, 1, 1] # type: ignore

@@ -20,7 +20,7 @@ def deep_merge_dict(target, source):
             target[k] = v
 
 
-VALID_SUBCONFIGS = ['train', 'denoiser', 'wandb']
+VALID_SUBCONFIGS = ['train', 'model', 'wandb']
 
 def update_config(target, source):
     for subconfig in source:
@@ -42,13 +42,14 @@ class Config:
         # Setup Argparse
         #-----------------------
         parser = argparse.ArgumentParser(description="Training Argument Parser")
+        parser.add_argument('base_config', help="First arguments must be the base config from configs.yaml")
 
         # Catch-all for your flexible positional args (ckpt, npz, config keys, .conf files)
         parser.add_argument('args', nargs='*', help="Sequence of .pt, .npz, .conf files, or config keys")
 
         # Flags for overrides
         parser.add_argument('-t', '--train', action='append', help="Override train config (key=value)")
-        parser.add_argument('-d', '--denoiser', action='append', help="Override denoiser config (key=value)")
+        parser.add_argument('-d', '--model', action='append', help="Override model config (key=value)")
         parser.add_argument('-w', '--wandb', action='append', help="Override wandb config (key=value)")
         parser.add_argument('-o', '--output_base_dir', help="Base directory for checkpoints, samples, etc.",
                             default=compat.OUTPUT_BASE_DIR)
@@ -65,21 +66,22 @@ class Config:
         self.config = {}
 
         #-----------------------
-        # Identify Checkpoint
-        # We need this first to establish the base config
+        # Load Base Config
         #-----------------------
+        with open('configs.yaml', 'r') as f:
+            self.library = yaml.safe_load(f)
+        self.config = self.library[self.parsed.base_config]
+
+        #-----------------------
+        # Update from Checkpoint
+        #-----------------------
+        # Identify checkpoint
         for arg in self.parsed.args:
             if arg.endswith('.pt'):
                 self.checkpoint_path = arg
                 break
 
-        #-----------------------
-        # Load Base Config (from checkpoint or defaults)
-        #-----------------------
-        with open('configs.yaml', 'r') as f:
-            self.library = yaml.safe_load(f)
-        self.config = self.library['default']
-
+        # Update config and data_path
         if self.checkpoint_path:
             ckpt = safe_torch_load(self.checkpoint_path, map_location='cpu')
             update_config(self.config, ckpt['config'])
@@ -95,9 +97,12 @@ class Config:
 
             del ckpt
 
-        # link to sub configs (initialize if they don't exist)
+        #-----------------------
+        # Link to sub configs 
+        # - initialize if they don't exist
+        #-----------------------
         self.train = self.config.setdefault('train', {})
-        self.denoiser = self.config.setdefault('denoiser', {})
+        self.model = self.config.setdefault('model', {})
         self.wandb = self.config.setdefault('wandb', {})
 
         #-----------------------
@@ -128,44 +133,49 @@ class Config:
         # Apply Flag Overrides (-t, -d, -w)
         #-----------------------
         if self.parsed.train:
-            print("Train config overrides:")
             for kv in self.parsed.train:
-                self._update_from_kv(kv, self.train)
+                self._update_from_kv(kv, "train")
 
-        if self.parsed.denoiser:
-            print("Denoiser config overrides:")
-            for kv in self.parsed.denoiser:
-                self._update_from_kv(kv, self.denoiser)
+        if self.parsed.model:
+            for kv in self.parsed.model:
+                self._update_from_kv(kv, "model")
 
         if self.parsed.wandb:
-            print("WandB config overrides:")
             for kv in self.parsed.wandb:
-                self._update_from_kv(kv, self.wandb)
+                self._update_from_kv(kv, "wandb")
 
+        #-----------------------
+        # Finalize
+        #-----------------------
         self.timestamp = datetime.now().strftime("%m%d_%H%M")
         self.output_base_dir = self.parsed.output_base_dir
 
-        if not self.data_path_orig:
+        if 'data_path_orig' not in self.__dict__:
             raise ValueError("Must specify either a checkpoint or data path.\n"
                              f" (e.g., python {sys.argv[0]} checkpoint.pt data.npz)")
 
         self.data_path = maybe_download(self.data_path_orig, suffix='.npz')
 
 
-    def _update_from_kv(self, kv_str, target_dict):
-        """Parses key=value and updates target_dict with type inference."""
-        if '=' not in kv_str:
-            print(f"Warning: Invalid key-value pair '{kv_str}'. format must be key=value")
-            return
+    def _update_from_kv(self, kv_str, subconfig):
+        """
+        Parses key=value and updates target_dict with type inference.
+        """
 
-        key, val_str = kv_str.split('=', 1)
-        val = infer_type(val_str)
-        print(f"\t{key} = {val} ({type(val).__name__})", end=' ')
-        if key in target_dict:
-            print(f"(overrides {target_dict[key]})")
-        else:
-            print(f"(Warning: Adding anew, not found in configs.yaml)")
-        target_dict[key] = val
+        if '=' not in kv_str:
+            raise ValueError(f"Invalid key-value pair '{kv_str} for subconfig '{subconfig}'." 
+                             "Format must be key=value")
+
+        subconfig_dict = self.config[subconfig]
+        key, val = kv_str.split('=', 1)
+
+        if key not in subconfig_dict:
+            raise ValueError(f"Key '{key}' not found in config {subconfig}: {subconfig_dict}")
+
+        val = infer_type(val)
+        print(f"Overriding config.{subconfig}.{key} = {val} (type = {type(val).__name__})"
+              f"\toverrides {subconfig_dict[key]}")
+        subconfig_dict[key] = val
 
 
     def __str__(self):

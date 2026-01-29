@@ -1,5 +1,5 @@
 import math
-from code.utils import cross, svg_path, vertexy
+from code.utils_geom import cross, svg_path, vertexy
 from code.pen.base import PenGrid, TriangleGrid
 
 def svg_arc(U, V, W, ndigits):

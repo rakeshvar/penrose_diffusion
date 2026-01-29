@@ -50,7 +50,7 @@ class WandBLog:
          except Exception as e:
              warnings.warn(f"Failed to log: {e}")
 
-    def info(self, tr_conf, compat, dataset, denoiser, loss_functor):
+    def info(self, tr_conf, compat, dataset, model):
         if not self.enabled:
             return
 
@@ -68,17 +68,17 @@ class WandBLog:
             'dataset_size': len(dataset),
         })
 
-        num_params = sum(p.numel() for p in denoiser.parameters())
-        num_trainable = sum(p.numel() for p in denoiser.parameters() if p.requires_grad)
+        num_params = sum(p.numel() for p in model.parameters())
+        num_trainable = sum(p.numel() for p in model.parameters() if p.requires_grad)
         self.update_run_config({
-            'loss_function': type(loss_functor).__qualname__,
+            'loss_function': type(model.descriptor).__qualname__,
             'num_parameters': num_params,
             'num_trainable_parameters': num_trainable,
         })
 
         if self.config['watch_freq'] > 0:
             watch_freq = self.config['watch_freq']
-            self.run.watch(denoiser, log='all', log_freq=watch_freq) #type: ignore
+            self.run.watch(model, log='all', log_freq=watch_freq) #type: ignore
             print(f"✓ WandB watching model (freq={watch_freq})")
 
     #--------------------------------------

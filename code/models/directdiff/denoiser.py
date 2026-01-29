@@ -16,10 +16,10 @@ class SinusoidalPositionalEmbedding(nn.Module):
         """
         device = t.device
         n = self.dim // 2
-        i = torch.arange(n, device=device)          # 1000 = num_timesteps
-        ω = (1000 * math.pi) ** (-i/(n-1))          # Frequency ladder: ωᵢ = 1 / (πT)ⁱ⁾ⁿ
-        Φ = t[:, None] * ω[None, :]                 # Phase: Φ[m, i] = ω[i] · t[m] = C^(-i/H) tₘ
-        sinΦ, cosΦ = torch.sin(Φ), torch.cos(Φ)     # sin(ωᵢt) = sin(t/(πT)ⁱ⁾ⁿ)
+        i = torch.arange(n, device=device)
+        ω = (1000 * math.pi) ** (-i/(n-1))          # Frequency: ωᵢ = 1 / (πT)ⁱ⁾ⁿ
+        Φ = ω[None, :] * t[:, None]                 # Phase: Φ[m, i] = ω[i]·t[m] = tₘ / (πT)ⁱ⁾ⁿ
+        sinΦ, cosΦ = torch.sin(Φ), torch.cos(Φ)     # sin(ωᵢt) = sin(t/(πT)ⁱ⁾ⁿ) , i ∈ [0, n)
         return torch.cat([sinΦ, cosΦ], dim=-1)
 
 class TransformerDenoiser(nn.Module):
@@ -33,7 +33,8 @@ class TransformerDenoiser(nn.Module):
         num_layers: int,
         dropout: float,
         predict: str='noise',
-        num_global_tokens: int=4
+        num_global_tokens: int=4,
+        **ignore
     ):
         super().__init__()
         self.predict = predict
@@ -102,44 +103,34 @@ class TransformerDenoiser(nn.Module):
         Returns:
             noise: (B, N, 4) - predicted noise for [x, y, sin, cos]
         """
-        B, N, _ = xysc.shape
-        
-        # 1. Project input tiles
+        B, _, _ = xysc.shape
+
+        # project to d_model        
         h = self.input_proj(xysc)                           # B, N, D
 
-        # 2. Add Color Embedding
-        # Ensure colors are (B, N) for embedding lookup
-        if colors.dim() == 3:
-            colors = colors.squeeze(-1)                     # B, N
-
+        # color embedding
         h_color = self.color_embed(colors)                  # B, N, D
         h = h + h_color
 
-        # 3. Add Time Embedding (to tile tokens only)
-        time_emb = self.time_embed(t).unsqueeze(1)          # B, 1, D
-        h = h + time_emb
-
-        # 4. Add class embedding (to tile tokens only)
-        class_emb = self.class_embed(class_labels)          # B, class_embed_dim
-        class_emb = self.class_proj(class_emb).unsqueeze(1) # B, 1, D
-        h = h + class_emb
-
-        # 5. Prepend global tokens
+        # global tokens
         global_tokens = self.global_tokens.expand(B, -1, -1)  # B, G, D
-        
-        # Add time and class embeddings to global tokens as well
-        global_tokens = global_tokens + time_emb + class_emb
         
         # Concatenate: [global_tokens, tile_tokens]
         h = torch.cat([global_tokens, h], dim=1)            # B, G+N, D
 
-        # 6. Apply transformer with unmasked self-attention
+        # time & class
+        time_emb = self.time_embed(t).unsqueeze(1)          # B, 1, D
+        class_emb = self.class_embed(class_labels)          # B, class_embed_dim
+        class_emb = self.class_proj(class_emb).unsqueeze(1) # B, 1, D
+        h = h + time_emb + class_emb
+
+        # process
         h = self.transformer(h)                             # B, G+N, D
 
-        # 7. Extract only the tile tokens (skip global tokens)
+        # Extract only the tile tokens (skip global tokens)
         h_tiles = h[:, self.num_global_tokens:, :]          # B, N, D
 
-        # 8. Normalize and project to noise
+        # Normalize and project to noise
         h_tiles = self.norm_out(h_tiles)
         h_tiles = self.dropout(h_tiles)
         noise_pred = self.output_proj(h_tiles)              # B, N, 4

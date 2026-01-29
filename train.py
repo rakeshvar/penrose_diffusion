@@ -2,22 +2,20 @@ import random
 import torch
 from pathlib import Path
 from tqdm import tqdm
+
 from torch.utils.data import DataLoader
 from torch.optim.lr_scheduler import LinearLR, CosineAnnealingLR, SequentialLR
+import torch.nn.utils as nn_utils
 
 import code.compatibility as compat
-from code.compatibility import master_print as mprint
 from code.config import Config
-from code.data.load import MyDataset
-from code.filesystem import CheckPointer, load_model_state
-from code.augment import GeometryAugment
-from code.model.diffusion import Diffuser
-from code.model.transformer import TransformerDenoiser
-from code.model.loss_helpers import circle_loss, lattice_loss, equal_angle_loss_var, equal_angle_loss_circular
-from code.model.sampler import save_sample
-from code.model.losses import get_loss
-from code.utils import pairwise_compare
+from code.utils_adv import xyac_to_svgs
 from code.wandblog import WandBLog
+from code.data.load import MyDataset
+from code.filesystem import CheckPointer, load_checkpoint
+from code.compatibility import master_print as mprint
+
+from code.models import get_model_class
 
 # Suppress nested tensor warnings
 import warnings
@@ -59,21 +57,18 @@ def train_fn(rank:int, config:Config):
     #--------------------------------------------
     # Model Initialization
     #--------------------------------------------
-    augmenter = GeometryAugment().to(device)
-    diffuser = Diffuser(num_timesteps=1000).to(device)
+    Model = get_model_class(config.model['model'])
+    model = Model(config.model).to(device)
+    optimizer = torch.optim.AdamW(model.parameters(), lr=config.train['lr'])
 
-    denoiser = TransformerDenoiser(**config.denoiser).to(device)
-    optimizer = torch.optim.AdamW(denoiser.parameters(), lr=config.train['lr'])
-
-    # 2. Init Scheduler (Create it NOW, before loading state)
+    # Scheduler (Create it NOW, before loading state)
     warmup_epochs = min(10, int(config.train['num_epochs'] * 0.05))
     decay_epochs = config.train['num_epochs'] - warmup_epochs
-
     scheduler1 = LinearLR(optimizer, start_factor=0.01, total_iters=warmup_epochs)
     scheduler2 = CosineAnnealingLR(optimizer, T_max=decay_epochs)
     scheduler = SequentialLR(optimizer, schedulers=[scheduler1, scheduler2], milestones=[warmup_epochs])
 
-    load_model_state(config.checkpoint_path, denoiser, optimizer, scheduler, rank)
+    load_checkpoint(config.checkpoint_path, model, optimizer, scheduler, rank)
 
     # Move to device
     for state in optimizer.state.values():
@@ -83,14 +78,11 @@ def train_fn(rank:int, config:Config):
             elif not isinstance(v, (int, float, bool, type(None))):
                 warnings.warn(f"Unexpected optimizer state type: '{type(v)}' for key '{k}'")
 
-    # Select Loss Function
-    lossfunctor = get_loss(config.train['loss'], denoiser, diffuser, optimizer, device)
-    mprint(f"Loss function: {lossfunctor} ({lossfunctor.abbr})", rank)
 
     #--------------------------------------------
     # Set an identifier for the run
     #--------------------------------------------
-    identifier = f"{config.timestamp}_d{config.denoiser['d_model']}_{lossfunctor.abbr}_t{dataset.num_tiles:03d}"
+    identifier = f"{config.timestamp}_{model.descriptor}_t{dataset.num_tiles:03d}"
     mprint(f"Identifier for this run: {identifier}", rank)
 
     #--------------------------------------------
@@ -101,7 +93,7 @@ def train_fn(rank:int, config:Config):
         config.wandb['run_name'] = identifier
 
     wandblog = WandBLog(rank, config.wandb)
-    wandblog.info(config, compat, dataset, denoiser, lossfunctor)
+    wandblog.info(config, compat, dataset, model)
 
     #--------------------------------------------
     # Initialize Checkpointer
@@ -131,42 +123,36 @@ def train_fn(rank:int, config:Config):
 
         for batch in progressbar:
             xya, colors, labels = batch
-            xysc_hat = augmenter(xya)
-            loss = lossfunctor(xysc_hat, colors, labels)
-            total_loss += loss
+            loss = model.train_step(xya, colors, labels)
+
+            # Backpropagate
+            optimizer.zero_grad()
+            loss.backward()
+            compat.optimizer_step(optimizer)
+
+            total_loss += loss.item()
             count += 1
 
             progressbar.set_description(f"Epoch {epoch} | Loss: {loss:.4f}")
-        
+
         scheduler.step()
         avg_loss = total_loss / count if count > 0 else 0
 
         to_log = {
             'loss': avg_loss,
-            'grad_norm': lsgradient_norm(denoiser),
+            'grad_norm': nn_utils.clip_grad_norm_(model.parameters(), float('inf')),
             'learning_rate': optimizer.param_groups[0]['lr']
         }
 
         if is_master:
-            ckptr.save_checkpoint(epoch, denoiser, optimizer, scheduler, avg_loss) # type: ignore
+          ckptr.save_checkpoint(epoch, model, optimizer, scheduler, avg_loss) # type: ignore
 
-            if config.train['save_samples']:
-                # Sample via the diffuser (using the denoiser)
-                svg, xysc_hat = save_sample(denoiser, diffuser, device, None,
-                    dataset.num_tiles, dataset.symmetry, dataset.side, sample_label)
-                
-                svg_fname = f"sv{config.timestamp}_e{epoch:03d}_{sample_name}.svg"
-                ckptr.save_svg(svg, svg_fname)                                  # type: ignore
-                wandblog.lsvg(epoch, svg, sample_label, sample_name)
-
-                # Save some special losses
-                latticeloss = lattice_loss(xysc_hat, dataset.side, dataset.symmetry).item()
-                circleloss = circle_loss(xysc_hat).item()
-                ealoss_var = equal_angle_loss_var(xysc_hat).item()
-                ealoss_cir = equal_angle_loss_circular(xysc_hat).item()
-                to_log.update({'lattice_loss': latticeloss, 'circle_loss': circleloss, 
-                               'equal_angle_loss_var': ealoss_var, 'equal_angle_loss_circular': ealoss_cir})
-                pairwise_compare([latticeloss, circleloss, ealoss_var, ealoss_cir], ["lattice", "circle", "eal_var", "eal_cir"], f"Losses")
+          if config.train['save_samples']:
+            samples = model.sample([sample_label], dataset.num_tiles, dataset.symmetry, 50)
+            svg = xyac_to_svgs(samples, dataset.symmetry, dataset.side)[0]
+            svg_fname = f"sv{config.timestamp}_e{epoch:03d}_{sample_name}.svg"
+            ckptr.save_svg(svg, svg_fname)                                    # type: ignore
+            wandblog.lsvg(epoch, svg, sample_label, sample_name)
 
         wandblog.log_step(to_log, step=epoch)
         mprint(f"Epoch {epoch} done. Average Loss: {avg_loss:.4f}\n", rank)
@@ -174,14 +160,6 @@ def train_fn(rank:int, config:Config):
     wandblog.finish()
     mprint("\n======\nDone!\n======", rank)
 
-
-def lsgradient_norm(denoiser):
-    total_sq_norm = 0.0
-    for p in denoiser.parameters():
-        if p.grad is not None:
-            param_norm = p.grad.data.norm(2)
-            total_sq_norm += param_norm.item() ** 2
-    return total_sq_norm ** 0.5
 
 #------
 # Main

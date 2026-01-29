@@ -1,7 +1,7 @@
 import sys
 import numpy as np
 import torch
-from code.model.diffusion import Diffuser  # Assumes ddim.py is in the same folder
+from code.models.diffuser import Diffuser  # Assumes ddim.py is in the same folder
 
 NBAR = 85
 

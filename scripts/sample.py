@@ -3,9 +3,10 @@ import random
 import torch
 from pathlib import Path
 
-from code.model.diffusion import Diffuser
-from code.model.transformer import TransformerDenoiser
-from code.model.sampler import save_sample
+from code.models import get_model_class
+from code.models.directdiff.denoiser import TransformerDenoiser
+from code.models.diffuser import Diffuser
+
 
 #--------------------------------------------
 # Interactive CLI

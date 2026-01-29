@@ -1,5 +1,5 @@
 import math
-from code.utils import inscribed_square_halfside
+from code.utils_geom import inscribed_square_halfside
 
 def get_color(q, r, s):
     """
@@ -186,4 +186,4 @@ class HexGrid:
 
     @property
     def side(self):
-        return self.hexxyas[0].side   
+        return self.hexxyas[0].side

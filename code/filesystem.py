@@ -40,7 +40,7 @@ def maybe_download(path:str, suffix=""):
 #--------------------------------------------
 # Loader
 #--------------------------------------------
-def load_model_state(checkpoint_path, denoiser, optimizer, scheduler, rank):
+def load_checkpoint(checkpoint_path, denoiser, optimizer, scheduler, rank):
     if not checkpoint_path:
         return
 

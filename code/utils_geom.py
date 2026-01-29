@@ -1,0 +1,122 @@
+import cmath
+import math
+
+import numpy as np
+
+
+TOL = 1e-6
+
+#-------------------------------------------------------------------------------
+# Geometic Utilities
+#-------------------------------------------------------------------------------
+def cross(u, v):
+    return u.real*v.imag - u.imag*v.real
+
+def deg(rad_or_dir):
+    if isinstance(rad_or_dir, complex):
+        return cmath.phase(rad_or_dir) * 180 / math.pi
+    else:
+        return rad_or_dir * 180 / math.pi
+
+def reim(v):
+    return v.real, v.imag
+
+
+def vertexy(v):
+    if isinstance(v, complex):
+        return v.real, v.imag
+    else:
+        return v[0], v[1]
+
+def prettxy(v, ndigits=None):
+    x, y = vertexy(v)
+
+    if ndigits is None:
+        return x, y
+
+    if ndigits == 0:
+        return int(round(x)), int(round(y))
+
+    if ndigits is not None:
+        return format(x, f".{ndigits}f"), format(y, f".{ndigits}f")
+
+    raise ValueError(f"Unknown value for ndigits: {ndigits}")
+
+def svg_path(polygon, ndigits):
+    # Flip x, y to match image convention
+    vertices = polygon.vertices
+    ay, ax = prettxy(vertices[0], ndigits=ndigits)
+    path = f"M{ax},{ay} "
+    for v in vertices[1:]:
+        vy, vx = prettxy(v, ndigits=ndigits)
+        path += f"L{vx},{vy} "
+    path += "Z"
+    return path
+
+
+def display_svg(filename):
+    from IPython.display import SVG, display
+    with open(filename, 'r') as fp:
+        svg = fp.read()
+        display(SVG(svg))
+
+
+def detect_duplicates(grid, ndigits=4):
+    lookup = {}
+    duplicates = []
+    for h in grid:
+        x, y = h.center
+        key = int(x*10**ndigits), int(y*10**ndigits)
+        if key in lookup:
+            duplicates.append(h)
+        else:
+            lookup[key] = h
+    return duplicates
+
+
+
+def inscribed_square_halfside(grid):
+    """
+    Given a set of points, it will give the half-side of the smallest inscribed square.
+    The simple appoarch works because the grid is such that the in-circle touches (x_max, 0) or (0, y_max).
+    """
+    try:
+        l1, l2 = [h.center[0] for h in grid], [h.center[1] for h in grid]
+    except TypeError:
+        l1, l2 = [h.center.real for h in grid], [h.center.imag for h in grid]
+
+    return min(max(map(abs, l1)), max(map(abs, l2))) / math.sqrt(2)
+
+
+def zealous_crop(arr, margin=0):
+    """
+    Remove blank space around the border while maintaining a minimum margin.
+
+    Args:
+        arr: numpy array of the image (binary after thresholding)
+        margin: minimum number of pixels to keep as border around the content
+
+    Returns:
+        Cropped numpy array with specified margin
+    """
+    # Find non-empty rows and columns
+    non_empty_rows = np.where(arr.any(axis=1))[0]
+    non_empty_cols = np.where(arr.any(axis=0))[0]
+
+    if non_empty_rows.size == 0 or non_empty_cols.size == 0:
+        return arr  # Return original if entirely blank
+
+    # Get the content boundaries
+    top_content = non_empty_rows[0]
+    bottom_content = non_empty_rows[-1]
+    left_content = non_empty_cols[0]
+    right_content = non_empty_cols[-1]
+
+    # Calculate crop boundaries with margin
+    top = max(0, top_content - margin)
+    bottom = min(arr.shape[0] - 1, bottom_content + margin)
+    left = max(0, left_content - margin)
+    right = min(arr.shape[1] - 1, right_content + margin)
+
+    # Crop the array
+    return arr[top:bottom+1, left:right+1]

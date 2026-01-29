@@ -68,7 +68,7 @@ class Diffuser(nn.Module):
             ϵ_pred = (xₜ - self.rᾱ[t]*xysc_0_pred)/self.r1mᾱ[t]
             # ̂ϵ = (xₜ -  √ᾱₜ x̂₀) / √(1 − ᾱₜ)
 
-        else:                                                       # predict ϵ
+        else:    
             ϵ_pred = denoiser(xₜ, colors, t, class_labels)
             xysc_0_pred = (xₜ - self.r1mᾱ[t]*ϵ_pred)/self.rᾱ[t]
             #  x̂₀ = (xₜ -  √(1 − ᾱₜ) ̂ϵ) / √ᾱₜ
@@ -105,7 +105,7 @@ class Diffuser(nn.Module):
         # Start from pure noise (only for first 4 dimensions)
         xysc = torch.randn((batch_size, num_tiles, 4), device=device)
         prob = {6: 1/3, 5: (3-5**0.5)/2}[symmetry]
-        colors = (torch.rand((batch_size, num_tiles, 1), device=device) < prob).long()
+        colors = (torch.rand((batch_size, num_tiles), device=device) < prob).long()
 
         # Time steps for DDIM
         times = torch.linspace(self.num_timesteps - 1, 0, num_steps + 1, device=device).long()

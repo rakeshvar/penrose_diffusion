@@ -2,7 +2,7 @@ import math
 import cmath
 import copy
 from collections import Counter
-from code.utils import deg, TOL
+from code.utils_geom import deg, TOL
 
 from code.pen.base import Triangle, TriangleGrid, Rhombus
 from code.pen.svg import save_svg

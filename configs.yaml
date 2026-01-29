@@ -1,44 +1,3 @@
-# configs.yaml
-
-# ---------------------------------------------------------
-# denoisers
-# ---------------------------------------------------------
-denoiser32: &denoiser32
-  num_classes: 70
-  class_embed_dim: 8
-  time_embed_dim: 16
-  d_model: 32
-  num_heads: 4
-  num_layers: 2
-  dropout: 0.
-
-denoiser64: &denoiser64
-  num_classes: 70
-  class_embed_dim: 16
-  time_embed_dim: 32
-  d_model: 64
-  num_heads: 4
-  num_layers: 4
-  dropout: 0.1
-
-denoiser128: &denoiser128
-  num_classes: 70
-  class_embed_dim: 32
-  time_embed_dim: 64
-  d_model: 128
-  num_heads: 8
-  num_layers: 4
-  dropout: 0.1
-
-denoiser256: &denoiser256
-  num_classes: 70
-  class_embed_dim: 64
-  time_embed_dim: 128
-  d_model: 256
-  num_heads: 8
-  num_layers: 6
-  dropout: 0.2
-
 #---------------------------------------------------------
 # Training
 #---------------------------------------------------------
@@ -46,7 +5,6 @@ default_train: &default_train
   lr: 0.001
   batch_size: 64
   num_epochs: 100
-  loss: 'Noise'
   save_samples: true
 
 #---------------------------------------------------------
@@ -74,21 +32,109 @@ nowatch_wandb:
   enable: true
   watch_freq: 0
 
+# ---------------------------------------------------------
+# direct model
+# ---------------------------------------------------------
+directcommon: &directcommon
+  model: "direct"
+  num_classes: 70
+  loss: "Noise"
+
+direct32: &direct32
+  <<: *directcommon
+  class_embed_dim: 8
+  time_embed_dim: 16
+  d_model: 32
+  num_heads: 4
+  num_layers: 2
+  dropout: 0.
+
+direct64: &direct64
+  <<: *directcommon
+  class_embed_dim: 16
+  time_embed_dim: 32
+  d_model: 64
+  num_heads: 4
+  num_layers: 4
+  dropout: 0.1
+
+direct128: &direct128
+  <<: *directcommon
+  class_embed_dim: 32
+  time_embed_dim: 64
+  d_model: 128
+  num_heads: 8
+  num_layers: 4
+  dropout: 0.1
+
+direct256: &direct256
+  <<: *directcommon
+  class_embed_dim: 64
+  time_embed_dim: 128
+  d_model: 256
+  num_heads: 8
+  num_layers: 6
+  dropout: 0.2
+
+#----------------------------------------------------------------
+# Latent
+#----------------------------------------------------------------
+latentcommon: &latentcommon
+  model: "latent"
+  num_classes: 70
+  loss: "Noise"
+
+latent32: &latent32
+  <<: *latentcommon
+  class_embed_dim: 8
+  time_embed_dim: 16
+  d_model: 32
+  num_heads: 4
+  num_layers: 2
+  dropout: 0.
+
+latent64: &latent64
+  <<: *latentcommon
+  class_embed_dim: 16
+  time_embed_dim: 32
+  d_model: 64
+  num_heads: 4
+  num_layers: 4
+  dropout: 0.1
+
+latent128: &latent128
+  <<: *latentcommon
+  class_embed_dim: 32
+  time_embed_dim: 64
+  d_model: 128
+  num_heads: 8
+  num_layers: 4
+  dropout: 0.1
+
+latent256: &latent256
+  <<: *latentcommon
+  class_embed_dim: 64
+  time_embed_dim: 128
+  d_model: 256
+  num_heads: 8
+  num_layers: 6 
+  dropout: 0.2
+
 # ----------------------------------------------------------------
 # EXPERIMENT GROUPS
 # This is what you select via CLI (e.g., train.py data.npz toy)
 # ----------------------------------------------------------------
 default:
-  denoiser:
-    <<: *denoiser64
+  model:
+    <<: *direct64
   train:
     <<: *default_train
   wandb:
     <<: *default_wandb
 
-toy:
-  denoiser:
-    <<: *denoiser32
+dtoy:
+  model:
+    <<: *direct32
   train:
     <<: *default_train
     num_epochs: 3
@@ -96,36 +142,50 @@ toy:
     <<: *default_wandb
     enable: true
     project: 'penrose-toy'
-    watch_freq: 0
 
 model32:
-  denoiser:
-    <<: *denoiser32
+  model:
+    <<: *direct32
   train:
     <<: *default_train
   wandb:
     <<: *default_wandb
 
 model64:
-  denoiser:
-    <<: *denoiser64
+  model:
+    <<: *direct64
   train:
     <<: *default_train
   wandb:
     <<: *default_wandb
 
 model128:
-  denoiser:
-    <<: *denoiser128
+  model:
+    <<: *direct128
   train:
     <<: *default_train
   wandb:
     <<: *default_wandb
 
 model256:
-  denoiser:
-    <<: *denoiser256
+  model:
+    <<: *direct256
   train:
     <<: *default_train
   wandb:
     <<: *default_wandb
+
+#----------------------------------------------------------------
+# EXPERIMENT GROUPS
+# This is what you select via CLI (e.g., train.py data.npz toy)
+#----------------------------------------------------------------
+ltoy:
+  model:
+    <<: *latent32
+  train:
+    <<: *default_train
+    num_epochs: 3
+  wandb:
+    <<: *default_wandb
+    enable: true
+    project: 'penrose-toy'

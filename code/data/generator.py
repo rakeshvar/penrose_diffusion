@@ -1,9 +1,9 @@
 import numpy as np
-from abc import ABC, abstractmethod
+from abc import ABC
 
 from code.pen.pregen import get_pen_mother_tiles
 from code.hex.pregen import get_hex_mother_tiles
-from code.utils import inscribed_square_halfside
+from code.utils_geom import inscribed_square_halfside
 
 class Generator(ABC):
     area_with_unit_side:float = 1.0
