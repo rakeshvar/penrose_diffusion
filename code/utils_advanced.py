@@ -29,6 +29,12 @@ def xyac_to_svgs(xyac, symmetry, side, save_paths=repeat(None)):
 # Tensor Ops
 #------------------------------------------------------------------------------
 
+def get_random_colors(symmetry, batch_size, num_tiles, device):
+    prob = {6: 1/3, 5: (3-5**0.5)/2}[symmetry]
+    unif = torch.rand((batch_size, num_tiles), device=device)
+    colors = (unif < prob).long()
+    return colors
+
 def xysc_to_xyac(xysc, colors=None):
     """
     Convert (x, y, sinθ, cosθ) to (x, y, θ) or (x, y, θ, color).

@@ -6,8 +6,8 @@ from scipy.optimize import linear_sum_assignment
 import torch
 import torch.nn.functional as F
 from torch_linear_assignment import batch_linear_assignment, assignment_to_indices
-from code.utils import pairwise_compare as compare
-from code.utils import linear_compare as compare
+from code.utils_basic import pairwise_compare as compare
+from code.utils_basic import linear_compare as compare
 
 # ==========================================
 # Only use XY to calculate distance

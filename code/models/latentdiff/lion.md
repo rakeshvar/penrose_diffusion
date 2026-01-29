@@ -1,7 +1,7 @@
 
 # LION
 ```mermaid
-flowchart TD
+flowchart LR
 
 %% Inputs
 subgraph INPUT1["Input"]
@@ -57,6 +57,7 @@ subgraph DEC["Decoder"]
   DECODER["Decoder"]
 end
 Z0 --> DECODER
+Q(("Q")) --> DECODER
 
 DECODER --> Tiles(["xya^"]) --> LREC
 COLORS2 --> DECODER

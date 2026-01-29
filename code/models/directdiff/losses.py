@@ -4,7 +4,7 @@ import code.compatibility as compat
 
 from ..diffuser import Diffuser
 from .denoiser import TransformerDenoiser
-from .loss_helpers import circle_loss, equal_angle_loss_circular, lattice_loss, lsa_ordering_scipy, sinkhorn_permutation
+from ...utils_loss import circle_loss, equal_angle_loss_circular, lattice_loss, lsa_ordering_scipy, sinkhorn_permutation
 
 #------------------------------------------------------------------------------
 # Registry & Factory for Selecting Losses
@@ -176,7 +176,7 @@ class PermutationInvariantLoss(AbstractLoss):
             soft_assignments = torch.softmax(logits, dim=-1)
             xysc_0_posterior = torch.bmm(soft_assignments, xysc_0)    # Batch matmul
 
-            noise_target = self.diffuser.recover_noise(xysc_t, t, xysc_0_posterior)
+            noise_target = self.diffuser.recover_ϵ(xysc_t, t, xysc_0_posterior)
 
         return F.mse_loss(noise_hat, noise_target)
 

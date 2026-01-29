@@ -32,6 +32,7 @@ class TransformerDenoiser(nn.Module):
         num_heads: int,
         num_layers: int,
         dropout: float,
+        io_dim: int=4,
         predict: str='noise',
         num_global_tokens: int=4,
         **ignore
@@ -39,13 +40,14 @@ class TransformerDenoiser(nn.Module):
         super().__init__()
         self.predict = predict
         self.d_model = d_model
+        self.io_dim = io_dim
         self.num_global_tokens = num_global_tokens
 
         # Learnable global tokens
         self.global_tokens = nn.Parameter(torch.randn(1, num_global_tokens, d_model))
 
         # Input projection
-        self.input_proj = nn.Linear(4, d_model)
+        self.input_proj = nn.Linear(io_dim, d_model)
 
         # Color embedding (Binary: 0 or 1)
         self.color_embed = nn.Embedding(2, d_model)
@@ -85,7 +87,7 @@ class TransformerDenoiser(nn.Module):
             nn.Dropout(dropout),
             nn.Linear(d_model * 2, d_model),
             nn.SiLU(),
-            nn.Linear(d_model, 4)
+            nn.Linear(d_model, io_dim)
         )
 
         # Layer norm for output
@@ -136,3 +138,7 @@ class TransformerDenoiser(nn.Module):
         noise_pred = self.output_proj(h_tiles)              # B, N, 4
 
         return noise_pred
+    
+    @property
+    def device(self):
+        return next(self.parameters()).device

@@ -3,7 +3,7 @@ import torch
 import numpy as np
 from pathlib import Path
 
-from code.models.directdiff.loss_helpers import lattice_loss
+from code.utils_loss import lattice_loss
 
 current_dir = Path(__file__).resolve().parent
 parent_dir = current_dir.parent
@@ -13,12 +13,12 @@ sys.path.append(str(parent_dir))
 from code.data.load import MyDataset
 from code.augment import GeometryAugment
 from code.models.diffuser import Diffuser
-from code.utils_adv import xysc_to_xyac
+from code.utils_advanced import xysc_to_xyac
 from code.hex.base import HexGrid
 from code.pen.base import PenGrid
 from code.hex.svg import save_svg as hex_save_svg
 from code.pen.svg import save_svg as pen_save_svg
-from code.utils import TablePrinter
+from code.utils_basic import TablePrinter
 
 # Table Printer
 tp = TablePrinter(8, 7, 4)

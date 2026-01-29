@@ -1,17 +1,41 @@
 import torch
 from code.augment import GeometryAugment
+from code.compatibility import maybe_mark_step
 from code.models.base import DiffusionModel
-from code.utils_adv import xya_to_xysc, xysc_to_xyac
+from code.utils_advanced import xya_to_xysc, xysc_to_xyac
 
 from .denoiser import TransformerDenoiser
 from ..diffuser import Diffuser
 from .losses import get_loss_functor_class
 
+#------------------------------------------------------------------------------
+# Diffuser
+#------------------------------------------------------------------------------
+class DirectDiffuser(Diffuser):
+    @torch.no_grad()
+    def sample(self, denoiser, colors, labels, num_steps=50, ddpm=0.):
+        device = denoiser.device
+        B, N = colors.shape
+        D = denoiser.io_dim
+        x = torch.randn((B, N, D), device=device)
+        times = torch.linspace(self.num_timesteps - 1, 0, num_steps + 1, device=device).long()
+
+        for i in range(num_steps):
+            t = torch.full((B,), times[i], device=device, dtype=torch.long) # type: ignore
+            ϵhat = denoiser(x, colors, t, labels)
+            x = self.p_sample(x, εhat, t, ddpm)
+            maybe_mark_step()
+
+        return x
+
+#------------------------------------------------------------------------------
+# Diffusion Model
+#------------------------------------------------------------------------------
 class DirectDiffusionModel(DiffusionModel):
-    def __init__(self, model_config):
+    def __init__(self, model_config, **ignore):
         super().__init__()
         self.augmenter = GeometryAugment()
-        self.diffuser = Diffuser(num_timesteps=1000)
+        self.diffuser = DirectDiffuser(2)
         self.denoiser = TransformerDenoiser(**model_config) # type: ignore
 
         Loss = get_loss_functor_class(model_config['loss'])
@@ -31,18 +55,13 @@ class DirectDiffusionModel(DiffusionModel):
         loss = self.loss_functor(xysc, colors, cls)
         return loss
     
-    def sample(self, labels, num_tiles, symmetry, num_steps):
-        class_labels = torch.tensor(labels, device=self.device)
-
-        xysc, colors = self.diffuser.sample(
+    def sample(self, colors, labels, num_steps):
+        xysc = self.diffuser.sample(
             self.denoiser, 
-            batch_size=class_labels.shape[0], 
-            num_tiles=num_tiles,
-            class_labels=class_labels, 
-            symmetry=symmetry, 
-            num_steps=num_steps
+            colors, 
+            labels, 
+            num_steps
         )
 
         xyac = xysc_to_xyac(xysc, colors)
-
         return xyac

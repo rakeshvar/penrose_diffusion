@@ -9,7 +9,7 @@ import torch.nn.utils as nn_utils
 
 import code.compatibility as compat
 from code.config import Config
-from code.utils_adv import xyac_to_svgs
+from code.utils_advanced import get_random_colors, xyac_to_svgs
 from code.wandblog import WandBLog
 from code.data.load import MyDataset
 from code.filesystem import CheckPointer, load_checkpoint
@@ -58,7 +58,7 @@ def train_fn(rank:int, config:Config):
     # Model Initialization
     #--------------------------------------------
     Model = get_model_class(config.model['model'])
-    model = Model(config.model).to(device)
+    model = Model(config.model, num_tiles=dataset.num_tiles).to(device)
     optimizer = torch.optim.AdamW(model.parameters(), lr=config.train['lr'])
 
     # Scheduler (Create it NOW, before loading state)
@@ -103,15 +103,19 @@ def train_fn(rank:int, config:Config):
         ckptr.add_fixed_ckpt_data(dataset, config.config, config.data_path_orig, wandblog.get_run_id())
 
     #--------------------------------------------
+    # Sample label and colors (to generate tiles)
+    #--------------------------------------------
+    sample_label = random.randint(0, dataset.num_classes - 1)
+    sample_label_tr = torch.tensor([sample_label], dtype=torch.long, device=device)
+    sample_name = dataset.class_lookup[sample_label]
+    sample_colors = get_random_colors(dataset.symmetry, 1, dataset.num_tiles, device)
+
+    #--------------------------------------------
     # Training Loop
     #--------------------------------------------
     start_epoch = config.resume_epoch
     total_epochs = start_epoch + config.train['num_epochs']
     iterator = range(start_epoch, total_epochs)
-
-    sample_label = random.randint(0, dataset.num_classes - 1)
-    sample_name = dataset.class_lookup[sample_label]
-
     mprint(f"Starting training for {len(iterator)} epochs...", rank)
 
     for epoch in iterator:
@@ -148,7 +152,7 @@ def train_fn(rank:int, config:Config):
           ckptr.save_checkpoint(epoch, model, optimizer, scheduler, avg_loss) # type: ignore
 
           if config.train['save_samples']:
-            samples = model.sample([sample_label], dataset.num_tiles, dataset.symmetry, 50)
+            samples = model.sample(sample_colors, sample_label_tr, 50)
             svg = xyac_to_svgs(samples, dataset.symmetry, dataset.side)[0]
             svg_fname = f"sv{config.timestamp}_e{epoch:03d}_{sample_name}.svg"
             ckptr.save_svg(svg, svg_fname)                                    # type: ignore

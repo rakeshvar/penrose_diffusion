@@ -1,7 +1,7 @@
 from pathlib import Path
 
 from code.data.load import MyDataset
-from code.utils import npz_stats
+from code.utils_basic import npz_stats
 
 for path in Path(".").rglob("*.npz"):
     print("#"* 50, "\nOpening: ", path)

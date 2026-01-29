@@ -1,7 +1,7 @@
 
 from code.hex.base import HexagonGrid, HexGrid
 from code.utils_geom import inscribed_square_halfside
-from code.utils import print_tile_stats
+from code.utils_basic import print_tile_stats
 
 def get_hex_mother_tiles(total_halfside, target_hex_side):
     hexagons = HexagonGrid.from_halfside(target_hex_side, total_halfside)

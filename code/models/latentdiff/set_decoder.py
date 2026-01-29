@@ -37,7 +37,7 @@ class PerceiverDecoder(nn.Module):
     def __init__(self, latent_dim, num_tiles):
         super().__init__()
 
-        self.queries = nn.Parameter(torch.randn(num_tiles, latent_dim))
+        self.queries = nn.Parameter(torch.randn(num_tiles, latent_dim)) # N, D
 
         self.blocks = nn.ModuleList([
             PerceiverBlock(latent_dim),
@@ -45,7 +45,7 @@ class PerceiverDecoder(nn.Module):
         ])
 
         self.output_mlp = nn.Sequential(
-            nn.Linear(latent_dim + 1, 256),
+            nn.Linear(latent_dim + 1, 256),             # 1 for color
             nn.ReLU(),
             nn.Linear(256, 256),
             nn.ReLU(),
@@ -53,11 +53,15 @@ class PerceiverDecoder(nn.Module):
         )
 
     def forward(self, z, color):
-        B, N, _ = color.shape
-        q = self.queries.unsqueeze(0).expand(B, -1, -1)
+        B, N = color.shape
+        q = self.queries.unsqueeze(0).expand(B, -1, -1)     # B, N, D
 
         for blk in self.blocks:
             q = blk(q, z)
-
-        return self.output_mlp(torch.cat([q, color], dim=-1))
+            # TODO: Make color also attend
+        
+        qc = torch.cat([q, color[..., None]], dim=-1)  # B, N, D+1
+        xyac = self.output_mlp(qc)                          # B, N, 3
+        
+        return xyac
 

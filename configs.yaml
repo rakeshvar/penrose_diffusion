@@ -82,43 +82,23 @@ direct256: &direct256
 latentcommon: &latentcommon
   model: "latent"
   num_classes: 70
-  loss: "Noise"
+  rec_loss: "sinkhorn"
 
 latent32: &latent32
   <<: *latentcommon
-  class_embed_dim: 8
-  time_embed_dim: 16
-  d_model: 32
-  num_heads: 4
-  num_layers: 2
-  dropout: 0.
+  latent_dim: 32
 
 latent64: &latent64
   <<: *latentcommon
-  class_embed_dim: 16
-  time_embed_dim: 32
-  d_model: 64
-  num_heads: 4
-  num_layers: 4
-  dropout: 0.1
+  latent_dim: 64
 
 latent128: &latent128
   <<: *latentcommon
-  class_embed_dim: 32
-  time_embed_dim: 64
-  d_model: 128
-  num_heads: 8
-  num_layers: 4
-  dropout: 0.1
+  latent_dim: 128
 
 latent256: &latent256
   <<: *latentcommon
-  class_embed_dim: 64
-  time_embed_dim: 128
-  d_model: 256
-  num_heads: 8
-  num_layers: 6 
-  dropout: 0.2
+  latent_dim: 256
 
 # ----------------------------------------------------------------
 # EXPERIMENT GROUPS
@@ -132,7 +112,7 @@ default:
   wandb:
     <<: *default_wandb
 
-dtoy:
+ddtoy:
   model:
     <<: *direct32
   train:
@@ -143,7 +123,7 @@ dtoy:
     enable: true
     project: 'penrose-toy'
 
-model32:
+dd32:
   model:
     <<: *direct32
   train:
@@ -151,7 +131,7 @@ model32:
   wandb:
     <<: *default_wandb
 
-model64:
+dd64:
   model:
     <<: *direct64
   train:
@@ -159,7 +139,7 @@ model64:
   wandb:
     <<: *default_wandb
 
-model128:
+dd128:
   model:
     <<: *direct128
   train:
@@ -167,7 +147,7 @@ model128:
   wandb:
     <<: *default_wandb
 
-model256:
+dd256:
   model:
     <<: *direct256
   train:
@@ -179,7 +159,7 @@ model256:
 # EXPERIMENT GROUPS
 # This is what you select via CLI (e.g., train.py data.npz toy)
 #----------------------------------------------------------------
-ltoy:
+ldtoy:
   model:
     <<: *latent32
   train:
@@ -189,3 +169,35 @@ ltoy:
     <<: *default_wandb
     enable: true
     project: 'penrose-toy'
+
+d32:
+  model:
+    <<: *latent32
+  train:
+    <<: *default_train
+  wandb:
+    <<: *default_wandb
+
+d64:
+  model:
+    <<: *latent64
+  train:
+    <<: *default_train
+  wandb:
+    <<: *default_wandb
+
+d128:
+  model:
+    <<: *latent128
+  train:
+    <<: *default_train
+  wandb:
+    <<: *default_wandb
+
+d256:
+  model:
+    <<: *latent256
+  train:
+    <<: *default_train
+  wandb:
+    <<: *default_wandb
