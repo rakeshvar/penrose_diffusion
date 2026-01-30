@@ -58,8 +58,8 @@ class Diffuser(nn.Module):
     def recover_ϵ(self, xₜ, t, x0):
         return (xₜ - self.rᾱ[t] * x0) / self.r1mᾱ[t]
     
-    def recover_ϵ_from_v(self, x_t, t, v):
-        return self.r1mᾱ[t] * x_t + self.rᾱ[t] * v
+    def calculate_v(self, x0, t, ϵ):
+        return -self.r1mᾱ[t] * x0 + self.rᾱ[t] * ϵ
     
 
     @torch.no_grad()

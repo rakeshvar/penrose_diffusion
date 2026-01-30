@@ -1,12 +1,15 @@
 import torch
-from code.augment import GeometryAugment
+
 from code.compatibility import maybe_mark_step
-from code.models.base import DiffusionModel
+from code.augment import GeometryAugment
 from code.utils_advanced import xya_to_xysc, xysc_to_xyac
 
-from .denoiser import TransformerDenoiser
 from ..diffuser import Diffuser
+from ..base import DiffusionModel
+from .direct_denoiser import TransformerDenoiser
+from .isab_denoiser import ISABDenoiser
 from .losses import get_loss_functor_class
+
 
 #------------------------------------------------------------------------------
 # Diffuser
@@ -36,8 +39,13 @@ class DirectDiffusionModel(DiffusionModel):
         super().__init__()
         self.augmenter = GeometryAugment()
         self.diffuser = DirectDiffuser(2)
-        self.denoiser = TransformerDenoiser(**model_config) # type: ignore
 
+        if model_config['model'] == 'direct':
+            self.denoiser = TransformerDenoiser(**model_config) # type: ignore
+        elif model_config['model'] == 'isab':
+            self.denoiser = ISABDenoiser(**model_config) # type: ignore
+        else:
+            raise NotImplementedError(f"Unknown model: {model_config['model']}")
         Loss = get_loss_functor_class(model_config['loss'])
         self.loss_functor = Loss(self.denoiser, self.diffuser)
 

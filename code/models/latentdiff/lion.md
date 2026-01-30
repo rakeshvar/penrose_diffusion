@@ -55,6 +55,7 @@ Z0 --> FWDIFF --> ZT --> DENOISER --> EPSHAT([" ̂ϵ"])  --> LDIFF
 %% Decoder
 subgraph DEC["Decoder"]
   DECODER["Decoder"]
+  Q
 end
 Z0 --> DECODER
 Q(("Q")) --> DECODER

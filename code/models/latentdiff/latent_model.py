@@ -3,7 +3,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 from code.augment import GeometryAugment
-from code.models.latentdiff.diffuser_denoiser import LatentDenoiser, LatentDiffuser
+from code.models.latentdiff.latent_denoiser import LatentDenoiser
 from code.utils_advanced import pairwise_sq_dist
 
 from .set_decoder import PerceiverDecoder
@@ -42,6 +42,33 @@ def sinkhorn_loss(x, y, colors, t):
 
 def kl_loss(mu, logvar):
     return -0.5 * torch.mean(1 + logvar - mu.pow(2) - logvar.exp())
+
+#------------------------------------------------------------
+# Diffuser
+# ------------------------------------------------------------
+from code.models.diffuser import Diffuser
+
+class LatentDiffuser(Diffuser):
+    @torch.no_grad()
+    def sample(self, denoiser, labels, num_steps=50, guidance_scale=2.0):
+        B = labels.shape[0]
+        D = denoiser.time_embed.embedding_dim
+        device = denoiser.device
+        NULL = denoiser.class_embed.num_embeddings - 1
+        nulls = torch.full_like(labels, NULL)
+
+        z = torch.randn((B, D), device=device)
+        times = torch.linspace(self.num_timesteps-1, 0, num_steps+1, device=device).long()
+
+        for i in range(num_steps):
+            t = torch.full((B,), times[i], device=device, dtype=torch.long) # type: ignore
+            ε_cond = denoiser(z, t, labels)
+            ε_null = denoiser(z, t, nulls)
+            ε_hatt = (1 + guidance_scale) * ε_cond - guidance_scale * ε_null
+            z = self.p_sample(z, ε_hatt, t)
+
+        return z
+
 
 #------------------------------------------------------------
 # Model

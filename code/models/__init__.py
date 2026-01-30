@@ -1,10 +1,10 @@
 
-from code.models.directdiff.model import DirectDiffusionModel
-from code.models.latentdiff.model import LatentDiffusionModel
-
+from .directdiff.direct_model import DirectDiffusionModel
+from .latentdiff.latent_model import LatentDiffusionModel
 
 _MODEL_REGISTRY = {
     'direct': DirectDiffusionModel,
+    'isab': DirectDiffusionModel,
     'latent': LatentDiffusionModel,
 }
 

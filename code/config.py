@@ -49,7 +49,7 @@ class Config:
 
         # Flags for overrides
         parser.add_argument('-t', '--train', action='append', help="Override train config (key=value)")
-        parser.add_argument('-d', '--model', action='append', help="Override model config (key=value)")
+        parser.add_argument('-m', '--model', action='append', help="Override model config (key=value)")
         parser.add_argument('-w', '--wandb', action='append', help="Override wandb config (key=value)")
         parser.add_argument('-o', '--output_base_dir', help="Base directory for checkpoints, samples, etc.",
                             default=compat.OUTPUT_BASE_DIR)
@@ -130,7 +130,7 @@ class Config:
                     raise ValueError(f"Warning: Config group '{arg}' not found in configs.yaml")
 
         #-----------------------
-        # Apply Flag Overrides (-t, -d, -w)
+        # Apply Flag Overrides (-t, -m, -w)
         #-----------------------
         if self.parsed.train:
             for kv in self.parsed.train:

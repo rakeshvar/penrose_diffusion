@@ -1,9 +1,11 @@
 from abc import ABC
 
-import code.compatibility as compat
+import torch
+import torch.nn.functional as F
 
 from ..diffuser import Diffuser
-from .denoiser import TransformerDenoiser
+from .direct_denoiser import TransformerDenoiser
+from .isab_denoiser import ISABDenoiser
 from ...utils_loss import circle_loss, equal_angle_loss_circular, lattice_loss, lsa_ordering_scipy, sinkhorn_permutation
 
 #------------------------------------------------------------------------------
@@ -42,7 +44,7 @@ def list_losses():
 #------------------------------------------------------------------------------
 class AbstractLoss(ABC):
     def __init__(self,
-                 denoiser: TransformerDenoiser,
+                 denoiser: TransformerDenoiser | ISABDenoiser,
                  diffuser: Diffuser,
                  **kwargs_subclass):
         self.denoiser = denoiser
@@ -82,13 +84,9 @@ class NoisePredictionLoss(AbstractLoss):
     def compute_loss(self, xysc_0, xysc_t, noise, noise_hat, colors, t):
         return F.mse_loss(noise, noise_hat)
 
-import torch
-import torch.nn.functional as F
-
 class VPredictionLoss(AbstractLoss):
     """
-    Assumes the denoiser predicts:
-        v = sqrt(alpha_t) * eps - sqrt(1 - alpha_t) * x0
+    Assumes the denoiser predicts: v =  −√(1−αₜ) ⋅ x₀ + √αₜ ⋅ ε 
     This loss has stable scale across timesteps and does NOT require reweighting.
     """
     def __init__(self, *args, **kwargs):
@@ -96,11 +94,8 @@ class VPredictionLoss(AbstractLoss):
         self.denoiser.predict = 'v'
 
     def compute_loss(self, xysc_0, xysc_t, noise, v_hat, colors, t):
-        α_t = self.diffuser.ᾱ[t]          # [B, 1, 1] # type: ignore
-        # TODO: make this a buffer in diffuser
-        σ_t = torch.sqrt(1.0 - α_t)       # [B, 1, 1]
-        v_0 = torch.sqrt(α_t) * noise - σ_t * xysc_0
-        return F.mse_loss(v_hat, v_0)
+        v = self.diffuser.calculate_v(xysc_0, t, noise)
+        return F.mse_loss(v, v_hat)
 
 #------------------------------------------------------------------------------
 # SamplePredictionLoss
@@ -142,7 +137,7 @@ class NoiseAssistedLoss(AbstractLoss):
         self.symmetry = kwargs["symmetry"] if "symmetry" in kwargs else 6
 
     def compute_loss(self, xysc_0, xysc_t, noise, noise_hat, colors, t):
-        xysc_0_hat = self.diffuser.recover_xysc(xysc_t, t, noise_hat)
+        xysc_0_hat = self.diffuser.recover_x(xysc_t, t, noise_hat)
         return F.mse_loss(noise, noise_hat) \
             + .33 * circle_loss(xysc_0_hat) \
             + .33 * equal_angle_loss_circular(xysc_0_hat) \
@@ -234,7 +229,7 @@ class LSALossSerial(AbstractLoss):
     def compute_loss(self, xysc_0, xysc_t, noise, noise_hat, colors, t):
         # Recover sample from predicted noise
         with torch.no_grad():
-            xysc_0_hat = self.diffuser.recover_xysc(xysc_t, t, noise_hat)
+            xysc_0_hat = self.diffuser.recover_x(xysc_t, t, noise_hat)
 
             # Cost Matrix for LSA
             # TODO: use cost = a^2 + b^2 - 2ab
@@ -312,9 +307,4 @@ class LSALossParallel(AbstractLoss):
         # Loss
         loss = F.mse_loss(noise[bi, ti], noise_hat[bi, pi])
 
-        # Backpropagate
-        self.optimizer.zero_grad()
-        loss.backward()
-        compat.optimizer_step(self.optimizer)
-
-        return loss.item()
+        return loss

@@ -1,26 +1,6 @@
-import math
 import torch
 from torch import nn
-
-
-class SinusoidalPositionalEmbedding(nn.Module):
-    """Sinusoidal positional embedding for time"""
-    def __init__(self, dim):
-        super().__init__()
-        self.dim = dim
-
-    def forward(self, t):
-        """
-        t: (B,) integer diffusion timesteps
-        returns: (B, dim) sinusoidal time embedding
-        """
-        device = t.device
-        n = self.dim // 2
-        i = torch.arange(n, device=device)
-        ω = (1000 * math.pi) ** (-i/(n-1))          # Frequency: ωᵢ = 1 / (πT)ⁱ⁾ⁿ
-        Φ = ω[None, :] * t[:, None]                 # Phase: Φ[m, i] = ω[i]·t[m] = tₘ / (πT)ⁱ⁾ⁿ
-        sinΦ, cosΦ = torch.sin(Φ), torch.cos(Φ)     # sin(ωᵢt) = sin(t/(πT)ⁱ⁾ⁿ) , i ∈ [0, n)
-        return torch.cat([sinΦ, cosΦ], dim=-1)
+from ..sinusoidal import SinusoidalPositionalEmbedding
 
 class TransformerDenoiser(nn.Module):
     def __init__(
@@ -79,6 +59,8 @@ class TransformerDenoiser(nn.Module):
             num_layers=num_layers
         )
 
+        # Layer norm for output
+        self.norm_out = nn.LayerNorm(d_model)
         # Output projection - predict noise for x, y, sin, cos
         # Only applied to tile tokens, not global tokens
         self.output_proj = nn.Sequential(
@@ -90,10 +72,6 @@ class TransformerDenoiser(nn.Module):
             nn.Linear(d_model, io_dim)
         )
 
-        # Layer norm for output
-        self.norm_out = nn.LayerNorm(d_model)
-
-        self.dropout = nn.Dropout(dropout)
 
     def forward(self, xysc, colors, t, class_labels):
         """
@@ -134,7 +112,6 @@ class TransformerDenoiser(nn.Module):
 
         # Normalize and project to noise
         h_tiles = self.norm_out(h_tiles)
-        h_tiles = self.dropout(h_tiles)
         noise_pred = self.output_proj(h_tiles)              # B, N, 4
 
         return noise_pred
