@@ -76,10 +76,6 @@ direct256: &direct256
   num_layers: 6
   dropout: 0.2
 
-isab:
-  model:
-    model: "isab"
-
 #----------------------------------------------------------------
 # Latent
 #----------------------------------------------------------------
@@ -115,6 +111,10 @@ default:
     <<: *default_train
   wandb:
     <<: *default_wandb
+
+isab:
+  model:
+    model: "isab"
 
 ddtoy:
   model:
@@ -174,7 +174,7 @@ ldtoy:
     enable: true
     project: 'penrose-toy'
 
-d32:
+ld32:
   model:
     <<: *latent32
   train:
@@ -182,7 +182,7 @@ d32:
   wandb:
     <<: *default_wandb
 
-d64:
+ld64:
   model:
     <<: *latent64
   train:
@@ -190,7 +190,7 @@ d64:
   wandb:
     <<: *default_wandb
 
-d128:
+ld128:
   model:
     <<: *latent128
   train:
@@ -198,7 +198,7 @@ d128:
   wandb:
     <<: *default_wandb
 
-d256:
+ld256:
   model:
     <<: *latent256
   train:
