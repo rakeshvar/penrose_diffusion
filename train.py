@@ -9,7 +9,7 @@ import torch.nn.utils as nn_utils
 
 import code.compatibility as compat
 from code.config import Config
-from code.utils_advanced import get_random_colors, xyac_to_svgs
+from code.utils.advanced import get_random_colors, xyac_to_svgs
 from code.wandblog import WandBLog
 from code.data.load import MyDataset
 from code.filesystem import CheckPointer, load_checkpoint
@@ -45,7 +45,7 @@ def train_fn(rank:int, config:Config):
         'batch_size': config.train['batch_size'],
         'sampler': distributed_sampler,
         'shuffle': distributed_sampler is None,           # distributed_sampler handles shuffling
-        'num_workers': 0 if distributed_sampler else 4,   # distributed_sampler handles multi-threading
+        'num_workers': 8, #0 if distributed_sampler else 4,   # distributed_sampler handles multi-threading
         'drop_last': True
     }
     raw_loader = DataLoader(dataset, **loader_args)

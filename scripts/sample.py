@@ -3,8 +3,7 @@ import random
 import torch
 from pathlib import Path
 
-from code.models import get_model_class
-from code.models.directdiff.denoiser import TransformerDenoiser
+from code.models.directdiff.direct_denoiser import TransformerDenoiser
 from code.models.diffuser import Diffuser
 
 

@@ -1,6 +1,6 @@
 from code.data.generator import Generator5, Generator6
 from code.data.imageset import ImageSet
-from code.utils_basic import npz_stats
+from code.utils.basic import npz_stats
 
 from code.data.create import generate_and_save
 

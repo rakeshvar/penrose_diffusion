@@ -2,13 +2,13 @@ import torch
 
 from code.compatibility import maybe_mark_step
 from code.augment import GeometryAugment
-from code.utils_advanced import xya_to_xysc, xysc_to_xyac
+from code.utils.advanced import xya_to_xysc, xysc_to_xyac
 
 from ..diffuser import Diffuser
 from ..base import DiffusionModel
 from .direct_denoiser import TransformerDenoiser
 from .isab_denoiser import ISABDenoiser
-from .losses import get_loss_functor_class
+from .direct_losses import loss_registry
 
 
 #------------------------------------------------------------------------------
@@ -26,7 +26,7 @@ class DirectDiffuser(Diffuser):
         for i in range(num_steps):
             t = torch.full((B,), times[i], device=device, dtype=torch.long) # type: ignore
             ϵhat = denoiser(x, colors, t, labels)
-            x = self.p_sample(x, εhat, t, ddpm)
+            x = self.p_sample(x, ϵhat, t, ddpm)
             maybe_mark_step()
 
         return x
@@ -47,7 +47,7 @@ class DirectDiffusionModel(DiffusionModel):
             self.denoiser = ISABDenoiser(**model_config) # type: ignore
         else:
             raise NotImplementedError(f"Unknown model: {model_config['model']}")
-        Loss = get_loss_functor_class(model_config['loss'])
+        Loss = loss_registry.get(model_config['loss'])
         self.loss_functor = Loss(self.denoiser, self.diffuser)
 
     @property

@@ -1,14 +1,15 @@
+from math import pi, sqrt
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
 from code.augment import GeometryAugment
 from code.models.latentdiff.latent_denoiser import LatentDenoiser
-from code.utils_advanced import pairwise_sq_dist
-from code.utils_loss import sinkhorn_permutation
+from code.utils.lossy import hex_lattice_loss
 
 from .set_decoder import PerceiverDecoder
 from .set_encoder import SetEncoder
+from .latent_losses import loss_registry
 
 # ------------------------------------------------------------
 # μ, σ2 → z
@@ -18,25 +19,6 @@ def reparameterize(mu, logvar):
     std = torch.exp(0.5 * logvar)
     eps = torch.randn_like(std)
     return mu + eps * std
-
-
-# ------------------------------------------------------------
-# Reconstruction losses (Permutation invariant)
-# ------------------------------------------------------------
-def chamfer_loss(x, y, colors):
-    sq_dist = pairwise_sq_dist(x, y, colors)                # B, N, N
-    loss_xy = sq_dist.min(dim=2).values.mean()
-    loss_yx = sq_dist.min(dim=1).values.mean()
-    return (loss_xy + loss_yx)/2.
-
-
-def sinkhorn_loss(x, y, colors):
-    sq_dist = pairwise_sq_dist(x, y, colors)         # B, N, N   
-    logits = -sq_dist/(2*.15**2)                     # .15 is unit_side of polygon
-    P = sinkhorn_permutation(logits)
-    y_post = torch.bmm(P, y)
-    return F.mse_loss(x, y_post)
-
 
 def kl_loss(mu, logvar):
     return -0.5 * torch.mean(1 + logvar - mu.pow(2) - logvar.exp())
@@ -78,21 +60,19 @@ class LatentDiffusionModel(nn.Module):
 
         latent_dim = config['latent_dim']
         num_classes = config['num_classes']
-        rec_loss = config['loss']
-        beta_kl = 1e-3
-        p_uncond = 1/7.
-
+        self.rec_loss = config['loss']
+        self.beta_kl = 1e-3
+        self.p_uncond = 1/7.
+        self.null_class = num_classes
+        self.latent_dim = latent_dim
+    
         self.augmenter = GeometryAugment()
         self.encoder = SetEncoder(latent_dim, num_classes)
         self.denoiser = LatentDenoiser(latent_dim, num_classes)
         self.decoder = PerceiverDecoder(latent_dim, num_tiles)
         self.diffuser = LatentDiffuser(1)
-        self.rec_loss =  rec_loss
-        self.beta_kl = beta_kl
-        self.p_uncond = p_uncond
-        self.null_class = num_classes
-        self.latent_dim = latent_dim
-    
+        self.recons_loss_fn = loss_registry.get(self.rec_loss)
+
     @property
     def device(self):
         return next(self.parameters()).device
@@ -102,6 +82,9 @@ class LatentDiffusionModel(nn.Module):
         return f"ld{self.latent_dim}_{self.rec_loss[:4]}"
 
     def train_step(self, x, color, cls):
+        x = self.augmenter(x)
+        x = x * torch.tensor([1., 1., sqrt(3)/pi], device=x.device)
+
         self.train()
         B = x.shape[0]
 
@@ -126,19 +109,22 @@ class LatentDiffusionModel(nn.Module):
 
         # Decoder
         x_hat = self.decoder(z0, color)
-        if self.rec_loss[:4] == "chamfer"[:4]:
-            loss_recons = chamfer_loss(x, x_hat, color)  
-        elif self.rec_loss[:4] == "sinkhorn"[:4]:
-            loss_recons = sinkhorn_loss(x, x_hat, color)
-        else:
-            raise NotImplementedError(f"Unknown reconstruction loss: {self.rec_loss}")
+        loss_recons = self.recons_loss_fn(x, x_hat, color)
 
-        loss = loss_recons + self.beta_kl * loss_kl + loss_diffusion
+        # Lattice
+        loss_lattice = hex_lattice_loss(x_hat, .18)
+
+        loss = loss_recons \
+                + self.beta_kl * loss_kl \
+                + loss_diffusion \
+                + loss_lattice
+        
         others = {
             "loss": loss.item(),
-            "recr": loss_recons.item(),
+            "recons": loss_recons.item(),
             "klmv": loss_kl.item(),
-            "diff": loss_diffusion.item(),
+            "diffusion": loss_diffusion.item(),
+            "lattice": loss_lattice.item()
         }
         return loss
 
@@ -151,5 +137,9 @@ class LatentDiffusionModel(nn.Module):
         )
 
         xya = self.decoder(z, colors)
-        xyac = torch.cat([xya, colors.unsqueeze(-1)], dim=-1)
+
+        # rescale angle to [-π, π] and attach color
+        xy, angle = xya.split([2, 1], dim=-1)
+        angle = angle * (pi / sqrt(3))
+        xyac = torch.cat([xy, angle, colors.unsqueeze(-1)], dim=-1)
         return xyac

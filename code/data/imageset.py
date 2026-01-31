@@ -4,7 +4,7 @@ from pathlib import Path
 from collections import defaultdict, namedtuple
 from tqdm import tqdm
 
-from code.utils_geom import zealous_crop
+from code.utils.geom import zealous_crop
 
 Sample = namedtuple("Sample", ["mask", "classid", "on", "classname", "inclassid"])
 

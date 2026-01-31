@@ -3,7 +3,7 @@ import torch
 import numpy as np
 from pathlib import Path
 
-from code.utils_loss import lattice_loss
+from code.utils.lossy import hex_lattice_loss
 
 current_dir = Path(__file__).resolve().parent
 parent_dir = current_dir.parent
@@ -13,12 +13,12 @@ sys.path.append(str(parent_dir))
 from code.data.load import MyDataset
 from code.augment import GeometryAugment
 from code.models.diffuser import Diffuser
-from code.utils_advanced import xysc_to_xyac
+from code.utils.advanced import xysc_to_xyac
 from code.hex.base import HexGrid
 from code.pen.base import PenGrid
 from code.hex.svg import save_svg as hex_save_svg
 from code.pen.svg import save_svg as pen_save_svg
-from code.utils_basic import TablePrinter
+from code.utils.basic import TablePrinter
 
 # Table Printer
 tp = TablePrinter(8, 7, 4)
@@ -35,7 +35,7 @@ def save_grid_svg(xyac, symmetry, side, filename, t):
 
     m = xyac.mean(axis=0)
     s = xyac.std(axis=0)
-    latice = lattice_loss(torch.from_numpy(xyac).unsqueeze(0), side, symmetry).item() # add batch dim
+    latice = hex_lattice_loss(torch.from_numpy(xyac).unsqueeze(0), side, symmetry).item() # add batch dim
     tp.line(t, m[0], s[0], m[1], s[1], m[2], s[2], latice)
 
 

@@ -1,4 +1,4 @@
-from code.utils_geom import detect_duplicates, svg_path
+from code.utils.geom import detect_duplicates, svg_path
 from textwrap import dedent
 
 def save_svg(hexgrid, filename, ndigits=3, print_ok=True):

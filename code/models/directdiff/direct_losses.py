@@ -3,43 +3,17 @@ from abc import ABC
 import torch
 import torch.nn.functional as F
 
-from code.utils_advanced import pairwise_sq_dist
+from code.utils.advanced import pairwise_sq_dist
 
 from ..diffuser import Diffuser
 from .direct_denoiser import TransformerDenoiser
 from .isab_denoiser import ISABDenoiser
-from ...utils_loss import circle_loss, equal_angle_loss_circular, lattice_loss, lsa_ordering_scipy, sinkhorn_permutation
+from ...utils.lossy import circle_loss_sincos, equiangle_loss_sincos, hex_lattice_loss, lsa_ordering_scipy, sinkhorn_permutation
 
-#------------------------------------------------------------------------------
-# Registry & Factory for Selecting Losses
-#------------------------------------------------------------------------------
-_LOSS_REGISTRY = {}
+from ...utils.registry import Registry
 
-def register_loss(*aliases):
-    """Decorator to register a loss class with multiple name aliases."""
-    def decorator(cls):
-        cls._canonical_name = aliases[0].lower() if aliases else cls.__name__.lower()
-        for alias in aliases:
-            _LOSS_REGISTRY[alias.lower()] = cls
-        return cls
-    return decorator
-
-def get_loss_functor_class(name: str):
-    """Factory function to instantiate a loss by name (case-insensitive)."""
-    key = name.lower()
-    try:
-        return _LOSS_REGISTRY[key]
-    except KeyError:
-        error_msg = f"Loss '{name}' not found. Available losses:\n"
-        for cls_name, alias_list in list_losses().items():
-            error_msg += f"  {cls_name}: {', '.join(alias_list)}\n"
-        raise ValueError(error_msg)
-
-def list_losses():
-    """Returns a dict mapping loss class names to their aliases."""
-    unique_classes = sorted(set(_LOSS_REGISTRY.values()), key=lambda x: x.__name__)
-    return {cls.__name__: sorted([k for k, v in _LOSS_REGISTRY.items() if v == cls])
-            for cls in unique_classes}
+loss_registry = Registry(name="DirectLoss")
+register_loss = loss_registry.register
 
 #------------------------------------------------------------------------------
 # Abstract Base Class for Losses
@@ -144,14 +118,14 @@ class NoiseAssistedLoss(AbstractLoss):
     def compute_loss(self, xysc_0, xysc_t, noise, noise_hat, colors, t):
         xysc_0_hat = self.diffuser.recover_x(xysc_t, t, noise_hat)
         return F.mse_loss(noise, noise_hat) \
-            + .33 * circle_loss(xysc_0_hat) \
-            + .33 * equal_angle_loss_circular(xysc_0_hat) \
-            + .33 * lattice_loss(xysc_0_hat, self.unit_side, self.symmetry)
+            + .33 * circle_loss_sincos(xysc_0_hat) \
+            + .33 * equiangle_loss_sincos(xysc_0_hat) \
+            + .33 * hex_lattice_loss(xysc_0_hat, self.unit_side, self.symmetry)
 
 #------------------------------------------------------------------------------
 # Permutation Invariant Loss
 #------------------------------------------------------------------------------
-@register_loss('pil', 'pinvl', 'perminv')
+@register_loss('pil', 'pinvl', 'perminv', "pinv")
 class PermutationInvariantLoss(AbstractLoss):
     """
     Loss calculation:
@@ -179,7 +153,7 @@ class PermutationInvariantLoss(AbstractLoss):
 #------------------------------------------------------------------------------
 # Sinkhorn Doubly Stochastic Permutation Invariant Loss
 #------------------------------------------------------------------------------
-@register_loss("shl", "sinkhorn")
+@register_loss("shl", "sinkhorn", "sink")
 class SinkhornLoss(AbstractLoss):
     """
     This is almost same as Permutation Invariant Loss

@@ -1,7 +1,7 @@
 import copy
 
-from code.utils_geom import inscribed_square_halfside
-from code.utils_basic import print_tile_stats
+from code.utils.geom import inscribed_square_halfside
+from code.utils.basic import print_tile_stats
 from code.pen.shapes import circle_tiling
 from code.pen.base import PenGrid
 
