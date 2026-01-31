@@ -70,19 +70,23 @@ def xya_to_xysc(xya):
     return xysc, colors
 
 
-def pairwise_sq_dist(x, y, colors, σₑ2):
+def pairwise_sq_dist(x, y, colors, σₑsq=1.):
     """
-    Used to caluclate raw logits:
-        ‖x₀ - ̂x₀‖² / 2σₑ²
+    Used to caluclate raw logits:        ‖x₀ - ̂x₀‖² / 2σₑ²
     We use σₑ² here only to estimate BIG, to avoid overflow.
+        exp(-100σₑ²/2σₑ²) = exp(-50) = 2e-22
+    So colors are seperated by 10 units.
     """
+    if isinstance(σₑsq, torch.Tensor):
+        σₑsq = σₑsq.view(-1, 1, 1)
+
     x2 = (x ** 2).sum(dim=-1, keepdim=True)       # B, N, 1
     y2 = (y ** 2).sum(dim=-1, keepdim=True)       # B, M, 1
     xy = torch.bmm(x, y.transpose(1, 2))          # B, N, M
-    sq_dist = x2 + y2.transpose(1, 2) - 2 * xy    # B, N, M
+    sq_dist = (x2 + y2.transpose(1, 2) - 2 * xy).clamp_min(0.0)    # B, N, M
 
-    color_mismatch = (colors.unsqueeze(2) != colors.unsqueeze(1)).to(x.dtype)
-    penalty = color_mismatch * (1000.0 * σₑ2).view(-1, 1, 1)
-    sq_dist = sq_dist + penalty
+    BIG = 100. * σₑsq
+    mismatch = (colors.unsqueeze(2) != colors.unsqueeze(1)).to(x.dtype)
+    sq_dist = sq_dist + BIG * mismatch
 
-    return sq_dist.clamp_min(0.0)
+    return sq_dist

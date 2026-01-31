@@ -109,7 +109,8 @@ def sinkhorn_permutation(log_K: torch.Tensor, n_iters: int = 7) -> torch.Tensor:
         log_v = -torch.logsumexp(log_K + log_u[:, :, None], dim=1)
 
     # P = diag(u) K diag(v)
-    return torch.exp(log_K + log_u[:, :, None] + log_v[:, None, :])
+    log_P = log_K + log_u[:, :, None] + log_v[:, None, :]
+    return torch.exp(log_P)
 
 def sinkhorn_permutation_onestep(log_P: torch.Tensor) -> torch.Tensor:
     log_P = log_P - torch.logsumexp(log_P, dim=2, keepdim=True)  # rows

@@ -82,7 +82,7 @@ direct256: &direct256
 latentcommon: &latentcommon
   model: "latent"
   num_classes: 70
-  rec_loss: "sinkhorn"
+  loss: "sinkhorn"
 
 latent32: &latent32
   <<: *latentcommon

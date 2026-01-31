@@ -5,6 +5,7 @@ import torch.nn.functional as F
 from code.augment import GeometryAugment
 from code.models.latentdiff.latent_denoiser import LatentDenoiser
 from code.utils_advanced import pairwise_sq_dist
+from code.utils_loss import sinkhorn_permutation
 
 from .set_decoder import PerceiverDecoder
 from .set_encoder import SetEncoder
@@ -22,20 +23,19 @@ def reparameterize(mu, logvar):
 # ------------------------------------------------------------
 # Reconstruction losses (Permutation invariant)
 # ------------------------------------------------------------
-def chamfer_loss(x, y, colors, t):
-    sq_dist = pairwise_sq_dist(x, y, colors, t)                # B, N, N
+def chamfer_loss(x, y, colors):
+    sq_dist = pairwise_sq_dist(x, y, colors)                # B, N, N
     loss_xy = sq_dist.min(dim=2).values.mean()
     loss_yx = sq_dist.min(dim=1).values.mean()
-    return loss_xy + loss_yx
+    return (loss_xy + loss_yx)/2.
 
 
-def sinkhorn_loss(x, y, colors, t):
-    sq_dist = pairwise_sq_dist(x, y, colors, t)             # B, N, N   
-    logits = -sq_dist/(2*t.view(-1, 1, 1))
-    logits = logits - torch.logsumexp(logits, dim=2, keepdim=True)  # rows
-    logits = logits - torch.logsumexp(logits, dim=1, keepdim=True)  # cols
-    P = torch.exp(logits)
-    return (P * sq_dist).sum(dim=[1, 2]).mean()
+def sinkhorn_loss(x, y, colors):
+    sq_dist = pairwise_sq_dist(x, y, colors)         # B, N, N   
+    logits = -sq_dist/(2*.15**2)                     # .15 is unit_side of polygon
+    P = sinkhorn_permutation(logits)
+    y_post = torch.bmm(P, y)
+    return F.mse_loss(x, y_post)
 
 
 def kl_loss(mu, logvar):
@@ -78,7 +78,7 @@ class LatentDiffusionModel(nn.Module):
 
         latent_dim = config['latent_dim']
         num_classes = config['num_classes']
-        rec_loss = config['rec_loss']
+        rec_loss = config['loss']
         beta_kl = 1e-3
         p_uncond = 1/7.
 
@@ -125,10 +125,10 @@ class LatentDiffusionModel(nn.Module):
 
         # Decoder
         x_hat = self.decoder(z0, color)
-        if self.rec_loss == "chamfer":
-            loss_recons = chamfer_loss(x, x_hat, color, t)  
-        elif self.rec_loss == "sinkhorn":
-            loss_recons = sinkhorn_loss(x, x_hat, color, t)
+        if self.rec_loss[:4] == "chamfer"[:4]:
+            loss_recons = chamfer_loss(x, x_hat, color)  
+        elif self.rec_loss[:4] == "sinkhorn"[:4]:
+            loss_recons = sinkhorn_loss(x, x_hat, color)
         else:
             raise NotImplementedError(f"Unknown reconstruction loss: {self.rec_loss}")
 

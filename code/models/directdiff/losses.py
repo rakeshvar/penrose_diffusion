@@ -164,8 +164,8 @@ class PermutationInvariantLoss(AbstractLoss):
     def compute_loss(self, xysc_0, xysc_t, noise, noise_hat, colors, t):
         with torch.no_grad():
             σₓ = self.diffuser.rᾱ[t]          # B, 1, 1 # type: ignore
-            σₑ2 = self.diffuser.onemᾱ[t]      # B, 1, 1 # type: ignore
-            σₓxysc0 = σₓ * xysc_0              # B, N, 4
+            σₑ2 = self.diffuser.onemᾱ[t]                # type: ignore
+            σₓxysc0 = σₓ * xysc_0             # B, N, 4
 
             sq_dist = pairwise_sq_dist(xysc_t, σₓxysc0, colors, σₑ2)
             logits = -sq_dist / (2*σₑ2)                             # B, N, N
@@ -192,18 +192,15 @@ class SinkhornLoss(AbstractLoss):
     def compute_loss(self, xysc_0, xysc_t, noise, noise_hat, colors, t):
         with torch.no_grad():
             σₓ = self.diffuser.rᾱ[t]          # B, 1, 1 # type: ignore
-            σₑ = self.diffuser.r1mᾱ[t]                  # type: ignore
             σₑ2 = self.diffuser.onemᾱ[t]                # type: ignore
             σₓxysc0 = σₓ * xysc_0             # B, N, 4
 
-            # ---- Sinkhorn barycenters ----
             sq_dist = pairwise_sq_dist(xysc_t, σₓxysc0, colors, σₑ2)
             logits = -sq_dist / (2*σₑ2)                              # B, N, N
             P = sinkhorn_permutation(logits)
-            σₓxysc0_post = torch.bmm(P, σₓxysc0)                     # B, N, 4
+            xysc0_posterior = torch.bmm(P, xysc_0)                   # B, N, 4
 
-            # ---- noise target & loss ----
-            noise_target = (xysc_t - σₓxysc0_post) / σₑ
+            noise_target = self.diffuser.recover_ϵ(xysc_t, t, xysc0_posterior)
         return F.mse_loss(noise_hat, noise_target)
 
 #------------------------------------------------------------------------------

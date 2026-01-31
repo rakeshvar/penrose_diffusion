@@ -37,6 +37,7 @@ class DirectDiffuser(Diffuser):
 class DirectDiffusionModel(DiffusionModel):
     def __init__(self, model_config, **ignore):
         super().__init__()
+        self.config = model_config
         self.augmenter = GeometryAugment()
         self.diffuser = DirectDiffuser(2)
 
@@ -55,7 +56,7 @@ class DirectDiffusionModel(DiffusionModel):
     
     @property
     def descriptor(self):
-        return f"d{self.denoiser.d_model}_{self.loss_functor.abbr}"
+        return f"{self.config['model'][0]}{self.denoiser.d_model}_{self.loss_functor.abbr}"
     
     def train_step(self, xya, colors, cls):
         xya = self.augmenter(xya)
