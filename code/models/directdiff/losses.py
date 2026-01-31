@@ -3,6 +3,8 @@ from abc import ABC
 import torch
 import torch.nn.functional as F
 
+from code.utils_advanced import pairwise_sq_dist
+
 from ..diffuser import Diffuser
 from .direct_denoiser import TransformerDenoiser
 from .isab_denoiser import ISABDenoiser
@@ -84,6 +86,10 @@ class NoisePredictionLoss(AbstractLoss):
     def compute_loss(self, xysc_0, xysc_t, noise, noise_hat, colors, t):
         return F.mse_loss(noise, noise_hat)
 
+#------------------------------------------------------------------------------
+# NoisePredictionLoss
+#------------------------------------------------------------------------------
+@register_loss('vpl', 'v')
 class VPredictionLoss(AbstractLoss):
     """
     Assumes the denoiser predicts: v =  −√(1−αₜ) ⋅ x₀ + √αₜ ⋅ ε 
@@ -91,7 +97,7 @@ class VPredictionLoss(AbstractLoss):
     """
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.denoiser.predict = 'v'
+        self.denoiser.predict = 'v'         # to be used while sampling
 
     def compute_loss(self, xysc_0, xysc_t, noise, v_hat, colors, t):
         v = self.diffuser.calculate_v(xysc_0, t, noise)
@@ -115,9 +121,8 @@ class SamplePredictionLoss(AbstractLoss):
         self.denoiser.predict = 'sample'   # network predicts x0
 
     def compute_loss(self, xysc_0, xysc_t, noise, xysc_0_hat, colors, t):
-        # t (hence weight) is different for each sample
-        ᾱ_t = self.diffuser.ᾱ[t] # type: ignore
-        loss = (xysc_0_hat - xysc_0).pow(2) * ᾱ_t / (1.-ᾱ_t)
+        ᾱₜ = self.diffuser.ᾱ[t] # type: ignore
+        loss = (xysc_0_hat - xysc_0).pow(2) * ᾱₜ / (1.-ᾱₜ)
         return loss.mean()
 
 #------------------------------------------------------------------------------
@@ -158,18 +163,14 @@ class PermutationInvariantLoss(AbstractLoss):
     """
     def compute_loss(self, xysc_0, xysc_t, noise, noise_hat, colors, t):
         with torch.no_grad():
-            # TODO: Scale xysc_0 by σₓ = sqrt(ᾱₜ)
-            # TODO: use cost = a^2 + b^2 - 2ab
-            diff = xysc_t.unsqueeze(2) - xysc_0.unsqueeze(1)     # B, N, N, D
-            sq_dist = (diff ** 2).sum(dim=-1)                    # B, N, N
-            noise_variance = 1.-self.diffuser.ᾱ[t]               # Var(noise) = 1-ᾱₜ # type: ignore
-            logits = -sq_dist/(2.*noise_variance)
+            σₓ = self.diffuser.rᾱ[t]          # B, 1, 1 # type: ignore
+            σₑ2 = self.diffuser.onemᾱ[t]      # B, 1, 1 # type: ignore
+            σₓxysc0 = σₓ * xysc_0              # B, N, 4
 
-            color_mask = (colors.unsqueeze(2) == colors.unsqueeze(1)) # B, N, N
-            neginf = torch.tensor(1e-6, device=logits.device, dtype=logits.dtype)
-            logits = torch.where(color_mask, logits, neginf)
+            sq_dist = pairwise_sq_dist(xysc_t, σₓxysc0, colors, σₑ2)
+            logits = -sq_dist / (2*σₑ2)                             # B, N, N
             soft_assignments = torch.softmax(logits, dim=-1)
-            xysc_0_posterior = torch.bmm(soft_assignments, xysc_0)    # Batch matmul
+            xysc_0_posterior = torch.bmm(soft_assignments, xysc_0)  # B, N, 4
 
             noise_target = self.diffuser.recover_ϵ(xysc_t, t, xysc_0_posterior)
 
@@ -191,29 +192,18 @@ class SinkhornLoss(AbstractLoss):
     def compute_loss(self, xysc_0, xysc_t, noise, noise_hat, colors, t):
         with torch.no_grad():
             σₓ = self.diffuser.rᾱ[t]          # B, 1, 1 # type: ignore
-            σₑ = self.diffuser.r1mᾱ[t]         # B, 1, 1 # type: ignore
-            twoσₑsqrd = 2.0 * (σₑ ** 2)        # B, 1, 1
-            σₓxysc0 = σₓ * xysc_0              # B, N, 4
-
-            # ---- squared distance ----
-            a2 = (xysc_t ** 2).sum(dim=-1)[:, :, None]              # B, N, 1
-            b2 = (σₓxysc0 ** 2).sum(dim=-1)[:, None, :]             # B, 1, N
-            ab = torch.bmm(xysc_t, σₓxysc0.transpose(1, 2))         # B, N, N
-            sq_dist = a2 + b2 - 2.0 * ab                            # B, N, N
-
-            # ---- color constraint via cost masking ----
-            diff_color = colors[:, :, None] != colors[:, None, :]   # B, N, N
-            # scale BIG with σₑ² (critical for stability)
-            BIG = 50. * twoσₑsqrd                                   # B, 1, 1
-            sq_dist = sq_dist + diff_color * BIG
+            σₑ = self.diffuser.r1mᾱ[t]                  # type: ignore
+            σₑ2 = self.diffuser.onemᾱ[t]                # type: ignore
+            σₓxysc0 = σₓ * xysc_0             # B, N, 4
 
             # ---- Sinkhorn barycenters ----
-            log_K = -sq_dist / twoσₑsqrd                             # B, N, N
-            P = sinkhorn_permutation(log_K)                          # B, N, N
+            sq_dist = pairwise_sq_dist(xysc_t, σₓxysc0, colors, σₑ2)
+            logits = -sq_dist / (2*σₑ2)                              # B, N, N
+            P = sinkhorn_permutation(logits)
             σₓxysc0_post = torch.bmm(P, σₓxysc0)                     # B, N, 4
 
             # ---- noise target & loss ----
-            noise_target = (xysc_t - σₓxysc0_post) / σₑ              # B, N, 4
+            noise_target = (xysc_t - σₓxysc0_post) / σₑ
         return F.mse_loss(noise_hat, noise_target)
 
 #------------------------------------------------------------------------------

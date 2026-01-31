@@ -23,20 +23,18 @@ def reparameterize(mu, logvar):
 # Reconstruction losses (Permutation invariant)
 # ------------------------------------------------------------
 def chamfer_loss(x, y, colors, t):
-    dist = pairwise_sq_dist(x, y, colors, t)                # B, N, N
-    loss_xy = dist.min(dim=2).values.mean()
-    loss_yx = dist.min(dim=1).values.mean()
+    sq_dist = pairwise_sq_dist(x, y, colors, t)                # B, N, N
+    loss_xy = sq_dist.min(dim=2).values.mean()
+    loss_yx = sq_dist.min(dim=1).values.mean()
     return loss_xy + loss_yx
 
 
 def sinkhorn_loss(x, y, colors, t):
     sq_dist = pairwise_sq_dist(x, y, colors, t)             # B, N, N   
-
-    log_P = -sq_dist/(2*t.view(-1, 1, 1))
-    log_P = log_P - torch.logsumexp(log_P, dim=2, keepdim=True)  # rows
-    log_P = log_P - torch.logsumexp(log_P, dim=1, keepdim=True)  # cols
-    P = torch.exp(log_P)
-
+    logits = -sq_dist/(2*t.view(-1, 1, 1))
+    logits = logits - torch.logsumexp(logits, dim=2, keepdim=True)  # rows
+    logits = logits - torch.logsumexp(logits, dim=1, keepdim=True)  # cols
+    P = torch.exp(logits)
     return (P * sq_dist).sum(dim=[1, 2]).mean()
 
 
