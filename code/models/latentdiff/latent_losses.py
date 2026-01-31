@@ -11,7 +11,7 @@ register_loss = loss_registry.register
 # Reconstruction losses
 # ------------------------------------------------------------
 
-@register_loss('spl', 'sample', 'sampleloss')
+@register_loss('samp', 'spl', 'sample', 'sampleloss')
 def sample_loss(x, y, colors):
     return F.mse_loss(x, y)
 
@@ -30,7 +30,7 @@ def sinkhorn_loss(x, y, colors):
     y_post = torch.bmm(P, y)
     return F.mse_loss(x, y_post)
 
-@register_loss('pil', 'pinv', 'perminv')
+@register_loss('pinv', 'pil', 'perminv')
 def pinv_loss(x, y, colors):
     sq_dist = pairwise_sq_dist(x, y, colors)         # B, N, N   
     logits = -sq_dist/(2*.15**2)                     # .15 is unit_side of polygon
