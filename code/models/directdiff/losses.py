@@ -166,7 +166,8 @@ class PermutationInvariantLoss(AbstractLoss):
             logits = -sq_dist/(2.*noise_variance)
 
             color_mask = (colors.unsqueeze(2) == colors.unsqueeze(1)) # B, N, N
-            logits[~color_mask] = -float("inf")
+            neginf = torch.tensor(1e-6, device=logits.device, dtype=logits.dtype)
+            logits = torch.where(color_mask, logits, neginf)
             soft_assignments = torch.softmax(logits, dim=-1)
             xysc_0_posterior = torch.bmm(soft_assignments, xysc_0)    # Batch matmul
 
