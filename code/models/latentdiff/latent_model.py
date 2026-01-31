@@ -79,7 +79,7 @@ class LatentDiffusionModel(nn.Module):
 
     @property
     def descriptor(self):
-        return f"ld{self.latent_dim}_{self.rec_loss[:4]}"
+        return f"ld{self.latent_dim}_{self.recons_loss_fn.abbr}"
 
     def train_step(self, x, color, cls):
         x = self.augmenter(x)

@@ -9,8 +9,8 @@ class Registry:
     def register(self, *aliases):
         """Decorator to register a class with multiple aliases."""
         def decorator(cls):
-            # Use the first alias as the canonical name, or fallback to class name
-            cls._canonical_name = aliases[0].lower() if aliases else cls.__name__.lower()
+            # Use the first alias as the abbreviation, or fallback to class name
+            cls.abbr = aliases[0].lower() if aliases else cls.__name__.lower()
             
             for alias in aliases:
                 key = alias.lower()

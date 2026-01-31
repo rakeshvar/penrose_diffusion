@@ -46,11 +46,6 @@ class AbstractLoss(ABC):
     def __repr__(self):
         return f"{self.__class__.__name__}"
 
-    @property
-    def abbr(self):
-        """Returns the canonical short name for this loss."""
-        return getattr(self.__class__, '_canonical_name', self.__class__.__name__.lower())
-
 
 #------------------------------------------------------------------------------
 # NoisePredictionLoss
