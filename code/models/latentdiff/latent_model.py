@@ -117,7 +117,8 @@ class LatentDiffusionModel(nn.Module):
         # Drop some classes for Classifier Free Guidance
         cls_cond = cls.clone()
         drop = torch.rand_like(z0[:, 0]) < self.p_uncond
-        cls_cond[drop] = self.null_class
+        nulls = torch.full_like(cls_cond, self.null_class)
+        cls_cond = torch.where(drop, nulls, cls_cond)
 
         # Denoiser
         εhat = self.denoiser(zt, t, cls_cond)                       # (B, D)
