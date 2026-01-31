@@ -3,7 +3,7 @@ import torch
 import numpy as np
 from pathlib import Path
 
-from code.utils.lossy import hex_lattice_loss
+from code.utils.lossy import hex_lattice_loss_logarthmic
 
 current_dir = Path(__file__).resolve().parent
 parent_dir = current_dir.parent
@@ -35,7 +35,7 @@ def save_grid_svg(xyac, symmetry, side, filename, t):
 
     m = xyac.mean(axis=0)
     s = xyac.std(axis=0)
-    latice = hex_lattice_loss(torch.from_numpy(xyac).unsqueeze(0), side, symmetry).item() # add batch dim
+    latice = hex_lattice_loss_logarthmic(torch.from_numpy(xyac).unsqueeze(0), side, symmetry).item() # add batch dim
     tp.line(t, m[0], s[0], m[1], s[1], m[2], s[2], latice)
 
 

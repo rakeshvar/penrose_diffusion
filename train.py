@@ -10,6 +10,7 @@ import torch.nn.utils as nn_utils
 import code.compatibility as compat
 from code.config import Config
 from code.utils.advanced import get_random_colors, xyac_to_svgs
+from code.utils.lossy import hex_lattice_loss_quadratic
 from code.wandblog import WandBLog
 from code.data.load import MyDataset
 from code.filesystem import CheckPointer, load_checkpoint
@@ -45,7 +46,7 @@ def train_fn(rank:int, config:Config):
         'batch_size': config.train['batch_size'],
         'sampler': distributed_sampler,
         'shuffle': distributed_sampler is None,           # distributed_sampler handles shuffling
-        'num_workers': 8, #0 if distributed_sampler else 4,   # distributed_sampler handles multi-threading
+        'num_workers': 0 if distributed_sampler else 4,   # distributed_sampler handles multi-threading
         'drop_last': True
     }
     raw_loader = DataLoader(dataset, **loader_args)
@@ -157,6 +158,9 @@ def train_fn(rank:int, config:Config):
             svg_fname = f"sv{config.timestamp}_e{epoch:03d}_{sample_name}.svg"
             ckptr.save_svg(svg, svg_fname)                                    # type: ignore
             wandblog.lsvg(epoch, svg, sample_label, sample_name)
+            lattice_loss = hex_lattice_loss_quadratic(samples, dataset.side)
+            to_log['lattice_loss'] = lattice_loss
+            mprint(f"Lattice loss: {lattice_loss:.4f}", rank)
 
         wandblog.log_step(to_log, step=epoch)
         mprint(f"Epoch {epoch} done. Average Loss: {avg_loss:.4f}\n", rank)

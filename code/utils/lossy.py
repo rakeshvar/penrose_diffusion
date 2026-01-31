@@ -29,7 +29,7 @@ def equiangle_loss_sincos(xysc_hat, eps=1e-6):
 #---------------------------
 # Lattice Loss
 #---------------------------
-def hex_lattice_loss(xy_hat, unit_side):
+def hex_lattice_loss_quadratic(xy_hat, unit_side):
     """
     0 when all nearest neighbors are exactly s units away.
     """
@@ -46,6 +46,35 @@ def hex_lattice_loss(xy_hat, unit_side):
 
     target = torch.full_like(min_dist, fill_value=dist2nearest)
     return F.mse_loss(min_dist, target) / dist2nearest**2
+
+#---------------------------
+# Lattice Loss (NN attract + global log-repel)
+#---------------------------
+def hex_lattice_loss_logarthmic(xy_hat, unit_side):
+    eps = 1e-6
+    dist2nearest = math.sqrt(3) * unit_side
+
+    B, N, _ = xy_hat.shape
+    xy = xy_hat[..., :2]
+    diff = xy.unsqueeze(2) - xy.unsqueeze(1)                 # (B, N, N, 2)
+    sq_dist = (diff ** 2).sum(-1)                             # (B, N, N)
+    eye = torch.eye(N, device=xy.device, dtype=sq_dist.dtype).unsqueeze(0)
+    sq_dist = sq_dist + eye * 1e6
+    dists = torch.sqrt(sq_dist + eps)                         # (B, N, N)
+
+    # nearest-neighbor attraction
+    d_nn = dists.min(dim=-1)[0]                               # (B, N)
+    r = d_nn / dist2nearest
+    loss_gapping = r - 1.0 - torch.log(r + eps)
+
+    # global logarithmic repulsion (only when too close)
+    r_ij = dists / dist2nearest
+    repulse = -torch.log(r_ij + eps)
+    repulse = torch.where(r_ij < 1.0, repulse, torch.zeros_like(repulse))
+    repulse = repulse * (1.0 - eye)
+    loss_overlapping = repulse.sum(dim=-1)
+
+    return (loss_gapping + loss_overlapping).mean()
 
 #---------------------------
 # Sinkhorn Soft-Permutation Calculation

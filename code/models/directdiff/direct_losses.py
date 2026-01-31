@@ -8,7 +8,7 @@ from code.utils.advanced import pairwise_sq_dist
 from ..diffuser import Diffuser
 from .direct_denoiser import TransformerDenoiser
 from .isab_denoiser import ISABDenoiser
-from ...utils.lossy import circle_loss_sincos, equiangle_loss_sincos, hex_lattice_loss, lsa_ordering_scipy, sinkhorn_permutation
+from ...utils.lossy import circle_loss_sincos, equiangle_loss_sincos, hex_lattice_loss_quadratic, lsa_ordering_scipy, sinkhorn_permutation
 
 from ...utils.registry import Registry
 
@@ -115,7 +115,7 @@ class NoiseAssistedLoss(AbstractLoss):
         return F.mse_loss(noise, noise_hat) \
             + .33 * circle_loss_sincos(xysc_0_hat) \
             + .33 * equiangle_loss_sincos(xysc_0_hat) \
-            + .33 * hex_lattice_loss(xysc_0_hat, self.unit_side, self.symmetry)
+            + .33 * hex_lattice_loss_quadratic(xysc_0_hat, self.unit_side, self.symmetry)
 
 #------------------------------------------------------------------------------
 # Permutation Invariant Loss

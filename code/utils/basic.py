@@ -77,16 +77,25 @@ def npz_stats(npz_name):
         cos = np.cos(angle).astype(np.float64)
         colors = data['colors'].astype(np.float64)
 
-    tp = TablePrinter(6, 11)
+    tp = TablePrinter(7, 11)
     tp.top_line()
-    tp.line("Var", "Global/Ind.", "min", "mean", "max", "std")
+    tp.line("Variable", "Global/Ind.", "min", "mean", "max", "std", "range")
 
     def stats(v, name):
         tp.mid_line()
-        tp.line(name, "global", np.min(v), np.mean(v), np.max(v), np.std(v))
+        tp.line(name, "global", np.min(v), np.mean(v), np.max(v), np.std(v), np.max(v) - np.min(v))
         tp.line(name, "indiv. avg",
                 np.min(v, axis=-1).mean(), np.mean(v, axis=-1).mean(),
-                np.max(v, axis=-1).mean(), np.std(v, axis=-1).mean())
+                np.max(v, axis=-1).mean(), np.std(v, axis=-1).mean(),
+                (np.max(v, axis=-1) - np.min(v, axis=-1)).mean())
+        tp.line(name, "indiv. max",
+                np.min(v, axis=-1).max(), np.mean(v, axis=-1).max(),
+                np.max(v, axis=-1).max(), np.std(v, axis=-1).max(),
+                (np.max(v, axis=-1) - np.min(v, axis=-1)).max())
+        tp.line(name, "indiv. min",
+                np.min(v, axis=-1).min(), np.mean(v, axis=-1).min(),
+                np.max(v, axis=-1).min(), np.std(v, axis=-1).min(),
+                (np.max(v, axis=-1) - np.min(v, axis=-1)).min())
 
 
     stats(x, "x")
@@ -95,7 +104,6 @@ def npz_stats(npz_name):
     stats(cos, "cos")
     stats(angle, "angle")
     stats(colors, "color")
-
     tp.bot_line()
 
 def pairwise_compare(vals, names, title, diag="both"):
