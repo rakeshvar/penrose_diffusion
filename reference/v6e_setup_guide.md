@@ -5,6 +5,7 @@
 ```bash
 sudo timedatectl set-timezone Asia/Kolkata
 export WANDB_API_KEY=$(gsutil cat gs://penrose_diffusion/wandb_api_key.txt)
+sudo systemctl stop unattended-upgrades
 sudo NEEDRESTART_MODE=a apt update
 sudo NEEDRESTART_MODE=a apt install -y python3.10-venv
 python3 -m venv ~/tpu-env
@@ -27,7 +28,7 @@ cd penrose_diffusion
 # toy 
 python train.py gs://penrose_diffusion/datasets/hex_t096_c96_u18.npz toy -t num_epochs=3 -t loss=pil 
 # main
-python train.py gs://penrose_diffusion/datasets/hex_t096_c96_u18.npz model128 -t num_epochs=301 -t loss=pil 
+python train.py dd128 isab gs://penrose_diffusion/datasets/hex_t096_c96_u18.npz model128 -t num_epochs=301 -t loss=pil 
 ```
 
 ### Kill jobs

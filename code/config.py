@@ -55,6 +55,8 @@ class Config:
                             default=compat.OUTPUT_BASE_DIR)
 
         # Parse
+        print("\n\n", "#" * 80)
+        print("Parsing command line arguments...")
         self.parsed = parser.parse_args()
 
         #-----------------------
@@ -127,7 +129,7 @@ class Config:
                 if arg in self.library:
                     update_config(self.config, self.library[arg])
                 else:
-                    raise ValueError(f"Warning: Config group '{arg}' not found in configs.yaml")
+                    raise ValueError(f"Config group '{arg}' not found in configs.yaml")
 
         #-----------------------
         # Apply Flag Overrides (-t, -m, -w)

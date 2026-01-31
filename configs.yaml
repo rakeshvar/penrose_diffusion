@@ -38,7 +38,7 @@ nowatch_wandb:
 directcommon: &directcommon
   model: "direct"
   num_classes: 70
-  loss: "Noise"
+  loss: "shl"
 
 direct32: &direct32
   <<: *directcommon
