@@ -132,6 +132,9 @@ def train_fn(rank:int, config:Config):
             xya, colors, labels = batch
             loss, aux_losses = model.train_step(xya, colors, labels)
 
+            if torch.isnan(loss):
+                continue
+
             # Backpropagate
             optimizer.zero_grad()
             loss.backward()
