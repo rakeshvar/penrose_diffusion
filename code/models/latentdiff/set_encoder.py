@@ -14,16 +14,9 @@ class MultiHeadAttnPool(nn.Module):
             num_heads=heads,
             batch_first=True
         )
-        # Make W_q = I
-        with torch.no_grad():
-            self.attn.in_proj_weight[:dim].copy_(torch.eye(dim))
-            self.attn.in_proj_bias[:dim].zero_()
-            self.attn.in_proj_weight[:dim].requires_grad = False
-            self.attn.in_proj_bias[:dim].requires_grad = False
 
     def forward(self, h):
-        # h: (B, N, D)
-        B = h.shape[0]
+        B, N, D = h.shape
         q = self.pool_token.expand(B, 1, -1)     # B, 1, D
         out, _ = self.attn(q, h, h)              # B, 1, D
         return out.squeeze(1)                    # B, D

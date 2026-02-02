@@ -18,6 +18,7 @@ drop" }
 
 %% Encoder
 subgraph ENC["Set Encoder"]
+  QE(("Q"))
   TWMLP["Tile-wise 
     MLP"]
   ATTNPOOL["Attention 
@@ -28,6 +29,7 @@ subgraph ENC["Set Encoder"]
 end
 
 COLORS --> TWMLP
+QE --> ATTNPOOL
 XYA --> TWMLP --> ATTNPOOL --> FCL
 CLASS --> CLSEMBD --> FCL
 FCL --> MUSIGMA2(["μ,σ²"]) --> LKL{{"KL Loss"}}
@@ -46,8 +48,10 @@ subgraph DIFFUSION["Latent Diffusion"]
   T(("t"))
 end
 
-FWDIFF --> EPS --> LDIFF
-FWDIFF --> T --> DENOISER
+EPS --> FWDIFF 
+EPS --> LDIFF
+T --> FWDIFF 
+T --> DENOISER
 
 CLASS2 --> DENOISER
 Z0 --> FWDIFF --> ZT --> DENOISER --> EPSHAT([" ̂ϵ"])  --> LDIFF

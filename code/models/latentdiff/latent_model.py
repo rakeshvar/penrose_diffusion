@@ -119,15 +119,17 @@ class LatentDiffusionModel(nn.Module):
                 + loss_diffusion \
                 + loss_lattice
         
-        others = {
-            "loss": loss.item(),
-            "recons": loss_recons.item(),
-            "klmv": loss_kl.item(),
-            "diffusion": loss_diffusion.item(),
-            "lattice": loss_lattice.item()
-        }
-        return loss
-
+        aux_losses = torch.stack([
+            loss_recons,
+            loss_kl,
+            loss_diffusion,
+            loss_lattice
+        ])
+        return loss, aux_losses
+    
+    @property
+    def aux_loss_names(self):
+        return ['reconstruction', 'KL', 'Diffusion', 'Lattice']
     
     def sample(self, colors, classes, num_steps):
         z = self.diffuser.sample(

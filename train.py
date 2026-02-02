@@ -118,9 +118,11 @@ def train_fn(rank:int, config:Config):
     total_epochs = start_epoch + config.train['num_epochs']
     iterator = range(start_epoch, total_epochs)
     mprint(f"Starting training for {len(iterator)} epochs...", rank)
+    num_aux_losses = len(model.aux_loss_names)
 
     for epoch in iterator:
         total_loss = 0
+        aux_loss_sums = torch.zeros(num_aux_losses, device=device)
         count = 0
 
         # Enable progress bar only on master process
@@ -128,7 +130,7 @@ def train_fn(rank:int, config:Config):
 
         for batch in progressbar:
             xya, colors, labels = batch
-            loss = model.train_step(xya, colors, labels)
+            loss, aux_losses = model.train_step(xya, colors, labels)
 
             # Backpropagate
             optimizer.zero_grad()
@@ -136,18 +138,24 @@ def train_fn(rank:int, config:Config):
             compat.optimizer_step(optimizer)
 
             total_loss += loss.item()
+            aux_loss_sums += aux_losses.detach()
             count += 1
-
-            progressbar.set_description(f"Epoch {epoch} | Loss: {loss:.4f}")
-
+            
+            progressbar.set_description(f"Epoch {epoch} | Loss: {loss.item():.4f}")
+        
         scheduler.step()
         avg_loss = total_loss / count if count > 0 else 0
 
         to_log = {
-            'loss': avg_loss,
+            'loss/avg_loss': avg_loss,
             'grad_norm': nn_utils.clip_grad_norm_(model.parameters(), float('inf')),
             'learning_rate': optimizer.param_groups[0]['lr']
         }
+        # Add averaged aux losses
+        if len(aux_loss_sums) > 0:
+            aux_loss_avgs = (aux_loss_sums / count).cpu().numpy()
+            for name, value in zip(model.aux_loss_names, aux_loss_avgs):
+                to_log["loss/"+name] = float(value)
 
         if is_master:
           ckptr.save_checkpoint(epoch, model, optimizer, scheduler, avg_loss) # type: ignore
@@ -159,7 +167,7 @@ def train_fn(rank:int, config:Config):
             ckptr.save_svg(svg, svg_fname)                                    # type: ignore
             wandblog.lsvg(epoch, svg, sample_label, sample_name)
             lattice_loss = hex_lattice_loss_quadratic(samples, dataset.side)
-            to_log['lattice_loss'] = lattice_loss
+            to_log['loss/lattice_sample'] = lattice_loss
             mprint(f"Lattice loss: {lattice_loss:.4f}", rank)
 
         wandblog.log_step(to_log, step=epoch)

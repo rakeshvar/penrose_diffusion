@@ -62,7 +62,12 @@ class DirectDiffusionModel(DiffusionModel):
         xya = self.augmenter(xya)
         xysc, _ = xya_to_xysc(xya)
         loss = self.loss_functor(xysc, colors, cls)
-        return loss
+        aux_losses = torch.tensor([], device=self.device)
+        return loss, aux_losses
+
+    @property
+    def aux_loss_names(self):
+        return []
     
     def sample(self, colors, labels, num_steps):
         xysc = self.diffuser.sample(
