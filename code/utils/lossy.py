@@ -65,7 +65,7 @@ def hex_lattice_loss_logarthmic(xy_hat, unit_side):
     # nearest-neighbor attraction
     d_nn = dists.min(dim=-1)[0]                               # (B, N)
     r = d_nn / dist2nearest
-    loss_gapping = r - 1.0 - torch.log(r + eps)
+    loss_gapping = (r - 1.0 - torch.log(r + eps)) / 10.         # TODO: this is a hyperparameter
 
     # global logarithmic repulsion (only when too close)
     r_ij = dists / dist2nearest

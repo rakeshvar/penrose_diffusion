@@ -32,7 +32,7 @@ class LatentDiffuser(Diffuser):
     @torch.no_grad()
     def sample(self, denoiser, labels, num_steps=50, guidance_scale=2.0):
         B = labels.shape[0]
-        D = denoiser.time_embed.embedding_dim
+        D = denoiser.D
         device = denoiser.device
         NULL = denoiser.class_embed.num_embeddings - 1
         nulls = torch.full_like(labels, NULL)
@@ -114,6 +114,9 @@ class LatentDiffusionModel(nn.Module):
         # Lattice
         loss_lattice = hex_lattice_loss_logarthmic(x_hat, .18)
 
+        # Angle Variance
+        loss_equiangle = torch.var(x_hat[:, :, 2], dim=1, unbiased=True).mean()
+
         loss = loss_recons \
                 + self.beta_kl * loss_kl \
                 + loss_diffusion \
@@ -123,13 +126,14 @@ class LatentDiffusionModel(nn.Module):
             loss_recons,
             loss_kl,
             loss_diffusion,
-            loss_lattice
+            loss_lattice,
+            loss_equiangle
         ])
         return loss, aux_losses
     
     @property
     def aux_loss_names(self):
-        return ['reconstruction', 'KL', 'Diffusion', 'Lattice']
+        return ['reconstruction', 'KL', 'Diffusion', 'Lattice', 'Equiangle']
     
     def sample(self, colors, classes, num_steps):
         z = self.diffuser.sample(

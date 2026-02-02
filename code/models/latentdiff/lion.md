@@ -97,3 +97,51 @@ Denoiser --> Z0(("z_(t-1)")) --> Decoder
 COLORS --> Decoder --> X(("Sample"))
 
 ```
+
+## FILM
+
+```mermaid
+graph TB
+    subgraph "Traditional Approach"
+        A1[Input x] --> Add1["+"]
+        A2[Conditioning] --> Add1
+        Add1 --> A3[Network]
+        A3 --> A4[Output]
+    end
+```
+
+```mermaid
+graph TB
+    subgraph "FiLM Approach"
+        B1[Input x] --> B3[Network]
+        B3 --> B4["Normalize"]
+        B4 --> Mod["× (1+scale) + shift"]
+        B2[Conditioning] --> Learn["Learn<br/>scale & shift"]
+        Learn --> Mod
+        Mod --> B5[Activation]
+        B5 --> B6[Output]
+    end
+```
+
+```mermaid
+graph TB
+    subgraph "FiLM Block"
+        Input[/"Input x<br/>(B, in_dim)"/]
+        Cond[/"Conditioning c<br/>(B, cond_dim)<br/>(time + class embeddings)"/]
+        
+        Input --> Linear["Linear Layer<br/>(in_dim → out_dim)"]
+        Linear --> Norm["LayerNorm<br/>(normalize)"]
+        
+        Cond --> FiLMNet["Linear Layer<br/>(cond_dim → 2×out_dim)"]
+        FiLMNet --> Split["Split into 2"]
+        Split --> Scale["Scale γ<br/>(B, out_dim)"]
+        Split --> Shift["Shift β<br/>(B, out_dim)"]
+        
+        Norm --> Modulate["h × (1 + γ) + β<br/>(element-wise)"]
+        Scale --> Modulate
+        Shift --> Modulate
+        
+        Modulate --> Act["SiLU/GELU<br/>Activation"]
+        Act --> Output[/"Output<br/>(B, out_dim)"/]
+    end
+```

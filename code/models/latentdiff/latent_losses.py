@@ -1,3 +1,4 @@
+import math
 import torch
 import torch.nn.functional as F
 from code.utils.advanced import pairwise_sq_dist
@@ -15,6 +16,7 @@ register_loss = loss_registry.register
 def sample_loss(x, y, colors):
     return F.mse_loss(x, y)
 
+
 @register_loss('cham', 'chamfer', 'cfl')
 def chamfer_loss(x, y, colors):
     sq_dist = pairwise_sq_dist(x, y, colors)                # B, N, N
@@ -22,19 +24,29 @@ def chamfer_loss(x, y, colors):
     loss_yx = sq_dist.min(dim=1).values.mean()
     return (loss_xy + loss_yx)/2.
 
+
 @register_loss('sink', 'sinkhorn', 'shl')
 def sinkhorn_loss(x, y, colors):
-    sq_dist = pairwise_sq_dist(x, y, colors)         # B, N, N   
-    logits = -sq_dist/(2*.15**2)                     # .15 is unit_side of polygon
+    t = t_from_s()
+    sq_dist = pairwise_sq_dist(x, y, colors)         
+    logits = -sq_dist/(2*(t**2))
     P = sinkhorn_permutation(logits)
     y_post = torch.bmm(P, y)
     return F.mse_loss(x, y_post)
 
+
 @register_loss('pinv', 'pil', 'perminv')
 def pinv_loss(x, y, colors):
+    t = t_from_s()
     sq_dist = pairwise_sq_dist(x, y, colors)         # B, N, N   
-    logits = -sq_dist/(2*.15**2)                     # .15 is unit_side of polygon
+    logits = -sq_dist/(2* t**2)                     # .15 is unit_side of polygon
     P = torch.softmax(logits, dim=-1)
     y_post = torch.bmm(P, y)
     return F.mse_loss(x, y_post)
+
+
+def t_from_s(s=.18, R=100):                 # .18 is unit_side of polygon
+    d = math.sqrt(3) * s                    # distance to nearest neighbor
+    t = d/math.sqrt(2 * math.log(R))        # first one is R factor more than second
+    return t                                
 
