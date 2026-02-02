@@ -65,11 +65,12 @@ class LatentDiffusionModel(nn.Module):
         self.p_uncond = 1/7.
         self.null_class = num_classes
         self.latent_dim = latent_dim
-    
+        num_blocks = config.get('num_blocks', 2)
+
         self.augmenter = GeometryAugment()
         self.encoder = SetEncoder(latent_dim, num_classes)
         self.denoiser = LatentDenoiser(latent_dim, num_classes)
-        self.decoder = PerceiverDecoder(latent_dim, num_tiles)
+        self.decoder = PerceiverDecoder(latent_dim, num_tiles, num_blocks)
         self.diffuser = LatentDiffuser(1)
         self.recons_loss_fn = loss_registry.get(self.rec_loss)
 
@@ -121,7 +122,7 @@ class LatentDiffusionModel(nn.Module):
                 + self.beta_kl * loss_kl \
                 + loss_diffusion \
                 + loss_lattice
-        
+
         aux_losses = torch.stack([
             loss_recons,
             loss_kl,
@@ -130,18 +131,28 @@ class LatentDiffusionModel(nn.Module):
             loss_equiangle
         ])
         return loss, aux_losses
-    
+
     @property
     def aux_loss_names(self):
         return ['reconstruction', 'KL', 'Diffusion', 'Lattice', 'Equiangle']
-    
+
+    def passthrough(self, x, color, cls):
+        self.eval()
+        x = x * torch.tensor([1., 1., sqrt(3)/pi], device=x.device)
+        mu, logvar = self.encoder(x, color, cls)                    # mu: (B, D), logvar: (B, D)
+        z0 = reparameterize(mu, logvar)                             # (B, D)
+        x_hat = self.decoder(z0, color)
+        x_hat = x_hat * torch.tensor([1., 1., pi/sqrt(3)], device=x.device)
+        xyac = torch.cat([x_hat, color.unsqueeze(-1)], dim=-1)
+        return xyac
+
     def sample(self, colors, classes, num_steps):
         z = self.diffuser.sample(
-            self.denoiser, 
-            classes, 
+            self.denoiser,
+            classes,
             num_steps
         )
-
+        self.eval()
         xya = self.decoder(z, colors)
 
         # rescale angle to [-π, π] and attach color

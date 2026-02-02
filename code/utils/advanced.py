@@ -10,17 +10,17 @@ from code.pen.svg import save_svg as pen_save_svg
 #------------------------------------------------------------------------------
 # Save
 #------------------------------------------------------------------------------
-def xyac_to_svgs(xyac, symmetry, side, save_paths=repeat(None)):
+def xyac_to_svgs(xyac, symmetry, side, save_paths=repeat(None), print_ok=False):
     svgs = []
     xyac_np = xyac.detach().cpu().numpy()
 
     for sample, path in zip(xyac_np, save_paths):
         if symmetry == 6:
             grid = HexGrid(sample, side=side)
-            svg = hex_save_svg(grid, path)
+            svg = hex_save_svg(grid, path, print_ok=print_ok)
         else:
             grid = PenGrid(sample, from_np=True, side=side)
-            svg = pen_save_svg(grid, path)
+            svg = pen_save_svg(grid, path, print_ok=print_ok)
 
         svgs.append(svg)
     return svgs

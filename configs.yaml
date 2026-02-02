@@ -87,18 +87,22 @@ latentcommon: &latentcommon
 latent32: &latent32
   <<: *latentcommon
   latent_dim: 32
+  num_blocks: 2
 
 latent64: &latent64
   <<: *latentcommon
   latent_dim: 64
+  num_blocks: 3
 
 latent128: &latent128
   <<: *latentcommon
   latent_dim: 128
+  num_blocks: 4
 
 latent256: &latent256
   <<: *latentcommon
   latent_dim: 256
+  num_blocks: 6
 
 # ----------------------------------------------------------------
 # EXPERIMENT GROUPS

@@ -15,6 +15,11 @@ class DiffusionModel(nn.Module, ABC):
         raise NotImplementedError
     
     @abstractmethod
+    def passthrough(self, *args, **kwargs):
+        """Passthrough"""
+        raise NotImplementedError
+    
+    @abstractmethod
     def sample(self, *args, **kwargs):
         """Generate samples"""
         raise NotImplementedError

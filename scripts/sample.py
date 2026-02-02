@@ -3,8 +3,10 @@ import random
 import torch
 from pathlib import Path
 
-from code.models.directdiff.direct_denoiser import TransformerDenoiser
-from code.models.diffuser import Diffuser
+from code.models import get_model_class
+from code.utils.advanced import get_random_colors, xyac_to_svgs
+from code.utils.basic import print_config
+from code.utils.lossy import hex_lattice_loss_quadratic
 
 
 #--------------------------------------------
@@ -13,7 +15,7 @@ from code.models.diffuser import Diffuser
 def get_user_class(num_classes, class_lookup):
     """Prompts user for a class index or name."""
     rand_label = random.randint(0, num_classes - 1)
-    prompt = f"Generate Class (default {rand_label} aka '{class_lookup.get(rand_label, '?')}'): "
+    prompt = f"q to quit. \nGenerate Class (default {rand_label} aka '{class_lookup.get(rand_label, '?')}'): "
     inp = input(prompt)
 
     if inp.lower() == 'q':
@@ -57,29 +59,20 @@ if __name__ == "__main__":
     if len(sys.argv) > 2:
         num_steps = int(sys.argv[2])
     else:
-        num_steps = 50
+        num_steps = 1000
 
     # 2. Load Checkpoint
     print(f"Loading {cp_path}...")
     cp = torch.load(cp_path, map_location=device)
     config = cp['config']
-
-    print("Config:")
-    for k, v in config.items():
-        if isinstance(v, dict):
-            print(k)
-            for kk, vv in v.items():
-                print(f"\t{kk}: {vv}")
-        else:
-            print(f"{k}: {v}")
+    print_config(config)
 
     # 3. Initialize Models
-    denoiser_config = config['denoiser']
-    denoiser = TransformerDenoiser(**denoiser_config).to(device)
-    denoiser.load_state_dict(cp['denoiser_state_dict'])
-    denoiser.eval()
-
-    diffuser = Diffuser(num_timesteps=1000).to(device)
+    Model = get_model_class(config['model']['model'])
+    model = Model(config['model'], num_tiles=cp.get('num_tiles')).to(device)
+    model.load_state_dict(cp['model_state_dict'])
+    model.eval()
+    diffuser = model.diffuser
 
     # 4. Extract Metadata
     num_tiles = cp.get('num_tiles')
@@ -88,10 +81,6 @@ if __name__ == "__main__":
     num_classes = cp.get('num_classes')
     class_lookup = cp.get('class_lookup', {})
 
-    if num_tiles is None:
-        print("Error: Checkpoint missing metadata (num_tiles).")
-        sys.exit(1)
-
     # 5. Interactive Loop
     i = 0
 
@@ -99,19 +88,20 @@ if __name__ == "__main__":
     print("Press Enter to use random class, type a number/name to select, or 'q' to quit.")
 
     while True:
-        label, cname = get_user_class(num_classes, class_lookup)
+        sample_label, sample_name = get_user_class(num_classes, class_lookup)
+        sample_label_tr = torch.tensor([sample_label], dtype=torch.long, device=device)
+        sample_colors = get_random_colors(symmetry, 1, num_tiles, device)
 
-        fname = f"library/samples/{cp_path.stem}_i{i:02d}_{cname}.svg"
+        fname = f"library/samples/{cp_path.stem}_i{i:02d}_{sample_name}.svg"
 
-        save_sample(
-            denoiser=denoiser,
-            diffuser=diffuser,
-            device=device,
-            save_path=fname,
-            num_tiles=num_tiles,
-            symmetry=symmetry,
-            side=side,
-            label=label,
-            num_steps=num_steps
-        )
+        samples = model.sample(sample_colors, sample_label_tr, num_steps)
+        svg = xyac_to_svgs(samples, symmetry, side)[0]
+        with open(fname, 'w') as fp:
+            fp.write(svg)
+            print(f"Saved to {fname}")
+
+        lattice_loss = hex_lattice_loss_quadratic(samples, side)
+        print(f"Lattice loss: {lattice_loss:.4f}")
+
+
         i += 1

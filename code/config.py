@@ -85,6 +85,7 @@ class Config:
 
         # Update config and data_path
         if self.checkpoint_path:
+            print(f"Loading config from checkpoint: {self.checkpoint_path}")
             ckpt = safe_torch_load(self.checkpoint_path, map_location='cpu')
             update_config(self.config, ckpt['config'])
 

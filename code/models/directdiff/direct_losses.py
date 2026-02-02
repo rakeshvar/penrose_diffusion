@@ -28,7 +28,6 @@ class AbstractLoss(ABC):
         self.device = next(denoiser.parameters()).device
 
     def __call__(self, xysc_0, colors, labels):
-        self.denoiser.train()
         B = xysc_0.shape[0]
 
         # Forward pass - Add Noise

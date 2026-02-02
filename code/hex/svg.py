@@ -7,6 +7,8 @@ def save_svg(hexgrid, filename, ndigits=3, print_ok=True):
     "colors": {
         0: "#D8D388",
         1: "#4ee055",
+        2: "#ddb4a2",
+        3: "#38b2c2",
         },
         "margin": 0.05,
         "stroke-colour": "#ffffff",
@@ -42,19 +44,15 @@ def save_svg(hexgrid, filename, ndigits=3, print_ok=True):
              width="{int(1080*wd/ht)}" height="1080"
              viewBox="{viewbox}">
 
-        <style>
-          .colored {{
-            fill: {config["colors"][1]};
-            fill-opacity: {config["opacity"]};
-          }}
-          .uncolor {{
-            fill: {config["colors"][0]};
-            fill-opacity: {config["opacity"]};
-          }}
+        <style>""") + "\n".join(
+        [
+            f'.color{i} {{ fill: {config["colors"][i]}; fill-opacity: {config["opacity"]}; }}' for i in range(4)
+        ]) + \
+        dedent(f"""\
           .duplicate {{
             fill: #0000c0;
             fill-opacity: 1.0;
-          }}
+          }}          
         </style>
         <rect x="{xmin:.3f}" y="{ymin:.3f}" width="{wd:.3f}" height="{ht:.3f}" fill="{config["background"]}"/>
         <g style="stroke:{config["stroke-colour"]}; stroke-width: {hexgrid.side/20:.4f};
@@ -67,7 +65,7 @@ def save_svg(hexgrid, filename, ndigits=3, print_ok=True):
     # Draw hexagons
     hexagon_paths = []
     for h in hexgrid:
-        css_class = "colored" if h.color else "uncolor"
+        css_class = f"color{int(h.color):d}"
         path = svg_path(h, ndigits=ndigits)
         hexagon_paths.append(f'<path class="{css_class}" d="{path}" />')
 

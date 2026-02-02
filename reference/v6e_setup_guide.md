@@ -5,7 +5,17 @@
 ```bash
 sudo timedatectl set-timezone Asia/Kolkata
 export WANDB_API_KEY=$(gsutil cat gs://penrose_diffusion/wandb_api_key.txt)
-sudo systemctl stop unattended-upgrades
+
+# Kill and permanently disable auto-upgrades
+sudo systemctl stop unattended-upgrades apt-daily apt-daily-upgrade
+sudo systemctl disable unattended-upgrades apt-daily apt-daily-upgrade
+sudo systemctl mask unattended-upgrades apt-daily apt-daily-upgrade
+
+# Lock-safe apt
+while sudo fuser /var/lib/dpkg/lock-frontend >/dev/null 2>&1; do
+  sleep 2
+done
+
 sudo NEEDRESTART_MODE=a apt update
 sudo NEEDRESTART_MODE=a apt install -y python3.10-venv
 python3 -m venv ~/tpu-env

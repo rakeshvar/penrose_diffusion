@@ -22,7 +22,7 @@ class PerceiverBlock(nn.Module):
         self.norm3 = nn.LayerNorm(dim)
 
     def forward(self, q, z):
-        z = z.unsqueeze(1)                      # (B, D) -> (B, 1, D) 
+        z = z.unsqueeze(1)                      # (B, D) -> (B, 1, D)
         h, _ = self.cross_attn(q, z, z) # q <- z
         q = self.norm1(q + h)
 
@@ -34,15 +34,14 @@ class PerceiverBlock(nn.Module):
 
 
 class PerceiverDecoder(nn.Module):
-    def __init__(self, latent_dim, num_tiles):
+    def __init__(self, latent_dim, num_tiles, num_blocks=2):
         super().__init__()
 
         self.queries = nn.Parameter(torch.randn(num_tiles, latent_dim)) # N, D
 
         self.color_embedding = nn.Embedding(2, latent_dim)
         self.blocks = nn.ModuleList([
-            PerceiverBlock(latent_dim),
-            PerceiverBlock(latent_dim),
+            PerceiverBlock(latent_dim) for _ in range(num_blocks)
         ])
 
         self.output_mlp = nn.Sequential(
@@ -57,13 +56,13 @@ class PerceiverDecoder(nn.Module):
         B, N = color.shape
         q = self.queries.unsqueeze(0).expand(B, -1, -1)     # B, N, D
         c_emb = self.color_embedding(color.long())
-        
-        q = q + c_emb 
+
+        q = q + c_emb
         for blk in self.blocks:
             q = blk(q, z)
 
-        
+
         # 5. Output
         xyac = self.output_mlp(q)
-        
+
         return xyac

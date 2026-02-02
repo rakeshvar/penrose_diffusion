@@ -40,13 +40,13 @@ def maybe_download(path:str, suffix=""):
 #--------------------------------------------
 # Loader
 #--------------------------------------------
-def load_checkpoint(checkpoint_path, denoiser, optimizer, scheduler, rank):
+def load_checkpoint(checkpoint_path, model, optimizer, scheduler, rank):
     if not checkpoint_path:
         return
 
     mprint(f"Loading weights from {checkpoint_path}...", rank)
     ckpt = safe_torch_load(checkpoint_path, map_location='cpu')
-    denoiser.load_state_dict(ckpt['denoiser_state_dict'], strict=True)
+    model.load_state_dict(ckpt['model_state_dict'], strict=True)
 
     if optimizer and 'optimizer_state_dict' in ckpt:
         optimizer.load_state_dict(ckpt['optimizer_state_dict'])
@@ -93,16 +93,16 @@ class CheckPointer:
         self.fixed_ckpt_data['num_tiles']    = dataset.num_tiles
         self.fixed_ckpt_data['num_classes']  = dataset.num_classes
         self.fixed_ckpt_data['class_lookup'] = dataset.class_lookup
-        
+
         self.fixed_ckpt_data['config']       = config
         self.fixed_ckpt_data['data_path']    = data_path
         self.fixed_ckpt_data['wandb_run_id'] = wandb_run_id
 
 
-    def save_checkpoint(self, epoch, denoiser, optimizer, scheduler, loss):
+    def save_checkpoint(self, epoch, model, optimizer, scheduler, loss):
         data = {
             'epoch': epoch,
-            'denoiser_state_dict': denoiser.state_dict(),
+            'model_state_dict': model.state_dict(),
             'optimizer_state_dict': optimizer.state_dict(),
             'scheduler_state_dict': scheduler.state_dict(),
             'loss': loss,
