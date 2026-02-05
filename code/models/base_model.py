@@ -1,7 +1,7 @@
 from abc import ABC, abstractmethod
 import torch.nn as nn
 
-class DiffusionModel(nn.Module, ABC):
+class AbstractModel(nn.Module, ABC):
     """Base class for all diffusion models"""
 
     @property

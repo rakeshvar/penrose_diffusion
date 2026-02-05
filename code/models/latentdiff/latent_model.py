@@ -4,6 +4,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 from code.augment import GeometryAugment
+from code.models.base_model import AbstractModel
 from code.models.latentdiff.latent_denoiser import LatentDenoiser
 from code.utils.lossy import hex_lattice_loss_logarthmic, hex_lattice_loss_quadratic
 
@@ -54,7 +55,7 @@ class LatentDiffuser(Diffuser):
 # Model
 # ------------------------------------------------------------
 
-class LatentDiffusionModel(nn.Module):
+class LatentDiffusionModel(AbstractModel):
     def __init__(self, config, num_tiles):
         super().__init__()
 

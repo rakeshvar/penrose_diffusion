@@ -5,7 +5,7 @@ from code.augment import GeometryAugment
 from code.utils.advanced import xya_to_xysc, xysc_to_xyac
 
 from ..diffuser import Diffuser
-from ..base import DiffusionModel
+from ..base_model import AbstractModel
 from .direct_denoiser import TransformerDenoiser
 from .isab_denoiser import ISABDenoiser
 from .direct_losses import loss_registry
@@ -34,7 +34,7 @@ class DirectDiffuser(Diffuser):
 #------------------------------------------------------------------------------
 # Diffusion Model
 #------------------------------------------------------------------------------
-class DirectDiffusionModel(DiffusionModel):
+class DirectDiffusionModel(AbstractModel):
     def __init__(self, model_config, **ignore):
         super().__init__()
         self.config = model_config
