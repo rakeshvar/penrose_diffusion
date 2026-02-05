@@ -47,7 +47,7 @@ class DirectDiffusionModel(AbstractModel):
             self.denoiser = ISABDenoiser(**model_config) # type: ignore
         else:
             raise NotImplementedError(f"Unknown model: {model_config['model']}")
-        Loss = loss_registry.get(model_config['loss'])
+        Loss = loss_registry[model_config['loss']]
         self.loss_functor = Loss(self.denoiser, self.diffuser)
 
     @property

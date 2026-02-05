@@ -23,3 +23,8 @@ class AbstractModel(nn.Module, ABC):
     def sample(self, *args, **kwargs):
         """Generate samples"""
         raise NotImplementedError
+    
+    @property
+    @abstractmethod
+    def aux_loss_names(self):
+        raise NotImplementedError

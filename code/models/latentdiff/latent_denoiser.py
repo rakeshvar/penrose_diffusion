@@ -24,7 +24,7 @@ class MLPLatentDenoiser(nn.Module):
     def forward(self, z_t, t, cls):
         h = z_t + self.time_embed(t) + self.class_embed(cls)
         return self.net(h)
-    
+
     @property
     def device(self):
         return next(self.parameters()).device
@@ -33,10 +33,10 @@ class MLPLatentDenoiser(nn.Module):
 # FiLM
 #------------------------------------------------------------
 class LatentDenoiser(nn.Module):
-    def __init__(self, D, num_classes, T=1000, hidden_dim=512):
+    def __init__(self, D, num_classes, hidden_dim=512):
         super().__init__()
         self.D = D
-        
+
         # Sinusoidal time embedding (critical!)
         self.time_mlp = nn.Sequential(
             SinusoidalPositionalEmbedding(256),
@@ -45,20 +45,20 @@ class LatentDenoiser(nn.Module):
             nn.Linear(hidden_dim, hidden_dim)
         )
         self.class_embed = nn.Embedding(num_classes + 1, hidden_dim)
-        
+
         # Deeper network with FiLM conditioning
         self.input_proj = nn.Linear(D, hidden_dim)
         self.blocks = nn.ModuleList([
-            FiLMBlock(hidden_dim, hidden_dim, hidden_dim) 
+            FiLMBlock(hidden_dim, hidden_dim, hidden_dim)
             for _ in range(4)
         ])
         self.out = nn.Linear(hidden_dim, D)
-    
+
     def forward(self, z_t, t, cls):
         t_emb = self.time_mlp(t)
         c_emb = self.class_embed(cls)
         cond = t_emb + c_emb
-        
+
         h = self.input_proj(z_t)
         for block in self.blocks:
             h = block(h, cond)
@@ -74,25 +74,25 @@ class FiLMBlock(nn.Module):
         super().__init__()
         self.norm = nn.LayerNorm(in_dim, elementwise_affine=False)
         self.linear = nn.Linear(in_dim, out_dim)
-        
+
         # Learn scale and shift from conditioning
         self.film = nn.Linear(cond_dim, out_dim * 2)
         self.act = nn.SiLU()
-        
+
         # Residual connection
         self.residual = nn.Linear(in_dim, out_dim) if in_dim != out_dim else nn.Identity()
-    
+
     def forward(self, x, cond):
         # Normalize
         h = self.norm(x)
-        
+
         # Apply linear
         h = self.linear(h)
-        
+
         # FiLM modulation
         scale, shift = self.film(cond).chunk(2, dim=-1)
         h = h * (1 + scale) + shift
-        
+
         # Activation and residual
         h = self.act(h)
         return h + self.residual(x)

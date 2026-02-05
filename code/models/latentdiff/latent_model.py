@@ -1,12 +1,11 @@
 from math import pi, sqrt
 import torch
-import torch.nn as nn
 import torch.nn.functional as F
 
 from code.augment import GeometryAugment
 from code.models.base_model import AbstractModel
 from code.models.latentdiff.latent_denoiser import LatentDenoiser
-from code.utils.lossy import hex_lattice_loss_logarthmic, hex_lattice_loss_quadratic
+from code.utils.lossy import hex_lattice_loss_logarthmic
 
 from .set_decoder import PerceiverDecoder
 from .set_encoder import SetEncoder
@@ -56,7 +55,7 @@ class LatentDiffuser(Diffuser):
 # ------------------------------------------------------------
 
 class LatentDiffusionModel(AbstractModel):
-    def __init__(self, config, num_tiles):
+    def __init__(self, config):
         super().__init__()
 
         latent_dim = config['latent_dim']
@@ -66,14 +65,15 @@ class LatentDiffusionModel(AbstractModel):
         self.p_uncond = 1/7.
         self.null_class = num_classes
         self.latent_dim = latent_dim
-        num_blocks = config.get('num_blocks', 2)
+        num_blocks = config['num_blocks']
+        num_tiles = config['num_tiles']
 
         self.augmenter = GeometryAugment()
         self.encoder = SetEncoder(latent_dim, num_classes)
         self.denoiser = LatentDenoiser(latent_dim, num_classes)
         self.decoder = PerceiverDecoder(latent_dim, num_tiles, num_blocks)
         self.diffuser = LatentDiffuser(1)
-        self.recons_loss_fn = loss_registry.get(self.rec_loss)
+        self.recons_loss_fn = loss_registry[self.rec_loss]
 
     @property
     def device(self):

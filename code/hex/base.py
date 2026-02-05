@@ -112,11 +112,14 @@ class HexagonGrid:
 
 class HexXYA:
     def __init__(self, hexagon):
-        self.q, self.r, self.s = hexagon.q, hexagon.r, hexagon.s
         self.x, self.y = hexagon.center
         self.color = hexagon.color
         self.angle = hexagon.angle
         self.side = hexagon.side
+        try:
+            self.q, self.r, self.s = hexagon.q, hexagon.r, hexagon.s
+        except AttributeError:
+            self.q = self.r = self.s = None
 
     def rotate(self, alpha):
         self.x, self.y = (

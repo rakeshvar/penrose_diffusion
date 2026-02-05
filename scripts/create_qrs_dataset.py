@@ -3,12 +3,14 @@ from code.data.generator import Generator6
 from code.data.imageset import ImageSet
 from tqdm import tqdm
 
+from code.utils.qrs import qrs_npz_stats
 
-def get_qrs_sample(gen6, class_id=None, inclassid=None, rotate_mask=True):
+
+def get_qr_sample(gen6, class_id=None, inclassid=None, rotate_mask=True):
     try:
-        _ = gen6.canvas_qrs
+        _ = gen6.canvas_qr
     except AttributeError:
-        gen6.canvas_qrs = np.array([(h.q, h.r, h.s) for h in gen6.canvas], dtype=np.int8)
+        gen6.canvas_qr = np.array([(h.q, h.r) for h in gen6.canvas], dtype=np.int8)
 
     if class_id is None:
         sample = next(gen6.imagesetiter)
@@ -59,7 +61,7 @@ def get_qrs_sample(gen6, class_id=None, inclassid=None, rotate_mask=True):
     update_coverage(u + eqsqhfsd, v + eqsqhfsd)
 
     sets_idx = {val: np.flatnonzero(coverage == val) for val in (1, 2, 3, 4)}
-    qrs = np.zeros((gen6.num_tiles, 3), dtype=np.int8)
+    qr = np.zeros((gen6.num_tiles, 2), dtype=np.int8)
     taken = 0
     take_now = 5
 
@@ -70,7 +72,7 @@ def get_qrs_sample(gen6, class_id=None, inclassid=None, rotate_mask=True):
         idxs = sets_idx[val]
         take = idxs[:gen6.num_tiles - taken]
         if len(take) > 0:
-            qrs[taken:taken + len(take)] = gen6.canvas_qrs[take]
+            qr[taken:taken + len(take)] = gen6.canvas_qr[take]
             taken += len(take)
 
     name = f"{sample.classname}-{sample.inclassid:02d}"
@@ -83,38 +85,37 @@ def get_qrs_sample(gen6, class_id=None, inclassid=None, rotate_mask=True):
             f"\tsets: ({len(sets_idx[4]):3d}, {len(sets_idx[3]):3d}, {len(sets_idx[2]):3d}, {len(sets_idx[1]):3d}) ⇒ {taken:3d} {take_now}")
 
     # return the actual canvas objects in the same order as original code
-    return {'qrs':qrs, 'label':sample.classid, 'name':name}
+    return {'qr':qr, 'label':sample.classid, 'name':name}
 
 
-def generate_qrs_and_save(generator, samples_per_class, num_copies, prefix):
+def generate_qr_and_save(generator, samples_per_class, num_copies, prefix):
     num_tiles = generator.num_tiles
     num_classes = generator.imageset.num_classes
     total_samples = num_classes * samples_per_class * num_copies
     print(f"\nTotal Samples = {num_classes} classes * {samples_per_class} samples * {num_copies} copies = {total_samples}.")
 
-    qrs = np.zeros((total_samples, num_tiles, 3), dtype=np.int8)
-    print(f"qrs: ({total_samples}, {num_tiles}, 3) [{qrs.dtype}]")
+    qr = np.zeros((total_samples, num_tiles, 2), dtype=np.int8)
+    print(f"qr: {qr.shape} [{qr.dtype}]")
     labels = np.zeros((total_samples,), dtype=np.uint8)
-    print(f"labels: ({total_samples},) [{labels.dtype}]")
+    print(f"labels: {labels.shape} [{labels.dtype}]")
 
     print("\nFilling data...")
     i = 0
     for _ in tqdm(range(num_copies)):
         for s_id in range(samples_per_class):
             for c_id in range(num_classes):
-                sample_data = get_qrs_sample(generator, c_id, s_id, rotate_mask=True)
-                qrs_i = sample_data['qrs']
-                qrs[i] = qrs_i[:, :3]
+                sample_data = get_qr_sample(generator, c_id, s_id, rotate_mask=True)
+                qr[i] = sample_data['qr']
                 labels[i] = sample_data['label']
                 i += 1
 
-    def save_npz(filename, _qrs, _labels):
+    def save_npz(filename, _qr, _labels):
         print(f"Saving file: {filename} ")
         np.savez(filename,
-                 qrs=_qrs,
+                 qr=_qr,
                  labels=_labels,
                  symmetry=generator.symmetry,
-                 side=generator.unit_side,
+                 side=1.,
                  num_tiles=generator.num_tiles,
                  num_classes=num_classes,
                  class_lookup=generator.imageset.class_name_to_id |
@@ -122,7 +123,7 @@ def generate_qrs_and_save(generator, samples_per_class, num_copies, prefix):
         print(f"Saved!")
 
     ffull = f"{prefix}_t{num_tiles:03d}_c{num_copies:02d}_u{round(100*generator.unit_side):02d}.npz"
-    save_npz(ffull, qrs, labels)
+    save_npz(ffull, qr, labels)
 
     return ffull
 
@@ -144,7 +145,8 @@ def main():
     print(f"NUM_TILES: {NUM_TILES} \nNUM_COPIES: {NUM_COPIES} \nUNIT_SIDE: {UNIT_SIDE}")
 
     gen6 = Generator6(imageset, num_tiles=NUM_TILES, target_halfside=5., unit_side=UNIT_SIDE)
-    file = generate_qrs_and_save(gen6, SAMPLES_PER_CLASS, NUM_COPIES, prefix="datasets/hexqrs")
+    file = generate_qr_and_save(gen6, SAMPLES_PER_CLASS, NUM_COPIES, prefix="datasets/hexqr")
+    qrs_npz_stats(file)
 
 
 if __name__ == "__main__":

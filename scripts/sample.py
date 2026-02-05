@@ -15,33 +15,31 @@ from code.utils.lossy import hex_lattice_loss_quadratic
 def get_user_class(num_classes, class_lookup):
     """Prompts user for a class index or name."""
     rand_label = random.randint(0, num_classes - 1)
-    prompt = f"q to quit. \nGenerate Class (default {rand_label} aka '{class_lookup.get(rand_label, '?')}'): "
+    prompt = f"q to quit. \nGenerate Class (default {rand_label} aka '{class_lookup[rand_label]}'): "
     inp = input(prompt)
 
     if inp.lower() == 'q':
         sys.exit()
 
     if inp == '':
-        return rand_label, class_lookup.get(rand_label, str(rand_label))
+        return rand_label, class_lookup[rand_label]
 
     # Try parsing as int index
     try:
         label = int(inp)
-        return label, class_lookup.get(label, str(label))
+        return label, class_lookup[label]
     except ValueError:
         pass
 
     # Try parsing as string name
     cname = inp.lower()
-    # Invert lookup: name -> index
-    # Assuming class_lookup is {index: name}
     name_to_idx = {v.lower(): k for k, v in class_lookup.items()}
 
     if cname in name_to_idx:
         return name_to_idx[cname], class_lookup[name_to_idx[cname]]
 
     print(f"Could not find class '{cname}'. Using random.")
-    return rand_label, class_lookup.get(rand_label, str(rand_label))
+    return rand_label, class_lookup[rand_label]
 
 
 if __name__ == "__main__":
@@ -69,17 +67,17 @@ if __name__ == "__main__":
 
     # 3. Initialize Models
     Model = get_model_class(config['model']['model'])
-    model = Model(config['model'], num_tiles=cp.get('num_tiles')).to(device)
+    model = Model(config['model'])
     model.load_state_dict(cp['model_state_dict'])
     model.eval()
     diffuser = model.diffuser
 
     # 4. Extract Metadata
-    num_tiles = cp.get('num_tiles')
-    symmetry = cp.get('symmetry')
-    side = cp.get('side', 1.0)
-    num_classes = cp.get('num_classes')
-    class_lookup = cp.get('class_lookup', {})
+    num_tiles = cp['num_tiles']
+    symmetry = cp['symmetry']
+    side = cp['side']
+    num_classes = cp['num_classes']
+    class_lookup = cp['class_lookup']
 
     # 5. Interactive Loop
     i = 0

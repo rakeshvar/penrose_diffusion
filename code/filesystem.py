@@ -54,7 +54,7 @@ def load_checkpoint(checkpoint_path, model, optimizer, scheduler, rank):
     if scheduler and 'scheduler_state_dict' in ckpt:
         scheduler.load_state_dict(ckpt['scheduler_state_dict'])
 
-    mprint(f"Resumed weights from Epoch {ckpt.get('epoch', 0)}.", rank)
+    mprint(f"Resumed weights from Epoch {ckpt['epoch']}.", rank)
 
 
 #--------------------------------------------

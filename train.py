@@ -54,12 +54,13 @@ def train_fn(rank:int, config:Config):
 
     mprint(dataset, rank) # type: ignore
     mprint(f"Batches/Core:  {len(raw_loader)}", rank)
-
+    config.model['num_tiles'] = dataset.num_tiles
+    config.model['num_classes'] = dataset.num_classes
     #--------------------------------------------
     # Model Initialization
     #--------------------------------------------
     Model = get_model_class(config.model['model'])
-    model = Model(config.model, num_tiles=dataset.num_tiles).to(device)
+    model = Model(config.model).to(device)
     optimizer = torch.optim.AdamW(model.parameters(), lr=config.train['lr'])
 
     # Scheduler (Create it NOW, before loading state)
@@ -124,6 +125,7 @@ def train_fn(rank:int, config:Config):
         total_loss = 0
         aux_loss_sums = torch.zeros(num_aux_losses, device=device)
         count = 0
+        num_nans = 0
 
         # Enable progress bar only on master process
         progressbar = tqdm(train_loader, disable=(rank != 0))
@@ -133,6 +135,7 @@ def train_fn(rank:int, config:Config):
             loss, aux_losses = model.train_step(xya, colors, labels)
 
             if torch.isnan(loss):
+                num_nans += 1
                 continue
 
             # Backpropagate
@@ -152,13 +155,13 @@ def train_fn(rank:int, config:Config):
         to_log = {
             'loss/avg_loss': avg_loss,
             'grad_norm': nn_utils.clip_grad_norm_(model.parameters(), float('inf')),
-            'learning_rate': optimizer.param_groups[0]['lr']
+            'learning_rate': optimizer.param_groups[0]['lr'],
+            'num_nans': num_nans/(count + num_nans)
         }
         # Add averaged aux losses
-        if len(aux_loss_sums) > 0:
-            aux_loss_avgs = (aux_loss_sums / count).cpu().numpy()
-            for name, value in zip(model.aux_loss_names, aux_loss_avgs):
-                to_log["loss/"+name] = float(value)
+        aux_loss_avgs = (aux_loss_sums / count).cpu().numpy()
+        for name, value in zip(model.aux_loss_names, aux_loss_avgs):
+            to_log["loss/"+name] = float(value)
 
         if is_master:
           ckptr.save_checkpoint(epoch, model, optimizer, scheduler, avg_loss) # type: ignore

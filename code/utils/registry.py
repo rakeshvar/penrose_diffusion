@@ -20,7 +20,7 @@ class Registry:
             return cls
         return decorator
 
-    def get(self, name: str):
+    def __getitem__(self, name: str):
         """Retrieve a class by name (case-insensitive)."""
         key = name.lower()
         try:

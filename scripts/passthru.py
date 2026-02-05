@@ -1,15 +1,12 @@
-
 from pathlib import Path
 import sys
 import torch
 
 from code.data.load import MyDataset
 from code.models import get_model_class
-from code.utils.advanced import get_random_colors, xyac_to_svgs
+from code.utils.advanced import xyac_to_svgs
 from code.utils.basic import print_config
 from code.utils.lossy import hex_lattice_loss_quadratic
-from scripts.sample import get_user_class
-
 
 def main():
     # 1. Setup
@@ -34,17 +31,14 @@ def main():
 
     # 3. Initialize Models
     Model = get_model_class(config['model']['model'])
-    model = Model(config['model'], num_tiles=cp.get('num_tiles')).to(device)
+    model = Model(config['model']).to(device)
     model.load_state_dict(cp['model_state_dict'])
     model.eval()
-    diffuser = model.diffuser
 
     # 4. Extract Metadata
-    num_tiles = cp.get('num_tiles')
-    symmetry = cp.get('symmetry')
-    side = cp.get('side', 1.0)
-    num_classes = cp.get('num_classes')
-    class_lookup = cp.get('class_lookup', {})
+    symmetry = cp['symmetry']
+    side = cp['side']
+    class_lookup = cp['class_lookup']
 
 
     # 5. Interactive Loop
@@ -56,7 +50,7 @@ def main():
 
     while True:
         xya, colors, labels = dataset[i:i+TEN]
-        names = [class_lookup.get(c, c) for c in labels]
+        names = [class_lookup[c] for c in labels]
 
         paths = [f"library/samples/{cp_path.stem}_i{i:02d}_{sample_name}.svg"
                  for (i, sample_name) in zip(range(TEN), names)]
