@@ -3,7 +3,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 from code.models.base_model import AbstractModel
-from code.models.llm.standardize import get_colors, qr_to_xya
+from code.utils.qrs import get_colors, qr_to_xya
 
 class LLModel(AbstractModel):
     def __init__(self, config):
