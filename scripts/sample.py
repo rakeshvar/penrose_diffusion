@@ -70,7 +70,6 @@ if __name__ == "__main__":
     model = Model(config['model'])
     model.load_state_dict(cp['model_state_dict'])
     model.eval()
-    diffuser = model.diffuser
 
     # 4. Extract Metadata
     num_tiles = cp['num_tiles']

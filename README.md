@@ -8,11 +8,11 @@ This is a geometric **Denoising Diffusion Probabilistic Model (DDPM/DDIM)** that
 - Periodic Hexagonal tilings with *6-fold symmetry*
 
 
-The tiles form an overall shape dictated by semantic class labels. The shapes come from silhouettes of the **MPEG-7 Core Experiment Shape-1 Part B**.
+The tiles form an overall shape dictated by semantic class labels.
 
 ## Data
-
-### MPEG-7 “base” data
+### Base Data
+The guiding shapes come from silhouettes of the **MPEG-7** dataset (*Core Experiment Shape-1 Part B*).
 
 - 70 distinct classes (e.g., apple, fish, bat, chopper, etc.)
 - Each class has *20* different sihouttes
@@ -22,23 +22,25 @@ The tiles form an overall shape dictated by semantic class labels. The shapes co
 
 ### Data Generation
 
-- **Mimic**ing a single silhoutte, tiles are ‘cut out’ of a mother canvas of rhombuses or hexagons.
+Mimicing every silhoutte, tiles are ‘cut out’ of a mother canvas of rhombuses or hexagons.
 - **Endless** amount of tessellations can be generated to mimic one silhoutte by snipping from different parts of the canvas and by rotating it at different angles
 
 - **Dual Rotation** for every training step, we apply random rotations to both the underlying tile canvas and the target silhouette mask independently.
 
-- This acts as **Regularization** as the model never sees the exact same arrangement of tiles twice, preventing memorization and encouraging robust geometric generalization.
+- This acts as **Regularization** as the model never sees the exact same arrangement of tiles twice, preventing memorization and instead forcing geometric generalization.
 
 ### Uniform Sample Complexity
 
-A major challenge in geometric modeling is varying density amongst silhouettes. Some are dense some are light. We solve this with a **dynamic scaling algorithm**:
+A major challenge in geometric modeling is varying density amongst silhouettes. 
 
+- Some are dense some are light. We solve this with a **dynamic scaling algorithm**:
 - Regardless of the class (e.g., a thin pencil vs. a bulky elephant), we automatically scale the silhouette so that it is filled by a **fixed, target-number of tiles** (e.g., 768 tiles).
 - This ensures we have the exact same dimension for every data sample.
 
 ### Representation
-- A single sample represented as N (say 768) pentagons.
-- Each pentagon is represented as a center and an orientation
+There are many ways to represent the sets of polygons — be it hexagons with six-way symmetry or rhombuses with five-way symmetry. Canonically...
+- A single sample is represented as N (say 768) polygons.
+- Each polygon is represented as a center and an orientation
 - One sample is N x 4 matrix of (x, y, angle and color)
 
   * `(x, y)` have zero-mean and unit variance
@@ -46,26 +48,48 @@ A major challenge in geometric modeling is varying density amongst silhouettes. 
   * `color` $\in \{0, 1\}$
 
 #### Color Constraint
-- Each pentagon also has a **binary** color property
+Each pentagon also has a **binary** color property
 - For *6-fold* symmetry
 
   * `Uncolored` tiles are 0 (2/3)
-  * `Colored` tiles are ` (1/3)
-  * Colored tiles should not be touching each other
+  * `Colored` tiles are 1 (1/3)
+  * Colored tiles should not be touching each other, in our problem
 ![Hexagonal Horse](reference/images/horse-07.svg)
 
 - For *5-fold* symmetry
 
-  * `Fatt` tiles are 0 (61.8%)
+  * `Fat` tiles are 0 (61.8%)
   * `Thin` tiles are 1 (38.2%)
   * Together they should obey the Penrose P3 rules
 ![Pentagonal Bird](reference/images/bird-15.svg)
 
-## Architecture
+## Architectures
+
+The project is designed in a highly modular code base, allowing one to plug-in a wide variety of Generative AI models. Currently Supported Models include...
+
+### 1. Direct Diffusion (`direct`)
+Operates directly on the tile coordinates `(x, y)` and angles using **Transformer**s. Standard self-attention over the set of tiles.
+
+### 2. Direct Diffusion with ISAB (`isab`)
+**ISAB (Induced Set Attention Block)**: Similar to the above but the transformer has an information bottleneck, which enocourages latent factor learning. Also reduces complexity from $O(N^2)$ to $O(NM)$ using inducing points for better scaling.
+
+### 3. Latent Diffusion (`latent`)
+Encodes the geometry into a compressed latent space before diffusion.
+- **Set Encoder**: Compresses the unordered set of tiles into a latent vector $z$ using attention pooling.
+- **Latent Diffuser**: Performs DDIM diffusion in the latent space.
+- **Perceiver Decoder**: Reconstructs the set of tiles from the noisy latent $z$, conditioned on tile colors.
+
+### 4. Language Model (`llm`)
+Treats the tiling as a sequence of discrete tokens.
+- **Quantization**: Converts continuous `(x, y)` coordinates into discrete integer grid coordinates.
+- **Autoregressive**: Generates tiles sequentially (next-token prediction) using a GPT-style decoder.
+- **Discretization**:
+  - The hexagons are naturally converted into a `q, r, s` space on the hexagonal grid
+  - The rhombuses have a hierarchical representation based on the generating tesselation process.
 
 ### Model Components
-
-- **Denoiser**: Transformer encoder that predicts noise or samples by conditiontioning on:
+The Diffusion models contain two basic working horses: (plus additional components based on the specific architecture.)
+- **Denoiser**: Transformer based encoder that predicts noise or samples by conditiontioning on:
   - Class
   - Time
   - Colors of tiles
@@ -89,19 +113,27 @@ The model supports multiple training objectives:
 
 ### Standard Losses
 
-1. **Noise Prediction Loss (NPL)**: Standard DDIM, predicts added noise
-2. **Sample Prediction Loss (SPL)**: Directly predicts clean samples
-
-**Geometric Constraints**: Custom loss terms can enforce valid unit-circle properties for orientation parameters (sin θ, cos θ).
-
-3. **Sample & Angle Loss (SAL)**: SPL with circle regularization as assistance
+- **Noise Prediction Loss (`npl`)**: Standard DDIM, predicts added noise
+- **Sample Prediction Loss (`spl`)**: Directly predicts clean samples
+- **Velocity-Prediction (`vpl`)**: Predicts velocity $v$ (useful for distillation).
 
 ### Permutation-Invariant Losses
 
-The above loss functions do not take into account the permutation invariance for sets of tiles, where the order of tiles doesn't matter. Advanced `Linear Sum Assignment (LSA)` losses handle this. We use the Hungarian Algorithm to find the optimal matching between predicted tiles and ground truth tiles before calculating loss.
+The above loss functions do not take into account the permutation invariance for sets of tiles, where the order of tiles doesn't matter. These soft assignment losses borrow ideas from `Optimal Transport` to make the model learn permutation invariance:
 
-4. **LSA Serial Loss (LSL)**: Sample is predicted and the minimum loss to any permutation of the original sample is considered.
-5. **LSA Parallel Loss (LPL)**: Sample is recovered from predicted Noise. Loss is the distance of this recovered sample to a permutation of data that is closed to the original data sample itself. *Note: This permutation of the orignial data can be calculated in parallel on the CPU, while the `Denoiser` is running, at no additional cost.*
+- **Permutation Invariant Loss (`pil`)**: Computes a soft-assignment between predicted tiles and ground truth to calculate loss.
+- **Sinkhorn Loss (`shl`)**: Uses the Sinkhorn-Knopp algorithm to enforce a doubly-stochastic match (permutation matrix) between prediction and truth.
+
+
+Advanced `Linear Sum Assignment (LSA)` losses handle this. We use the Hungarian Algorithm to find the optimal matching between predicted tiles and ground truth tiles before calculating loss.
+
+- **LSA Serial Loss (LSL)**: Sample is predicted and the minimum loss to any permutation of the original sample is considered.
+- **LSA Parallel Loss (LPL)**: Sample is recovered from predicted Noise. Loss is the distance of this recovered sample to a permutation of data that is closed to the original data sample itself. *Note: This permutation of the orignial data can be calculated in parallel on the CPU, while the `Denoiser` is running, at no additional cost.*
+
+### Auxillary Losses
+**Geometric Constraints**: Auxillary loss terms can enforce:
+-  valid unit-circle properties for orientation parameters (sin θ, cos θ) 
+- valid distance between the tiles
 
 ## Output
 
@@ -161,17 +193,23 @@ python train.py [dataset.npz] [config_group] [checkpoint.pt] [options]
 
 **Examples:**
 ```bash
-# Train from scratch with default config
-python train.py datasets/hex_t096_c100_u18.npz
+# Train from scratch with default config (direct)
+python dd128 train.py datasets/hex_t096_c100_u18.npz
 
 # Resume from checkpoint (using the same dataset)
 python train.py checkpoint.pt
 
-# Use small model config
-python train.py datasets/hex_t096_c100_u18.npz small
+# ISAB
+python dd128 isab train.py datasets/hex_t096_c100_u18.npz
+
+# LLM
+python dd128 llm train.py datasets/hexqr_t128_c64_u16.npz
+
+# latent diffusion
+python ld128 train.py datasets/hex_t096_c100_u18.npz 
 
 # Override training parameters
-python train.py datasets/hex_t096_c100_u18.npz -t lr=0.0005 -t batch_size=32 -t num_epochs=99 -t loss=lsaserial -d num_layers=4
+python train.py datasets/hex_t096_c100_u18.npz -t lr=0.0005 -t batch_size=32 -t num_epochs=99 -t loss=lsaserial -d num_layers=4 -w enable=False
 ```
 
 **Training produces:**
@@ -224,35 +262,35 @@ For Google Cloud TPU v6e, see [`v6e_setup_guide.md`](v6e_setup_guide.md) for com
 
 
 ## Project Structure
+## Project Structure
 
-```
+```text
 code/
-├── model/
-│   ├── ddim.py           # DDIM diffuser &  denoiser
-│   ├── losses.py         # Loss functions
-│   ├── augment.py        # Geometric data augmentation
-│   └── sampler.py        # Sampling as SVG
+├── models/
+│   ├── directdiff/       # Direct Diffusion (Transformer & ISAB)
+│   ├── latentdiff/       # Latent Diffusion (Set Encoder/Decoder)
+│   ├── llm/              # Autoregressive Transformer (GPT-style)
+│   ├── diffuser.py       # DDIM/DDPM logic
+│   └── sinusoidal.py     # Time embeddings
 ├── data/
-│   ├── imageset.py       # MPEG7 solhoutte image loading
-│   ├── generator.py      # Generate tilings
-│   ├── create.py         # Save tilings as npz file
-│   └── load.py           # Load from npz file
-├── hex/
-│   ├── base.py          # Hexagonal tiling logic
-│   ...
-├── pen/
-│   ├── base.py          # Penrose tiling logic
-│   ...
-├── config.py            # Configuration management
-├── utils.py             # Utility functions
-└── compatibility.py     # TPU/GPU/CPU compatibility layer
+│   ├── generator.py      # Tiling generation logic (Hex/Penrose)
+│   ├── imageset.py       # MPEG-7 silhouette loading
+│   └── load.py           # Dataset loaders (.npz)
+├── hex/                  # Hexagonal tiling logic & SVG
+├── pen/                  # Penrose tiling logic & SVG
+├── utils/
+│   ├── lossy.py          # Geometric & set-matching losses
+│   ├── qrs.py            # Coordinate systems (QRS <-> XY)
+│   └── registry.py       # Model/Loss registry
+├── config.py             # Configuration management
+├── wandblog.py           # WandB logging wrapper
+└── compatibility.py      # TPU/GPU/CPU compatibility layer
 scripts/
-├── sample.py            # Interactive sampling
-└── create_dataset.py    # Dataset creation
-tests/
-└── ...                  # Tests and trails
-train.py                 # Main training script
-configs.yaml             # Model configurations
+├── sample.py             # Interactive sampling
+├── create_dataset.py     # Create training .npz from shapes
+└── passthru.py           # Model pass-through testing
+train.py                  # Main training entry point
+configs.yaml              # Hyperparameters & Experiment groups
 ```
 
 ## How It Works (Details)
@@ -303,6 +341,10 @@ This is well-vectorized, but we do it only once on the CPU apriori and save it t
 - Normalize angles to unit circle at final step
 - Export as SVG
 
+### Hardware & Scaling
+- **Multi-Backend**: Seamless switching between CPU, GPU (CUDA), and TPU (PJRT).
+- **TPU v4/v5e/v6e Support**: Optimized for Google Cloud TPUs with `torch_xla` and distributed sampling.
+- **WandB Integration**: Automatic logging of loss curves, gradients, and **SVG samples** directly to the dashboard.
 
 ## Requirements
 
@@ -315,18 +357,3 @@ This is well-vectorized, but we do it only once on the CPU apriori and save it t
 **Optional:**
 - `torch-xla` for TPU support
 - `torch-linear-assignment` for faster LSA on GPU with CUDA
-
-## Citation
-
-```bibtex
-@software{penrose_diffusion,
-  author = {Rakeshvara},
-  title = {Penrose Diffusion: Conditional Tiling Generation with Diffusion Models},
-  year = {2025},
-  url = {https://github.com/rakeshvar/penrose_diffusion}
-}
-```
-
-## License
-
-MIT License

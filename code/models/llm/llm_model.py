@@ -90,11 +90,12 @@ class LLModel(AbstractModel):
 
         preds = logits[:, :-1, :]                                   # (B, 2N, V)
         qr_seq = qr.view(B, -1)
-        targets = (qr_seq + self.vocab_size//2).clamp(0, self.vocab_size - 1)
-
+        qr_seq = (qr_seq + self.vocab_size//2).clamp(0, self.vocab_size - 1)
+        used_mask = self._build_used_pair_mask(qr)    # (B, 2N, V)
+        preds = preds.masked_fill(used_mask, float('-inf'))
         loss = F.cross_entropy(
             preds.reshape(-1, self.vocab_size),
-            targets.reshape(-1)
+            qr_seq.reshape(-1)
         )
 
         aux_losses = torch.tensor([], device=self.device)
@@ -105,41 +106,52 @@ class LLModel(AbstractModel):
         self.eval()
         B = labels.shape[0]
         N = self.num_tiles
+        V = self.vocab_size
+        device = self.device
+        BR = torch.arange(B, device=device)
 
-        class_embs = self.class_embed(labels).unsqueeze(1) # (B, 1, D)
-        curr_seq = class_embs + self.pos_embed[:, :1, :]
-        generated_indices = []
+        # used_pairs[b, q, r] = True if (q,r) already used
+        used_pairs = torch.zeros(B, V, V, device=device, dtype=torch.bool)  # (B, V, V)
 
-        for i in range(N * 2):
-            out = self.transformer(curr_seq, curr_seq)
-            last_token_logits = self.out_head(out[:, -1, :])        # (B, V)
+        curr_seq = self.class_embed(labels).unsqueeze(1) + self.pos_embed[:, :1, :]  # (B, 1, D)
 
-            if False:
-                next_token = torch.argmax(last_token_logits, dim=-1) # Greedy
-            else:
-                probs = F.softmax(last_token_logits, dim=-1)
-                next_token = torch.multinomial(probs, 1).squeeze(1) # Random sampling
-            generated_indices.append(next_token)
+        generated = []
 
-            # Append and Embed for next step
-            next_emb = self.qrs_embed(next_token).unsqueeze(1)
-            # Add pos embedding
-            next_emb = next_emb + self.pos_embed[:, i+1:i+2, :]
+        for i in range(2 * N):
+            out = self.transformer(curr_seq, curr_seq)   # (B, i, D)
+            logits = self.out_head(out[:, -1, :])        # (B, V)
+
+            # r-step masking (odd positions only)
+            if i % 2 == 1:
+                q_tok = generated[-1]                    # (B,)
+                mask = used_pairs[BR, q_tok]    # (B, V)
+                logits = logits.masked_fill(mask, float('-inf'))
+
+            # sample
+            probs = F.softmax(logits, dim=-1)             # (B, V)
+            next_tok = torch.multinomial(probs, 1).squeeze(1)  # (B,)
+            generated.append(next_tok)
+
+            # update used_pairs after r-step
+            if i % 2 == 1:
+                q_tok = generated[-2]                     # (B,)
+                r_tok = next_tok                          # (B,)
+                used_pairs[BR, q_tok, r_tok] = True
+
+            # append embedding + position
+            next_emb = (
+                self.qrs_embed(next_tok).unsqueeze(1)
+                + self.pos_embed[:, i + 1 : i + 2, :]
+            )                                             # (B, 1, D)
 
             curr_seq = torch.cat([curr_seq, next_emb], dim=1)
             maybe_mark_step()
 
-        # 3. Reshape output to (B, N, 2)
-        seq = torch.stack(generated_indices, dim=1).view(B, N, 2)
-
-        # 4. Decode
-        q = seq[..., 0] - self.vocab_size//2
-        r = seq[..., 1] - self.vocab_size//2
-
-        # 5. Convert to Continuous for visualization
+        seq = torch.stack(generated, dim=1).view(B, N, 2)  # (B, N, 2)
+        q = seq[..., 0] - V // 2
+        r = seq[..., 1] - V // 2
         xya = qr_to_xya(q, r, 1.)
         colors = get_colors(q, r)
-
         return torch.cat([xya, colors.unsqueeze(-1)], dim=-1)
 
     def passthrough(self, qr, colors, labels):
@@ -163,3 +175,32 @@ class LLModel(AbstractModel):
     def aux_loss_names(self):
         return []
 
+
+
+    def _build_used_pair_mask(self, qr):
+        """
+        qr: (B, N, 2)
+        returns: (B, 2N, V)
+        """
+        B, N, _ = qr.shape
+        V = self.vocab_size
+        device = qr.device
+
+        qr_tok = (qr + V // 2).clamp(0, V - 1)   # (B, N, 2)
+        q = qr_tok[..., 0]                      # (B, N)
+        r = qr_tok[..., 1]                      # (B, N)
+        r_onehot = F.one_hot(r, V).bool()       # (B, N, V)
+        used = torch.zeros(B, V, V, device=device, dtype=torch.bool)
+        masks = []
+
+        for i in range(N):
+            masks.append(used[torch.arange(B), q[:, i]])
+            used[torch.arange(B), q[:, i]] |= r_onehot[:, i]
+
+        q_mask = torch.zeros(B, N, V, device=device, dtype=torch.bool)
+        r_mask = torch.stack(masks, dim=1)      # (B, N, V)
+
+        used_mask = torch.stack([q_mask, r_mask], dim=2)  # (B, N, 2, V)
+        used_mask = used_mask.view(B, 2 * N, V)
+
+        return used_mask

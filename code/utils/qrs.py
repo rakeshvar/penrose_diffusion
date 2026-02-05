@@ -125,7 +125,6 @@ def spiral_sort_qrs(qr):
     Sorts tiles by distance from center (shell) then by angle.
     CRITICAL: Also re-centers the cluster to (0,0) so vocab stays small.
     """
-    print("Sorting QRs... ", qr.shape, qr.dtype)
     M, N, D = qr.shape
     
     q = qr[..., 0].float()
