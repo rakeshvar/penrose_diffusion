@@ -1,7 +1,5 @@
 import warnings
-from pathlib import Path
 from typing import Optional, Dict
-import wandb
 
 try:
     import wandb

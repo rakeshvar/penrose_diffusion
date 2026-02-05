@@ -2,6 +2,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
+from code.compatibility import maybe_mark_step
 from code.models.base_model import AbstractModel
 from code.utils.qrs import get_colors, qr_to_xya
 
@@ -126,6 +127,7 @@ class LLModel(AbstractModel):
             next_emb = next_emb + self.pos_embed[:, i+1:i+2, :]
 
             curr_seq = torch.cat([curr_seq, next_emb], dim=1)
+            maybe_mark_step()
 
         # 3. Reshape output to (B, N, 2)
         seq = torch.stack(generated_indices, dim=1).view(B, N, 2)

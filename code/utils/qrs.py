@@ -100,7 +100,7 @@ def get_colors(q, r):
     mn = a.min(dim=-1)[0]
     return ((mx + mn) % 3 == 0).long()
 
-def sort_canonical(q, r):
+def spiral_sort(q, r):
     """
     Sorts the tiles to ensure a deterministic sequence order.
     Sorts by degree (shells), then circularly by angle.
@@ -119,3 +119,36 @@ def sort_canonical(q, r):
     q_sorted = torch.gather(q, 1, sort_idx)
     r_sorted = torch.gather(r, 1, sort_idx)
     return q_sorted, r_sorted
+
+def spiral_sort_qrs(qr):
+    """
+    Sorts tiles by distance from center (shell) then by angle.
+    CRITICAL: Also re-centers the cluster to (0,0) so vocab stays small.
+    """
+    print("Sorting QRs... ", qr.shape, qr.dtype)
+    M, N, D = qr.shape
+    
+    q = qr[..., 0].float()
+    r = qr[..., 1].float()
+    
+    # Mean-center
+    q_center = q.mean(dim=1, keepdim=True).round()
+    r_center = r.mean(dim=1, keepdim=True).round()
+    q_centered = q - q_center
+    r_centered = r - r_center
+    s_centered = -q_centered - r_centered 
+    qr_centered = torch.stack([q_centered, r_centered], dim=2).long()
+    
+    # Sort 
+    # Key A: Radius = max(|q|, |r|, |s|)
+    radius = torch.max(torch.max(q_centered.abs(), r_centered.abs()), s_centered.abs())
+    # Key B: Angle
+    x, y = math.sqrt(3) * (q_centered + 0.5 * r_centered), 1.5 * r_centered
+    angle = torch.atan2(y, x)               # (-pi, pi]
+    sort_key = 10 * radius - angle          # radius, then clockwise
+    perm = torch.argsort(sort_key, dim=1) # (M, N)
+  
+    # 3D gather: (M, N) -> (M, N, D)
+    perm_expanded = perm.unsqueeze(-1).expand(-1, -1, D)
+    data_sorted = torch.gather(qr_centered, 1, perm_expanded)
+    return data_sorted

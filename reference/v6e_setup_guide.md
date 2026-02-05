@@ -48,6 +48,15 @@ pkill -9 -f python
 sudo fuser -v /dev/vfio/*
 ```
 
+### Toys
+```bash
+mkdir datasets/
+gsutil -m cp -r gs://penrose_diffusion/datasets/*.npz datasets
+python train.py ddtoy datasets/hex_t096_c01_u18.npz -w enable=False 
+python train.py ddtoy isab datasets/hex_t096_c01_u18.npz -w enable=False 
+python train.py ldtoy datasets/hex_t096_c01_u18.npz -w enable=False 
+python train.py ddtoy llm datasets/hexqr_t128_c64_u16.npz -w enable=False 
+```
 
 # Working Area
 ```

@@ -4,15 +4,17 @@ import numpy as np
 import torch
 from torch.utils.data import Dataset
 
+from code.utils.qrs import spiral_sort_qrs
+
 class MyDataset(Dataset):
     def __init__(self, data_path):
         path = Path(data_path)
         self.data_path_name = path.name
 
         with np.load(path, allow_pickle=True) as data:
-            xya = torch.from_numpy(data['xya'])       if 'xya' in data else None           # (M, N, xya)
+            xya = torch.from_numpy(data['xya'])       if 'xya' in data else None     # (M, N, xya)
             colors = torch.from_numpy(data['colors']) if 'colors' in data else None  # (M, N)
-            qr = torch.from_numpy(data['qr'])         if 'qr' in data else None              # (M, N, 2)
+            qr = torch.from_numpy(data['qr'])         if 'qr' in data else None      # (M, N, 2)
             labels = torch.from_numpy(data['labels'])                                # (M,)
             self.symmetry = data['symmetry'].item()
             self.side = data['side'].item()
@@ -31,7 +33,7 @@ class MyDataset(Dataset):
 
         else:
             assert  qr is not None, "Either xya or qr must be provided."
-            self.data = qr.long()
+            self.data = spiral_sort_qrs(qr).long()
 
         self.labels = labels.long()
         self.n_samples = len(self.labels)
