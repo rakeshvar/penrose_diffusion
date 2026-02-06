@@ -130,7 +130,8 @@ class Config:
                 if arg in self.library:
                     update_config(self.config, self.library[arg])
                 else:
-                    raise ValueError(f"Config group '{arg}' not found in configs.yaml")
+                    raise ValueError(f"Config group '{arg}' not found in configs.yaml. "
+                                     f"\nAvailable groups: {sorted(self.library.keys())}")
 
         #-----------------------
         # Apply Flag Overrides (-t, -m, -w)
