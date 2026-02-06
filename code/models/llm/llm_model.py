@@ -41,7 +41,7 @@ class LLModel(AbstractModel):
 
     @property
     def descriptor(self):
-        return f"llm_d{self.d_model}x{self.n_layers}"
+        return f"llm_{self.d_model}x{self.n_layers}"
 
     @property
     def device(self):

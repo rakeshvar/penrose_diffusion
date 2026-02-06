@@ -28,3 +28,8 @@ class AbstractModel(nn.Module, ABC):
     @abstractmethod
     def aux_loss_names(self):
         raise NotImplementedError
+
+    @property
+    @abstractmethod
+    def device(self):
+        raise NotImplementedError

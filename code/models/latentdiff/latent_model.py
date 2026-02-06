@@ -67,6 +67,7 @@ class LatentDiffusionModel(AbstractModel):
         self.latent_dim = latent_dim
         num_blocks = config['num_blocks']
         num_tiles = config['num_tiles']
+        self.config = config
 
         self.augmenter = GeometryAugment()
         self.encoder = SetEncoder(latent_dim, num_classes)
@@ -81,7 +82,7 @@ class LatentDiffusionModel(AbstractModel):
 
     @property
     def descriptor(self):
-        return f"ld{self.latent_dim}_{self.recons_loss_fn.abbr}"
+        return f"lat_{self.latent_dim}x{self.config['num_blocks']}_{self.recons_loss_fn.abbr}"
 
     def train_step(self, x, color, cls):
         x = self.augmenter(x)

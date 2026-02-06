@@ -1,12 +1,14 @@
 from .directdiff.direct_model import DirectDiffusionModel
 from .latentdiff.latent_model import LatentDiffusionModel
 from .llm.llm_model import LLModel
+from .discrete.discrete_model import MaskedDiscreteModel
 
 _MODEL_REGISTRY = {
     'direct': DirectDiffusionModel,
     'isab': DirectDiffusionModel,
     'latent': LatentDiffusionModel,
-    'llm': LLModel
+    'llm': LLModel,
+    'discrete': MaskedDiscreteModel
 }
 
 def get_model_class(model_name):
