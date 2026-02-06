@@ -4,6 +4,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 import numpy as np
 
+from code.compatibility import maybe_mark_step
 from code.models.base_model import AbstractModel
 from code.models.sinusoidal import SinusoidalPositionalEmbedding
 from code.utils.qrs import get_colors, qr_to_xya  
@@ -219,7 +220,7 @@ class MaskedDiscreteModel(AbstractModel):
             threshold = torch.kthvalue(confidence, n_mask, dim=1).values.unsqueeze(1)  # B, 1
             mask_decision = confidence < threshold                                     # B, 2N
             xₜ = torch.where(mask_decision, self.mask_token_id, xₜ_new)                # B, 2N
-
+            maybe_mark_step()
 
         q = xₜ[:, 0::2] - self.offset # B, N
         r = xₜ[:, 1::2] - self.offset # B, N
