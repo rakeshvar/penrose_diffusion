@@ -113,6 +113,7 @@ class LLModel(AbstractModel):
         # used_pairs[b, q, r] = True if (q,r) already used
         used_pairs = torch.zeros(B, V, V, device=device, dtype=torch.bool)  # (B, V, V)
 
+        # start with class token (embedded + position 0)
         curr_seq = self.class_embed(labels).unsqueeze(1) + self.pos_embed[:, :1, :]  # (B, 1, D)
 
         generated = []
@@ -124,7 +125,7 @@ class LLModel(AbstractModel):
             # r-step masking (odd positions only)
             if i % 2 == 1:
                 q_tok = generated[-1]                    # (B,)
-                mask = used_pairs[BR, q_tok]    # (B, V)
+                mask = used_pairs[BR, q_tok]             # (B, V)
                 logits = logits.masked_fill(mask, float('-inf'))
 
             # sample
@@ -134,9 +135,8 @@ class LLModel(AbstractModel):
 
             # update used_pairs after r-step
             if i % 2 == 1:
-                q_tok = generated[-2]                     # (B,)
                 r_tok = next_tok                          # (B,)
-                used_pairs[BR, q_tok, r_tok] = True
+                used_pairs[BR, q_tok, r_tok] = True       # (B, V, V)  # type: ignore
 
             # append embedding + position
             next_emb = (

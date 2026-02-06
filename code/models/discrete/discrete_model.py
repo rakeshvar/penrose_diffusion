@@ -106,23 +106,27 @@ class MaskedDiscreteModel(AbstractModel):
 
         # Sample Masking Ratio = cos(uniform(0, pi/2))
         mask_ratio = torch.cos(R(B) * math.pi * 0.5)
-        mask_indices = R(B, 2*N) < mask_ratio.unsqueeze(1)
-        x_t = x_0.clone()
-        x_t[mask_indices] = self.mask_token_id
+        mask_bool = R(B, 2*N) < mask_ratio.unsqueeze(1)
+        mask_token_tensor = torch.full_like(x_0, self.mask_token_id)
+        x_t = torch.where(mask_bool, mask_token_tensor, x_0)
 
         logits = self._forward(x_t, mask_ratio, labels)   # B, 2N, V
 
         # Loss (Only on masked tokens)
-        loss = F.cross_entropy(
-            logits[mask_indices], 
-            x_0[mask_indices]
-        )
+        loss_all = F.cross_entropy(
+            logits.reshape(-1, self.vocab_size),          # 2BN, V
+            x_0.reshape(-1),                              # 2BN
+            reduction='none' # Return loss per token
+        ).view(B, 2*N)
+        loss_masked = loss_all * mask_bool.float()
+        num_masked = mask_bool.sum().clamp(min=1.0)
+        loss = loss_masked.sum() / num_masked
 
-        # Calculate Accuracy for monitoring
+        # 6. Accuracy
         with torch.no_grad():
             preds = torch.argmax(logits, dim=-1)
-            correct = (preds == x_0) & mask_indices
-            acc = correct.sum().float() / mask_indices.sum().float().clamp(min=1.0) # ÷ 0
+            correct_tokens = (preds == x_0) & mask_bool
+            acc = correct_tokens.sum().float() / num_masked
 
         return loss, torch.tensor([acc], device=self.device)
 
