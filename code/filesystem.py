@@ -118,7 +118,8 @@ class CheckPointer:
             compat.local_save(data, local_tmp_path)
             self._upload_to_gcs(local_tmp_path, path)
 
-        print(f"Saved Checkpoint: {path}")
+        print(f"Saved Checkpoint: {path}"
+              f"   (Loss: {loss:.4f})")
         self._keep_only_last_n(self.saved_checkpoints, path, loss)
 
 
