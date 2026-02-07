@@ -1,10 +1,16 @@
 # Penrose Diffusion
 
-This is a **Denoising Diffusion Probabilistic Model (DDPM/DDIM)** that learns to generate tilings to form different shapes.
-Tiling are of two types:
+We probe the limits of class-conditioned structure discovery using Permutation-Invariant DDPM/DDIM models on sets. Operating on continuous spaces or fixed grids, we aim to train Deep Neural Networks to learn to sample chaotic, aperiodic tilings on zero-measure fractal manifolds without repetition.
 
-- Periodic Hexagonal tilings with *6-fold symmetry*
-- Aperiodic Penrose P3 Rhombus tilings with *5-fold symmetry*
+A Unified "Plug-and-Play" Architecture for the latest generative frameworks in Gen AI:
+- Transformer Denoisers: self-attention to manage long-range spatial dependencies.
+- Latent Space Learning: cross-attention and VAE information bottlenecks to compress complex geometric structures.
+- Discrete Diffusion: on the categorical nature of tile slots and orientations.
+- Auto-regressive GPTs: tilings through a sequential, LLM-style generation
+
+Symmetry and Structure: two distinct spatial regimes:
+- Periodic Hexagonal Tilings: predictable 6-fold symmetry and translational invariance that repeats.
+- Aperiodic Penrose (P3) Rhombus Tilings: chaotic/fractal 5-fold symmetry and "forbidden" quasi-crystalline structures that never repeat globally.
 
 ## Data Generation
 
