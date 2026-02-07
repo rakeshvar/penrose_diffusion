@@ -66,7 +66,7 @@ def xya_to_xysc(xya):
     xysc = torch.stack([x, y, s, c], dim=-1)
 
     colors = xya[..., 3] if xya.shape[-1] > 3 else None
-    
+
     return xysc, colors
 
 

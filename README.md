@@ -14,7 +14,7 @@ Symmetry and Structure: two distinct spatial regimes:
 
 ## Data Generation
 
-As there is no ready-made dataset for this problem, we set out to make one ourself. First we need some shapes. 
+As there is no ready-made dataset for this problem, we set out to make one ourself. First we need some shapes.
 
 ### Base Shapes
 The guiding shapes come from silhouettes of the **MPEG-7** dataset (*Core Experiment Shape-1 Part B*).
@@ -50,8 +50,8 @@ Each polygon also has a **binary** color property that has to follow a strict pa
 
 - For *5-fold* symmetry
 
-  * $\phi-1 = \frac{1}{\phi} = \frac{\sqrt{5}-1}{2} = 61.8\%$ `Fat` tiles 
-  * $2 - \phi = 1- \frac{1}{\phi} = \frac{3-\sqrt{5}}{2} = 38.2\%$ `Thin` tiles
+  * $\phi-1 = \frac{1}{\phi} = \frac{\sqrt{5}-1}{2} = 61.8%$ `Fat` tiles
+  * $2 - \phi = 1- \frac{1}{\phi} = \frac{3-\sqrt{5}}{2} = 38.2%$ `Thin` tiles
   * Together they should obey the Penrose P3 rules
 ![Pentagonal Bird](reference/images/bird-15.svg)
 
@@ -84,7 +84,7 @@ This does not employ diffusion. Instead it treats the data as integer indicies o
 - The rhombuses have a hierarchical representation based on the generating tesselation process.
 
 Then...
-- *Tokenization* converts indexing integers to tokens 
+- *Tokenization* converts indexing integers to tokens
 - *Autoregression* generates tiles sequentially using a GPT-style decoder.
 
 
@@ -96,18 +96,18 @@ In additon to the *array* of models above, the model supports multiple training 
 #### Diffusion Equations
 Variance Preserving Transformation. The signal $x_0$ and noise $\epsilon$ are combined so that the variance of $x_t$ is preserved across $t$.
 $$
-\begin{bmatrix} 
-x_t \\ 
-v 
-\end{bmatrix} 
-= 
-\begin{bmatrix} 
-\sqrt{\alpha_t} & \sqrt{1-\alpha_t} \\ 
--\sqrt{1-\alpha_t} & \sqrt{\alpha_t} 
-\end{bmatrix} 
-\begin{bmatrix} 
-x_0 \\ 
-\epsilon 
+\begin{bmatrix}
+x_t \\
+v
+\end{bmatrix}
+=
+\begin{bmatrix}
+\sqrt{\alpha_t} & \sqrt{1-\alpha_t} \\
+-\sqrt{1-\alpha_t} & \sqrt{\alpha_t}
+\end{bmatrix}
+\begin{bmatrix}
+x_0 \\
+\epsilon
 \end{bmatrix}
 $$
 ### Standard Losses
@@ -125,26 +125,26 @@ The above loss functions do not take into account the permutation invariance for
 - **Sinkhorn Loss (`shl`)**: Uses the Sinkhorn-Knopp algorithm to enforce a doubly-stochastic match (permutation matrix) between prediction and truth. This is still a soft-assignment.
 
 - **LSA Parallel Loss (`lpl`)**: Advanced `Linear Sum Assignment (LSA)` losses handle permuation-invariance more head on using the Hungarian Algorithm to find the optimal matching $\Pi^*$ between *noised* tiles $x_t$ and ground truth tiles $x_0$ before calculating loss. This permutation $\Pi^*$  can be calculated in parallel on the CPU, while the `Denoiser` is prediction $\hat\epsilon$.
-$$ 
+$$
 L = \| \Pi^*(x_o) - (x_t - \hatϵ) \| \\
 \Pi^* = \argmin_\Pi \| \Pi(x_o) - x_t \|
 $$
 
 - **LSA Serial Loss (`lsl`)**: Sample is predicted and the minimum loss to any permutation of the original sample is considered.
-$$ 
+$$
 L = \min_\Pi \| \Pi(x_o) - (x_t - \hatϵ) \| \\
 $$
 
 ### Auxillary Losses
 In addition to set level permutation invariance, there are additional constraints, like the polygons do not overlap. i.e. the tokens in a sequence of the memebers of a set do not repeat! Auxillary loss terms can enforce such **geometric constraints**.
 
-- **Lattice Loss** The distance to the nearest neighbour should be 
-  - exactly $\sqrt{3}$ unit side of the hexagon, or 
-  - within a given range for the P3 Rhombuses. 
+- **Lattice Loss** The distance to the nearest neighbour should be
+  - exactly $\sqrt{3}$ unit side of the hexagon, or
+  - within a given range for the P3 Rhombuses.
 
-Overlaps can be penalized heavily using Itakura-Saito loss over the distance to the nearest neighbour $d^*$. 
+Overlaps can be penalized heavily using Itakura-Saito loss over the distance to the nearest neighbour $d^*$.
 $$
-L_{lattice} = \sum_i d^*_i - 1 -\log d^*_i 
+L_{lattice} = \sum_i d^*_i - 1 -\log d^*_i
 $$
 
 ## Output
@@ -208,7 +208,7 @@ python train.py [dataset.npz] [config_group] [checkpoint.pt] [options]
 # Help
 python train.py -h
 
-# Train from scratch 
+# Train from scratch
 
 # Direct diffusion
 python dd128 train.py datasets/hex_t096_c100_u18.npz
@@ -217,14 +217,14 @@ python dd128 train.py datasets/hex_t096_c100_u18.npz
 python dd128 isab train.py datasets/hex_t096_c100_u18.npz
 
 # Latent diffusion
-python ld128 train.py datasets/hex_t096_c100_u18.npz 
+python ld128 train.py datasets/hex_t096_c100_u18.npz
 
 # LLM
 python dd128 llm train.py datasets/hexqr_t128_c64_u16.npz
 
 # Override training parameters
-python train.py datasets/hex_t096_c100_u18.npz \ 
-  -t lr=0.0005 -t batch_size=32 -t num_epochs=99 \                    # training 
+python train.py datasets/hex_t096_c100_u18.npz \
+  -t lr=0.0005 -t batch_size=32 -t num_epochs=99 \                    # training
   -m model=latent -m loss=lsaserial -m num_layers=4 -m d_model=256 \  # model
   -w enable=False -w project=test                                     # WANDB
 
@@ -327,7 +327,7 @@ scripts/
 
 ### 1. Dynamic Data Generation
 
-Unlike traditional approaches that cache a fixed dataset, our generator creates unique samples **dynamically**. **Dual Rotation** for every training step, we apply random rotations to both the underlying tile canvas and the target silhouette mask independently. This acts as **Regularization** as the model never sees the exact same arrangement of tiles twice, preventing memorization and instead forcing geometric generalization. 
+Unlike traditional approaches that cache a fixed dataset, our generator creates unique samples **dynamically**. **Dual Rotation** for every training step, we apply random rotations to both the underlying tile canvas and the target silhouette mask independently. This acts as **Regularization** as the model never sees the exact same arrangement of tiles twice, preventing memorization and instead forcing geometric generalization.
 
 The Process:
 
@@ -342,7 +342,7 @@ The Process:
 
 ### 2. Uniform Sample Complexity
 
-A major challenge in geometric modeling is varying density amongst silhouettes. Some are dense some are light (e.g., a thin pencil vs. a bulky elephant). We solve this with a **dynamic scaling algorithm**, which ensures we have exactly `N` tiles for every data sample: 
+A major challenge in geometric modeling is varying density amongst silhouettes. Some are dense some are light (e.g., a thin pencil vs. a bulky elephant). We solve this with a **dynamic scaling algorithm**, which ensures we have exactly `N` tiles for every data sample:
 
 - We scale the silhoutte up by the proper value inversely proportional to its density. The sparser the silhoutte, the more we have to scale it up, and viceversa
 - Now we collect all the pentagons that have all the four ‘pseudo’ vertices within mask
@@ -357,9 +357,9 @@ This is well-vectorized, but we do it only once on the CPU apriori and save it t
 
 - **Apply geometric augmentation** each epoch add additional rotation + translation to $(x, y, θ)$
 - **Convert angles**, to get unit variance on the orientation dimension, depending on the model, we either
-  - Convert θ → (sin θ, cos θ) 
-  - Scale θ → θ * $\sqrt{3}/\pi$ 
-- **Forward diffusion**: Gradually add Gaussian noise to the sample. In diffusion lingo uncorrupted data is represented as $x_0$, which in our case is the `N x 3` matrix of $(x, y, θ)$. And $x_t$ is the forward diffused value with noise variance, $var(ϵ)$ is monotonic in $t$. The variance preserving transform is: 
+  - Convert θ → (sin θ, cos θ)
+  - Scale θ → θ * $\sqrt{3}/\pi$
+- **Forward diffusion**: Gradually add Gaussian noise to the sample. In diffusion lingo uncorrupted data is represented as $x_0$, which in our case is the `N x 3` matrix of $(x, y, θ)$. And $x_t$ is the forward diffused value with noise variance, $var(ϵ)$ is monotonic in $t$. The variance preserving transform is:
 
 $$x_t = \sqrtᾱ_t ~ x_0 + \sqrt{1-ᾱ_t} ~ ε $$
 

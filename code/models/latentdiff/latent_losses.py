@@ -28,7 +28,7 @@ def chamfer_loss(x, y, colors):
 @register_loss('sink', 'sinkhorn', 'shl')
 def sinkhorn_loss(x, y, colors):
     t = t_from_s()
-    sq_dist = pairwise_sq_dist(x, y, colors, t**2)         
+    sq_dist = pairwise_sq_dist(x, y, colors, t**2)
     logits = -sq_dist/(2*(t**2))
     P = sinkhorn_permutation(logits)
     y_post = torch.bmm(P, y)
@@ -38,7 +38,7 @@ def sinkhorn_loss(x, y, colors):
 @register_loss('pinv', 'pil', 'perminv')
 def pinv_loss(x, y, colors):
     t = t_from_s()
-    sq_dist = pairwise_sq_dist(x, y, colors, t**2)         # B, N, N   
+    sq_dist = pairwise_sq_dist(x, y, colors, t**2)         # B, N, N
     logits = -sq_dist/(2* t**2)                     # .15 is unit_side of polygon
     P = torch.softmax(logits, dim=-1)
     y_post = torch.bmm(P, y)
@@ -48,5 +48,5 @@ def pinv_loss(x, y, colors):
 def t_from_s(s=.18, R=100):                 # .18 is unit_side of polygon
     d = math.sqrt(3) * s                    # distance to nearest neighbor
     t = d/math.sqrt(2 * math.log(R))        # first one is R factor more than second
-    return t                                
+    return t
 

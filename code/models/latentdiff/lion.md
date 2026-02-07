@@ -19,11 +19,11 @@ drop" }
 %% Encoder
 subgraph ENC["Set Encoder"]
   QE(("Q"))
-  TWMLP["Tile-wise 
+  TWMLP["Tile-wise
     MLP"]
-  ATTNPOOL["Attention 
+  ATTNPOOL["Attention
     Pooling"]
-  CLSEMBD["Class 
+  CLSEMBD["Class
     Embedding"]
   FCL["FCL"]
 end
@@ -41,16 +41,16 @@ MUSIGMA2 --> REPARAM --> Z0(("Z0"))
 
 subgraph DIFFUSION["Latent Diffusion"]
   EPS(("ε"))
-  FWDIFF(["Forward 
+  FWDIFF(["Forward
     Diffusion"])
   DENOISER["Denoiser"]
   ZT(("Zₜ"))
   T(("t"))
 end
 
-EPS --> FWDIFF 
+EPS --> FWDIFF
 EPS --> LDIFF
-T --> FWDIFF 
+T --> FWDIFF
 T --> DENOISER
 
 CLASS2 --> DENOISER
@@ -68,9 +68,9 @@ DECODER --> Tiles(["xya^"]) --> LREC
 COLORS2 --> DECODER
 
 %% Losses
-LREC{{"Reconstruction 
+LREC{{"Reconstruction
 Loss"}}
-LDIFF{{"Diffusion 
+LDIFF{{"Diffusion
 Loss"}}
 XYA2 --> LREC
 subgraph LOSSES["Losses"]
@@ -128,19 +128,19 @@ graph TB
     subgraph "FiLM Block"
         Input[/"Input x<br/>(B, in_dim)"/]
         Cond[/"Conditioning c<br/>(B, cond_dim)<br/>(time + class embeddings)"/]
-        
+
         Input --> Linear["Linear Layer<br/>(in_dim → out_dim)"]
         Linear --> Norm["LayerNorm<br/>(normalize)"]
-        
+
         Cond --> FiLMNet["Linear Layer<br/>(cond_dim → 2×out_dim)"]
         FiLMNet --> Split["Split into 2"]
         Split --> Scale["Scale γ<br/>(B, out_dim)"]
         Split --> Shift["Shift β<br/>(B, out_dim)"]
-        
+
         Norm --> Modulate["h × (1 + γ) + β<br/>(element-wise)"]
         Scale --> Modulate
         Shift --> Modulate
-        
+
         Modulate --> Act["SiLU/GELU<br/>Activation"]
         Act --> Output[/"Output<br/>(B, out_dim)"/]
     end

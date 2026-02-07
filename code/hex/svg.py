@@ -52,7 +52,7 @@ def save_svg(hexgrid, filename, ndigits=3, print_ok=True):
           .duplicate {{
             fill: #0000c0;
             fill-opacity: 1.0;
-          }}          
+          }}
         </style>
         <rect x="{xmin:.3f}" y="{ymin:.3f}" width="{wd:.3f}" height="{ht:.3f}" fill="{config["background"]}"/>
         <g style="stroke:{config["stroke-colour"]}; stroke-width: {hexgrid.side/20:.4f};

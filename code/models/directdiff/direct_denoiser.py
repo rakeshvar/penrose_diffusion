@@ -85,7 +85,7 @@ class TransformerDenoiser(nn.Module):
         """
         B, _, _ = xysc.shape
 
-        # project to d_model        
+        # project to d_model
         h = self.input_proj(xysc)                           # B, N, D
 
         # color embedding
@@ -94,7 +94,7 @@ class TransformerDenoiser(nn.Module):
 
         # global tokens
         global_tokens = self.global_tokens.expand(B, -1, -1)  # B, G, D
-        
+
         # Concatenate: [global_tokens, tile_tokens]
         h = torch.cat([global_tokens, h], dim=1)            # B, G+N, D
 
@@ -115,7 +115,7 @@ class TransformerDenoiser(nn.Module):
         noise_pred = self.output_proj(h_tiles)              # B, N, 4
 
         return noise_pred
-    
+
     @property
     def device(self):
         return next(self.parameters()).device

@@ -146,9 +146,9 @@ def train_fn(rank:int, config:Config):
             total_loss += loss.item()
             aux_loss_sums += aux_losses.detach()
             count += 1
-            
+
             progressbar.set_description(f"Epoch {epoch} | Loss: {loss.item():.4f}")
-        
+
         scheduler.step()
         avg_loss = total_loss / count if count > 0 else 0
 

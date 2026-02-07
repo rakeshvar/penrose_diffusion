@@ -101,7 +101,7 @@ class Config:
             del ckpt
 
         #-----------------------
-        # Link to sub configs 
+        # Link to sub configs
         # - initialize if they don't exist
         #-----------------------
         self.train = self.config.setdefault('train', {})
@@ -167,7 +167,7 @@ class Config:
         """
 
         if '=' not in kv_str:
-            raise ValueError(f"Invalid key-value pair '{kv_str} for subconfig '{subconfig}'." 
+            raise ValueError(f"Invalid key-value pair '{kv_str} for subconfig '{subconfig}'."
                              "Format must be key=value")
 
         subconfig_dict = self.config[subconfig]

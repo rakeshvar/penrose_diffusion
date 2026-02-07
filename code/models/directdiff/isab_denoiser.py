@@ -25,7 +25,7 @@ class MAB(nn.Module):
         # Note: PyTorch MHA returns (attn_output, attn_weights)
         attn_out, _ = self.mha(Q, K, V)
         X = self.norm1(Q + attn_out)
-        
+
         # Feedforward + Residual + Norm
         return self.norm2(X + self.ff(X))
 
@@ -39,7 +39,7 @@ class ISABlock(nn.Module):
         # Learnable Inducing Points
         self.I = nn.Parameter(torch.Tensor(1, num_inducing, dim))
         nn.init.xavier_uniform_(self.I)
-        
+
         # Two MAB steps:
         # I = X -> I
         self.mab0 = MAB(dim, num_heads, dropout)
@@ -49,7 +49,7 @@ class ISABlock(nn.Module):
     def forward(self, X):
         B = X.shape[0]
         I = self.I.expand(B, -1, -1)    # (1, M, D) -> (B, M, D)
-        H = self.mab0(I, X, X)          # (B, M, D) - The "Bottleneck" 
+        H = self.mab0(I, X, X)          # (B, M, D) - The "Bottleneck"
         X = self.mab1(X, H, H)       # (B, N, D) - The "Broadcast"
         return X
 
@@ -95,7 +95,7 @@ class ISABDenoiser(nn.Module):
         # The ISAB Stack
         # Replaces nn.TransformerEncoder
         self.layers = nn.ModuleList([
-            ISABlock(d_model, num_inducing, num_heads, dropout) 
+            ISABlock(d_model, num_inducing, num_heads, dropout)
             for _ in range(num_layers)
         ])
 
@@ -117,7 +117,7 @@ class ISABDenoiser(nn.Module):
         t: (B,)
         class_labels: (B,)
         """
-        # project to d_model        
+        # project to d_model
         h = self.input_proj(xysc)                           # B, N, D
 
         # color embedding
@@ -138,7 +138,7 @@ class ISABDenoiser(nn.Module):
         # Final Prediction
         h = self.norm_out(h)
         noise_pred = self.output_proj(h)
-        
+
         return noise_pred
 
     @property

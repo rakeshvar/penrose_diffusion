@@ -9,8 +9,8 @@ class GeometryAugment(nn.Module):
     Applies random rigid-body transformations (Rotation + Translation) to a batch of tiles.
     Takes (x, y, angle) -> Returns (x, y, sin, cos).
     """
-    def __init__(self, 
-                 rot_range=np.pi/3, 
+    def __init__(self,
+                 rot_range=np.pi/3,
                  translate_range=0.125
                  ):
         super().__init__()

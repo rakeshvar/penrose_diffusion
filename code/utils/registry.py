@@ -11,7 +11,7 @@ class Registry:
         def decorator(cls):
             # Use the first alias as the abbreviation, or fallback to class name
             cls.abbr = aliases[0].lower() if aliases else cls.__name__.lower()
-            
+
             for alias in aliases:
                 key = alias.lower()
                 if key in self._registry:

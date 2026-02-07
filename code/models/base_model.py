@@ -8,22 +8,22 @@ class AbstractModel(nn.Module, ABC):
     @abstractmethod
     def descriptor(self):
         raise NotImplementedError
-    
+
     @abstractmethod
     def train_step(self, *args, **kwargs):
         """Single training step"""
         raise NotImplementedError
-    
+
     @abstractmethod
     def passthrough(self, *args, **kwargs):
         """Passthrough"""
         raise NotImplementedError
-    
+
     @abstractmethod
     def sample(self, *args, **kwargs):
         """Generate samples"""
         raise NotImplementedError
-    
+
     @property
     @abstractmethod
     def aux_loss_names(self):

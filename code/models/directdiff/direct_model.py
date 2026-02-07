@@ -53,11 +53,11 @@ class DirectDiffusionModel(AbstractModel):
     @property
     def device(self):
         return next(self.parameters()).device
-    
+
     @property
     def descriptor(self):
         return f"{self.config['model'][3]}_{self.denoiser.d_model}x{self.config['num_layers']}_{self.loss_functor.abbr}"
-    
+
     def train_step(self, xya, colors, cls):
         xya = self.augmenter(xya)
         xysc, _ = xya_to_xysc(xya)
@@ -65,7 +65,7 @@ class DirectDiffusionModel(AbstractModel):
         loss = self.loss_functor(xysc, colors, cls)
         aux_losses = torch.tensor([], device=self.device)
         return loss, aux_losses
-    
+
     def passthrough(self, xya, colors, cls):
         self.denoiser.eval()
         xysc, _ = xya_to_xysc(xya)
@@ -77,12 +77,12 @@ class DirectDiffusionModel(AbstractModel):
     @property
     def aux_loss_names(self):
         return []
-    
+
     def sample(self, colors, labels, num_steps):
         xysc = self.diffuser.sample(
-            self.denoiser, 
-            colors, 
-            labels, 
+            self.denoiser,
+            colors,
+            labels,
             num_steps
         )
 

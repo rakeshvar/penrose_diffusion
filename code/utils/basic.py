@@ -197,6 +197,6 @@ def infer_type(val_str):
     if vls == 'true':    return True
     if vls == 'false':   return False
     try:                 return int(val_str)
-    except ValueError:   pass    
+    except ValueError:   pass
     try:                 return float(val_str)
     except ValueError:   return val_str

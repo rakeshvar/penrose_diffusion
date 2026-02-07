@@ -35,10 +35,10 @@ cd penrose_diffusion
 
 ### Train
 ```bash
-# toy 
-python train.py gs://penrose_diffusion/datasets/hex_t096_c96_u18.npz toy -t num_epochs=3 -t loss=pil 
+# toy
+python train.py gs://penrose_diffusion/datasets/hex_t096_c96_u18.npz toy -t num_epochs=3 -t loss=pil
 # main
-python train.py dd128 isab gs://penrose_diffusion/datasets/hex_t096_c96_u18.npz model128 -t num_epochs=301 -t loss=pil 
+python train.py dd128 isab gs://penrose_diffusion/datasets/hex_t096_c96_u18.npz model128 -t num_epochs=301 -t loss=pil
 ```
 
 ### Kill jobs
@@ -52,11 +52,11 @@ sudo fuser -v /dev/vfio/*
 ```bash
 mkdir datasets/
 gsutil -m cp -r gs://penrose_diffusion/datasets/*.npz datasets/
-python train.py ddtoy datasets/hex_t096_c01_u18.npz -w enable=False 
-python train.py ddtoy isab datasets/hex_t096_c01_u18.npz -w enable=False 
-python train.py ldtoy datasets/hex_t096_c01_u18.npz -w enable=False 
-python train.py ddtoy llm datasets/hexqr_t128_c64_u16.npz -w enable=False 
-python train.py ddtoy discrete datasets/hexqr_t128_c64_u16.npz -w enable=False 
+python train.py ddtoy datasets/hex_t096_c01_u18.npz -w enable=False
+python train.py ddtoy isab datasets/hex_t096_c01_u18.npz -w enable=False
+python train.py ldtoy datasets/hex_t096_c01_u18.npz -w enable=False
+python train.py ddtoy llm datasets/hexqr_t128_c64_u16.npz -w enable=False
+python train.py ddtoy discrete datasets/hexqr_t128_c64_u16.npz -w enable=False
 ```
 
 # Working Area

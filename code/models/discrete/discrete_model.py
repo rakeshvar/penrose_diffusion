@@ -7,7 +7,7 @@ import numpy as np
 from code.compatibility import maybe_mark_step
 from code.models.base_model import AbstractModel
 from code.models.sinusoidal import SinusoidalPositionalEmbedding
-from code.utils.qrs import get_colors, qr_to_xya  
+from code.utils.qrs import get_colors, qr_to_xya
 
 class MaskedDiscreteModel(AbstractModel):
     def __init__(self, config):
@@ -23,12 +23,12 @@ class MaskedDiscreteModel(AbstractModel):
         self.num_classes = config['num_classes']
 
         # Vocabulary
-        # Range -32 to +31 centered at 32. 
+        # Range -32 to +31 centered at 32.
         # 0-63: Coordinate tokens
         # 64:   MASK TOKEN
         # 0 -> -31 , 1 -> -30 ⋅⋅⋅ 31 -> 0, 32 -> 1 ⋅⋅⋅ 62 -> 31, 63 -> MASK
         self.vocab_size = 63
-        self.mask_token_id = self.vocab_size 
+        self.mask_token_id = self.vocab_size
         self.total_tokens = self.vocab_size + 1
         self.offset = 31
 
@@ -141,12 +141,12 @@ class MaskedDiscreteModel(AbstractModel):
         N = self.num_tiles
         V = self.vocab_size
         d = self.device
-        
+
         xₜ = torch.full((B, 2*N), self.mask_token_id, dtype=torch.long, device=d)      # B, 2N
-        
+
         # Pre-compute duplicate detection mask (Lower Triangular)
         trl = torch.tril(torch.ones(N, N, device=d, dtype=torch.bool), diagonal=-1)    # N, N
-        
+
         # Pre-compute S-Constraint Mask (|s| <= offset)
         a = torch.arange(V, device=d) - self.offset                                    # V
         qg, rg = torch.meshgrid(a, a, indexing='ij')                                   # V, V
@@ -163,7 +163,7 @@ class MaskedDiscreteModel(AbstractModel):
             ll = l.view(B, N, 2, V)                                                    # B, N, 2, V
             lj = ll[..., 0, :].unsqueeze(-1) + ll[..., 1, :].unsqueeze(-2)             # B, N, V, V
             lj = lj.view(B, N, -1)                                                     # B, N, V²
-            
+
             # --- Forbid bad s values ---
             lj.masked_fill_(s_bad, float('-inf'))                                      # B, N, V²
 
@@ -174,7 +174,7 @@ class MaskedDiscreteModel(AbstractModel):
             forbidden = torch.zeros(B, V*V, device=d, dtype=torch.bool)                # B, V²
             for b in range(B):
                 unmasked_pair_ids = ids[b][is_unmasked_pair[b]]
-                forbidden[b, unmasked_pair_ids] = True 
+                forbidden[b, unmasked_pair_ids] = True
             lj.masked_fill_(forbidden.unsqueeze(1), float('-inf'))                     # B, N, V²
             #print where forbidden
 
@@ -201,13 +201,13 @@ class MaskedDiscreteModel(AbstractModel):
             is_dup = (matches & trl).any(dim=-1)                                       # B, N
             is_dup = is_dup.unsqueeze(-1).expand(-1, -1, 2).reshape(B, 2*N)            # B, 2N
             confidence[is_dup] = 0.                                                    # B, 2N
-            
+
             # --- Break ties ---
             confidence += torch.rand_like(confidence) * 1e-4                           # B, 2N
-            
+
             # --- Update State ---
             n_mask = int(r1 * 2 * N)
-            
+
             # Nice Print Logic
             n_fixed = is_unmasked_pair.sum().item()
             n_dups = is_dup.sum().item() // 2

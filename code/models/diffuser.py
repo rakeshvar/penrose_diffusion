@@ -5,7 +5,7 @@ import torch.nn as nn
 from code.compatibility import maybe_mark_step
 
 """
-Variance Preserving Transformations for Diffusion 
+Variance Preserving Transformations for Diffusion
 
 ⎡ xₜ ⎤ = ⎡  √αₜ        √(1−αₜ) ⎤ ⎡ x₀ ⎤
 ⎣ v  ⎦   ⎣ −√(1−αₜ)     √αₜ    ⎦ ⎣ ε  ⎦
@@ -57,17 +57,17 @@ class Diffuser(nn.Module):
 
     def recover_ϵ(self, xₜ, t, x0):
         return (xₜ - self.rᾱ[t] * x0) / self.r1mᾱ[t]
-    
+
     def calculate_v(self, x0, t, ϵ):
         return -self.r1mᾱ[t] * x0 + self.rᾱ[t] * ϵ
-    
+
 
     @torch.no_grad()
     def p_sample(self, xₜ, ϵhat, t, ddpm=0.0):
         """
         Reverse diffusion process (DDIM sampling)
         """
-        x0hat = self.recover_x(xₜ, t, ϵhat) 
+        x0hat = self.recover_x(xₜ, t, ϵhat)
 
 
         if t[0] == 0:               # All t's are same in a prediction batch
