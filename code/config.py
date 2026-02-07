@@ -55,7 +55,7 @@ class Config:
                             default=compat.OUTPUT_BASE_DIR)
 
         # Parse
-        print("\n\n", "#" * 80)
+        print("\n\n" + "#" * 80)
         print("Parsing command line arguments...")
         self.parsed = parser.parse_args()
 

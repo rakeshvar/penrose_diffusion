@@ -2,7 +2,6 @@ import math
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-import numpy as np
 
 from code.compatibility import maybe_mark_step
 from code.models.base_model import AbstractModel
@@ -66,7 +65,7 @@ class MaskedDiscreteModel(AbstractModel):
 
     @property
     def descriptor(self):
-        return f"dis_{self.d_model}x{self.num_layers}"
+        return f"dis{self.d_model}x{self.num_layers}"
 
     @property
     def device(self):

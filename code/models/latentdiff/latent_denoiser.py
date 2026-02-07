@@ -33,26 +33,26 @@ class MLPLatentDenoiser(nn.Module):
 # FiLM
 #------------------------------------------------------------
 class LatentDenoiser(nn.Module):
-    def __init__(self, D, num_classes, hidden_dim=512):
+    def __init__(self, num_classes, latent_dim, num_blocks):
         super().__init__()
-        self.D = D
+        self.dim = time_emb_dim = hidden_dim = latent_dim
 
         # Sinusoidal time embedding (critical!)
         self.time_mlp = nn.Sequential(
-            SinusoidalPositionalEmbedding(256),
-            nn.Linear(256, hidden_dim),
+            SinusoidalPositionalEmbedding(time_emb_dim),
+            nn.Linear(time_emb_dim, hidden_dim),
             nn.SiLU(),
             nn.Linear(hidden_dim, hidden_dim)
         )
         self.class_embed = nn.Embedding(num_classes + 1, hidden_dim)
 
         # Deeper network with FiLM conditioning
-        self.input_proj = nn.Linear(D, hidden_dim)
+        self.input_proj = nn.Linear(latent_dim, hidden_dim)
         self.blocks = nn.ModuleList([
             FiLMBlock(hidden_dim, hidden_dim, hidden_dim)
-            for _ in range(4)
+            for _ in range(num_blocks)
         ])
-        self.out = nn.Linear(hidden_dim, D)
+        self.out = nn.Linear(hidden_dim, latent_dim)
 
     def forward(self, z_t, t, cls):
         t_emb = self.time_mlp(t)

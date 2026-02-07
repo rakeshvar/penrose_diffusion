@@ -119,7 +119,7 @@ class CheckPointer:
             self._upload_to_gcs(local_tmp_path, path)
 
         print(f"Saved Checkpoint: {path}")
-        self._keep_only_last_n(self.saved_checkpoints, path)
+        self._keep_only_last_n(self.saved_checkpoints, path, loss)
 
 
     def save_svg(self, svg, file_name: str):
@@ -146,12 +146,16 @@ class CheckPointer:
         Path(local_tmp_path).unlink()
 
 
-    def _keep_only_last_n(self, saved_paths, path: str):
-        saved_paths.append(path)
+    def _keep_only_last_n(self, saved_paths, path: str, loss=None):
+        saved_paths.append((path, loss))
+        if loss is not None:
+            saved_paths.sort(key=lambda x: x[1])
+
         while len(saved_paths) > self.keep_last_n:
-            to_remove = saved_paths.pop(0)
+            to_remove, loss_max = saved_paths.pop()
             self._delete_resource(to_remove)
-            print(f" - Deleted      : {to_remove}")
+            print(f" - Deleted      : {to_remove}"
+                  f"   (Loss: {loss_max:.4f})" if loss_max is not None else "")
 
     def _delete_resource(self, path: str):
         if self.is_local:

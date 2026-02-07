@@ -114,7 +114,7 @@ class NoiseAssistedLoss(AbstractLoss):
         return F.mse_loss(noise, noise_hat) \
             + .33 * circle_loss_sincos(xysc_0_hat) \
             + .33 * equiangle_loss_sincos(xysc_0_hat) \
-            + .33 * hex_lattice_loss_quadratic(xysc_0_hat, self.unit_side, self.symmetry)
+            + .33 * hex_lattice_loss_quadratic(xysc_0_hat, self.unit_side)
 
 #------------------------------------------------------------------------------
 # Permutation Invariant Loss

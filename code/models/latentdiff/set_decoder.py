@@ -6,42 +6,43 @@ import torch.nn as nn
 # ------------------------------------------------------------
 
 class PerceiverBlock(nn.Module):
-    def __init__(self, dim, heads=4):
+    def __init__(self, dim, heads):
         super().__init__()
         self.cross_attn = nn.MultiheadAttention(dim, heads, batch_first=True)
+        self.norm1 = nn.LayerNorm(dim)
         self.self_attn = nn.MultiheadAttention(dim, heads, batch_first=True)
+        self.norm2 = nn.LayerNorm(dim)
 
         self.ff = nn.Sequential(
             nn.Linear(dim, 4 * dim),
             nn.ReLU(),
             nn.Linear(4 * dim, dim),
         )
-
-        self.norm1 = nn.LayerNorm(dim)
-        self.norm2 = nn.LayerNorm(dim)
         self.norm3 = nn.LayerNorm(dim)
 
-    def forward(self, q, z):
+    def forward(self, x, z):
         z = z.unsqueeze(1)                      # (B, D) -> (B, 1, D)
-        h, _ = self.cross_attn(q, z, z) # q <- z
-        q = self.norm1(q + h)
+        h, _ = self.cross_attn(x, z, z) # x <- z
+        x = self.norm1(x + h)
 
-        h, _ = self.self_attn(q, q, q)  # q <- q
-        q = self.norm2(q + h)
+        h, _ = self.self_attn(x, x, x)  # x <- x
+        x = self.norm2(x + h)
 
-        q = self.norm3(q + self.ff(q))
-        return q
+        h = self.ff(x)
+        x = self.norm3(x + h)
+        
+        return x
 
 
 class PerceiverDecoder(nn.Module):
-    def __init__(self, latent_dim, num_tiles, num_blocks=2):
+    def __init__(self, num_tiles, latent_dim, num_blocks, num_heads):
         super().__init__()
 
-        self.queries = nn.Parameter(torch.randn(num_tiles, latent_dim)) # N, D
+        self.seeds = nn.Parameter(torch.randn(1, num_tiles, latent_dim)) # 1, N, D
 
         self.color_embedding = nn.Embedding(2, latent_dim)
         self.blocks = nn.ModuleList([
-            PerceiverBlock(latent_dim) for _ in range(num_blocks)
+            PerceiverBlock(latent_dim, num_heads) for _ in range(num_blocks)
         ])
 
         self.output_mlp = nn.Sequential(
@@ -54,15 +55,13 @@ class PerceiverDecoder(nn.Module):
 
     def forward(self, z, color):
         B, N = color.shape
-        q = self.queries.unsqueeze(0).expand(B, -1, -1)     # B, N, D
-        c_emb = self.color_embedding(color.long())
+        xya = self.seeds.expand(B, -1, -1)              # 1, N, D → B, N, D
+        c_emb = self.color_embedding(color.long())      # B, N    → B, N, D
+        xya = xya + c_emb
 
-        q = q + c_emb
         for blk in self.blocks:
-            q = blk(q, z)
+            xya = blk(xya, z)
 
+        xya = self.output_mlp(xya)
 
-        # 5. Output
-        xyac = self.output_mlp(q)
-
-        return xyac
+        return xya

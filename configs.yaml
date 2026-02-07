@@ -111,22 +111,34 @@ latentcommon: &latentcommon
 latent32: &latent32
   <<: *latentcommon
   latent_dim: 32
-  num_blocks: 2
+  num_latent_blocks: 2
+  num_vae_blocks: 2
+  num_pools: 4
+  num_heads: 2
 
 latent64: &latent64
   <<: *latentcommon
   latent_dim: 64
-  num_blocks: 3
+  num_latent_blocks: 4
+  num_vae_blocks: 4
+  num_pools: 4
+  num_heads: 4
 
 latent128: &latent128
   <<: *latentcommon
   latent_dim: 128
-  num_blocks: 4
+  num_latent_blocks: 4
+  num_vae_blocks: 4
+  num_pools: 8
+  num_heads: 4
 
 latent256: &latent256
   <<: *latentcommon
   latent_dim: 256
-  num_blocks: 6
+  num_latent_blocks: 6
+  num_vae_blocks: 6
+  num_pools: 8
+  num_heads: 4
 
 # ----------------------------------------------------------------
 # EXPERIMENT GROUPS
@@ -195,8 +207,12 @@ ldtoy:
     num_epochs: 3
   wandb:
     <<: *default_wandb
-    enable: true
     project: 'penrose-toy'
+
+default_latent_wandb: &default_latent_wandb
+  <<: *default_wandb
+  project: 'penrose-latent'
+  enable: true
 
 ld32:
   model:
@@ -204,7 +220,7 @@ ld32:
   train:
     <<: *default_train
   wandb:
-    <<: *default_wandb
+    <<: *default_latent_wandb
 
 ld64:
   model:
@@ -212,7 +228,7 @@ ld64:
   train:
     <<: *default_train
   wandb:
-    <<: *default_wandb
+    <<: *default_latent_wandb
 
 ld128:
   model:
@@ -220,7 +236,7 @@ ld128:
   train:
     <<: *default_train
   wandb:
-    <<: *default_wandb
+    <<: *default_latent_wandb
 
 ld256:
   model:
@@ -228,4 +244,4 @@ ld256:
   train:
     <<: *default_train
   wandb:
-    <<: *default_wandb
+    <<: *default_latent_wandb

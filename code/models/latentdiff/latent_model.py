@@ -32,7 +32,7 @@ class LatentDiffuser(Diffuser):
     @torch.no_grad()
     def sample(self, denoiser, labels, num_steps=50, guidance_scale=2.0):
         B = labels.shape[0]
-        D = denoiser.D
+        D = denoiser.dim
         device = denoiser.device
         NULL = denoiser.class_embed.num_embeddings - 1
         nulls = torch.full_like(labels, NULL)
@@ -58,23 +58,24 @@ class LatentDiffusionModel(AbstractModel):
     def __init__(self, config):
         super().__init__()
 
-        latent_dim = config['latent_dim']
-        num_classes = config['num_classes']
-        self.rec_loss = config['loss']
+        L = config['latent_dim']
+        C = config['num_classes']
+        H = config['num_heads']
+        P = config['num_pools']
+        N = config['num_tiles']
+        Kl = config['num_latent_blocks']
+        Kv = config['num_vae_blocks']
         self.beta_kl = 1e-3
         self.p_uncond = 1/7.
-        self.null_class = num_classes
-        self.latent_dim = latent_dim
-        num_blocks = config['num_blocks']
-        num_tiles = config['num_tiles']
         self.config = config
 
         self.augmenter = GeometryAugment()
-        self.encoder = SetEncoder(latent_dim, num_classes)
-        self.denoiser = LatentDenoiser(latent_dim, num_classes)
-        self.decoder = PerceiverDecoder(latent_dim, num_tiles, num_blocks)
+        self.encoder = SetEncoder(C, L, P, Kv, 2)
+        self.denoiser = LatentDenoiser(C, L, Kl)
+        self.decoder = PerceiverDecoder(N, L, Kv, H)
         self.diffuser = LatentDiffuser(1)
-        self.recons_loss_fn = loss_registry[self.rec_loss]
+        self.recons_loss_fn = loss_registry[config['loss']]
+        self.null_class = C
 
     @property
     def device(self):
@@ -82,7 +83,9 @@ class LatentDiffusionModel(AbstractModel):
 
     @property
     def descriptor(self):
-        return f"lat_{self.latent_dim}x{self.config['num_blocks']}_{self.recons_loss_fn.abbr}"
+        D = self.config['latent_dim']
+        K = self.config['num_latent_blocks']
+        return f"lat{D}x{K}_{self.recons_loss_fn.abbr}"
 
     def train_step(self, x, color, cls):
         x = self.augmenter(x)

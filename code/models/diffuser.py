@@ -2,8 +2,6 @@
 import torch
 import torch.nn as nn
 
-from code.compatibility import maybe_mark_step
-
 """
 Variance Preserving Transformations for Diffusion
 

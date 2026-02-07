@@ -35,7 +35,7 @@ def save_grid_svg(xyac, symmetry, side, filename, t):
 
     m = xyac.mean(axis=0)
     s = xyac.std(axis=0)
-    latice = hex_lattice_loss_logarthmic(torch.from_numpy(xyac).unsqueeze(0), side, symmetry).item() # add batch dim
+    latice = hex_lattice_loss_logarthmic(torch.from_numpy(xyac).unsqueeze(0), side).item() # add batch dim
     tp.line(t, m[0], s[0], m[1], s[1], m[2], s[2], latice)
 
 
@@ -59,7 +59,7 @@ def main():
 
     # Setup Models
     augmenter = GeometryAugment().to(device)
-    diffuser = Diffuser(num_timesteps=1000).to(device)
+    diffuser = Diffuser(2, num_timesteps=1000).to(device)
 
     # Output directory
     out_dir = Path("library/diffuser_output")
