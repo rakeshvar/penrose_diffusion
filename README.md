@@ -1,14 +1,10 @@
 # Penrose Diffusion
 
-**Learning to generate aperiodic Penrose tilings (and hexagonal tiling) using class-conditional diffusion models.**
+This is a **Denoising Diffusion Probabilistic Model (DDPM/DDIM)** that learns to generate tilings to form different shapes.
+Tiling are of two types:
 
-This is a geometric **Denoising Diffusion Probabilistic Model (DDPM/DDIM)** that generates:
-
-- Aperiodic Penrose P3 tilings with *5-fold symmetry*
 - Periodic Hexagonal tilings with *6-fold symmetry*
-
-
-The tiles form an overall shape dictated by semantic class labels.
+- Aperiodic Penrose P3 Rhombus tilings with *5-fold symmetry*
 
 ## Data
 ### Base Data
