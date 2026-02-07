@@ -12,12 +12,12 @@ register_loss = loss_registry.register
 # Reconstruction losses
 # ------------------------------------------------------------
 
-@register_loss('samp', 'spl', 'sample', 'sampleloss')
+@register_loss('spl', 'samp', 'sample', 'sampleloss')
 def sample_loss(x, y, colors):
     return F.mse_loss(x, y)
 
 
-@register_loss('cham', 'chamfer', 'cfl')
+@register_loss('cfl', 'cham', 'chamfer')
 def chamfer_loss(x, y, colors):
     sq_dist = pairwise_sq_dist(x, y, colors)                # B, N, N
     loss_xy = sq_dist.min(dim=2).values.mean()
@@ -25,7 +25,7 @@ def chamfer_loss(x, y, colors):
     return (loss_xy + loss_yx)/2.
 
 
-@register_loss('sink', 'sinkhorn', 'shl')
+@register_loss('shl', 'sink', 'sinkhorn')
 def sinkhorn_loss(x, y, colors):
     t = t_from_s()
     sq_dist = pairwise_sq_dist(x, y, colors, t**2)
@@ -35,7 +35,7 @@ def sinkhorn_loss(x, y, colors):
     return F.mse_loss(x, y_post)
 
 
-@register_loss('pinv', 'pil', 'perminv')
+@register_loss('pil', 'pinv', 'perminv')
 def pinv_loss(x, y, colors):
     t = t_from_s()
     sq_dist = pairwise_sq_dist(x, y, colors, t**2)         # B, N, N
