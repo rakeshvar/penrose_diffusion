@@ -144,7 +144,9 @@ def train_fn(rank:int, config:Config):
             if torch.isnan(loss):
                 if num_nans == 0:
                     print(f"Loss is NaN for batch:{count+num_nans} epoch:{epoch} process:{rank}")
-                    print(f"norm = {nn_utils.clip_grad_norm_(model.parameters(), float('inf')):.4f}")
+                    mprint(f"norm = {nn_utils.clip_grad_norm_(model.parameters(), float('inf')):.4f}")
+                    for name, value in zip(model.aux_loss_names, aux_losses.detach().cpu().numpy()):
+                        mprint(f"{name} = {value:.4f}")
                 num_nans += 1
                 continue
 
