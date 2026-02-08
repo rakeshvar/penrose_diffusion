@@ -33,7 +33,7 @@ def sq_dists(xy_hat):
     N = xy_hat.shape[1]
     xy = xy_hat[..., :2]
     sq_dist = ((xy.unsqueeze(2) - xy.unsqueeze(1)) ** 2).sum(-1)  # B, N, N
-    dist_to_self = torch.eye(N, device=xy.device, dtype=sq_dist.dtype).unsqueeze(0) * 1e6
+    dist_to_self = torch.eye(N, device=xy.device, dtype=sq_dist.dtype).unsqueeze(0) * 1e9
     sq_dist += dist_to_self
     return sq_dist
 
@@ -52,18 +52,20 @@ def _lattice_loss_quadratic(xy_hat, min_dist_to_nearest, max_dist_to_nearest, ep
 #---------------------------
 def _lattice_loss_logarithmic(xy_hat, min_dist_to_nearest, max_dist_to_nearest, eps=1e-6):
     sq_dist = sq_dists(xy_hat)
-    dist = torch.sqrt(sq_dist)
+    dist = torch.sqrt(sq_dist+eps)
+
+    eps2 = 1e-2 # To be safe on TPUs with bp16
 
     # nearest-neighbor attraction
     d_nn = dist.min(dim=-1)[0]
     r_nn = d_nn / max_dist_to_nearest
-    gap_loss = r_nn - 1. - torch.log(r_nn + eps)
+    gap_loss = r_nn - 1. - torch.log(r_nn + eps2)
     gap_mask = (r_nn > 1.0).to(gap_loss.dtype)
     gap_loss = (gap_loss * gap_mask).mean()
 
-    # global logarithmic repulsion (only when too close)
+    # global logarithmic repulsion when overlapping
     r_ij = dist / min_dist_to_nearest
-    lap_loss = r_ij - 1.0 - torch.log(r_ij + eps)  # (B, N, N)
+    lap_loss = r_ij - 1.0 - torch.log(r_ij + eps2)  # (B, N, N)
     lap_mask = (r_ij < 1.0).to(lap_loss.dtype)
     lap_loss = (lap_loss * lap_mask).mean()
 

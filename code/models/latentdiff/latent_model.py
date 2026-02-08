@@ -16,6 +16,8 @@ from .latent_losses import loss_registry
 # ------------------------------------------------------------
 
 def reparameterize(mu, logvar):
+    logvar = torch.clamp(logvar, max=20.0, min=-20.0)
+    mu = torch.clamp(mu, min=-100.0, max=100.0)
     std = torch.exp(0.5 * logvar)
     eps = torch.randn_like(std)
     return mu + eps * std
