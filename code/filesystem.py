@@ -6,7 +6,6 @@ from pathlib import Path
 import torch
 
 import code.compatibility as compat
-from code.compatibility import master_print as mprint
 
 #--------------------------------------------
 # Helpers to load/download
@@ -40,11 +39,11 @@ def maybe_download(path:str, suffix=""):
 #--------------------------------------------
 # Loader
 #--------------------------------------------
-def load_checkpoint(checkpoint_path, model, optimizer, scheduler, rank):
+def load_checkpoint(checkpoint_path, model, optimizer, scheduler, mprint):
     if not checkpoint_path:
         return
 
-    mprint(f"Loading weights from {checkpoint_path}...", rank)
+    mprint(f"Loading weights from {checkpoint_path}...")
     ckpt = safe_torch_load(checkpoint_path, map_location='cpu')
     model.load_state_dict(ckpt['model_state_dict'], strict=True)
 
@@ -54,7 +53,7 @@ def load_checkpoint(checkpoint_path, model, optimizer, scheduler, rank):
     if scheduler and 'scheduler_state_dict' in ckpt:
         scheduler.load_state_dict(ckpt['scheduler_state_dict'])
 
-    mprint(f"Resumed weights from Epoch {ckpt['epoch']}.", rank)
+    mprint(f"Resumed weights from Epoch {ckpt['epoch']}.")
 
 
 #--------------------------------------------
@@ -119,7 +118,7 @@ class CheckPointer:
             self._upload_to_gcs(local_tmp_path, path)
 
         print(f"Saved Checkpoint: {path}"
-              f"   (Loss: {loss:.4f})")
+              f"   +(Loss: {loss:.4f})")
         self._keep_only_last_n(self.saved_checkpoints, path, loss)
 
 
@@ -156,7 +155,7 @@ class CheckPointer:
             to_remove, loss_max = saved_paths.pop()
             self._delete_resource(to_remove)
             print(f" - Deleted      : {to_remove}"
-                  f"   (Loss: {loss_max:.4f})" if loss_max is not None else "")
+                  f"   -(Loss: {loss_max:.4f})" if loss_max is not None else "")
 
     def _delete_resource(self, path: str):
         if self.is_local:

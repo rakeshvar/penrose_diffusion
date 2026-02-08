@@ -14,7 +14,6 @@ from code.utils.lossy import lattice_loss
 from code.wandblog import WandBLog
 from code.data.load import MyDataset
 from code.filesystem import CheckPointer, load_checkpoint
-from code.compatibility import master_print as mprint
 
 from code.models import get_model_class
 
@@ -27,18 +26,22 @@ def train_fn(rank:int, config:Config):
     """
     Main training loop.
     Args:
-        rank: Process rank/index (0 for master).
+        rank: Process rank/index
         config: Instance of config.Config containing parsed settings.
     """
     device = compat.get_device()
-    compat.print_env(rank)
     is_master = compat.is_master()
-    print(f"Process {rank} initialized on {device}. Master: {is_master}")
+    if is_master: 
+        compat.print_env()
+        mprint = print
+    else: 
+        mprint = lambda *args, **kwargs: None 
+    print(f"Process {rank} initialized on {device}."  " (Master)" if is_master else "")
 
     #--------------------------------------------
     # Load Data
     #--------------------------------------------
-    mprint(f"Loading data from {config.data_path}...", rank)
+    mprint(f"Loading data from {config.data_path}...")
     dataset = MyDataset(Path(config.data_path))         # CPU
     distributed_sampler = compat.get_maybe_distributed_sampler(dataset)   # Split data for TPU cores
 
@@ -52,8 +55,8 @@ def train_fn(rank:int, config:Config):
     raw_loader = DataLoader(dataset, **loader_args)
     train_loader = compat.get_loader(raw_loader, device)  # Pre-fetch to device
 
-    mprint(dataset, rank) # type: ignore
-    mprint(f"Batches/Core:  {len(raw_loader)}", rank)
+    mprint(dataset) # type: ignore
+    mprint(f"Batches/Core:  {len(raw_loader)}")
     config.model['num_tiles'] = dataset.num_tiles
     config.model['num_classes'] = dataset.num_classes
     config.model['side'] = dataset.side
@@ -72,7 +75,7 @@ def train_fn(rank:int, config:Config):
     scheduler2 = CosineAnnealingLR(optimizer, T_max=decay_epochs)
     scheduler = SequentialLR(optimizer, schedulers=[scheduler1, scheduler2], milestones=[warmup_epochs])
 
-    load_checkpoint(config.checkpoint_path, model, optimizer, scheduler, rank)
+    load_checkpoint(config.checkpoint_path, model, optimizer, scheduler, mprint)
 
     # Move to device
     for state in optimizer.state.values():
@@ -87,16 +90,16 @@ def train_fn(rank:int, config:Config):
     # Set an identifier for the run
     #--------------------------------------------
     identifier = f"{config.timestamp}_{model.descriptor}_t{dataset.num_tiles:03d}"
-    mprint(f"Identifier for this run: {identifier}", rank)
+    mprint(f"Identifier for this run: {identifier}")
 
     #--------------------------------------------
     # Initialize WandB Logger
     #--------------------------------------------
-    mprint("Initializing WandB (Maybe)...", rank)
+    mprint("Initializing WandB (Maybe)...")
     if not config.wandb['run_name']:
         config.wandb['run_name'] = identifier
 
-    wandblog = WandBLog(rank, config.wandb)
+    wandblog = WandBLog(is_master, config.wandb)
     wandblog.info(config, compat, dataset, model)
 
     #--------------------------------------------
@@ -120,7 +123,7 @@ def train_fn(rank:int, config:Config):
     start_epoch = config.resume_epoch
     total_epochs = start_epoch + config.train['num_epochs']
     iterator = range(start_epoch, total_epochs)
-    mprint(f"Starting training for {len(iterator)} epochs...", rank)
+    mprint(f"Starting training for {len(iterator)} epochs...")
     num_aux_losses = len(model.aux_loss_names)
 
     for epoch in iterator:
@@ -130,7 +133,7 @@ def train_fn(rank:int, config:Config):
         num_nans = 0
 
         # Enable progress bar only on master process
-        progressbar = tqdm(train_loader, disable=(rank != 0))
+        progressbar = tqdm(train_loader, disable = not is_master)
 
         for batch in progressbar:
             xya, colors, labels = batch
@@ -176,16 +179,16 @@ def train_fn(rank:int, config:Config):
             wandblog.lsvg(epoch, svg, sample_label, sample_name)
             loss_lattice = lattice_loss(dataset.symmetry, samples, dataset.side)
             to_log['loss/lattice_sample'] = loss_lattice
-            mprint(f"Lattice loss: {loss_lattice:.4f}", rank)
+            mprint(f"Lattice loss: {loss_lattice:.4f}")
 
         wandblog.log_step(to_log, step=epoch)
-        mprint(f"Epoch {epoch} done. Average Loss: {avg_loss:.4f}\n", rank)
+        mprint(f"Epoch {epoch} done. Average Loss: {avg_loss:.4f}\n")
         if count == 0:
             print(f"All nans on epoch {epoch} on device:{rank}. Count={count} vs Nans={num_nans}")
             break
 
     wandblog.finish()
-    mprint("\n======\nDone!\n======", rank)
+    mprint("\n======\nDone!\n======")
 
 
 #------

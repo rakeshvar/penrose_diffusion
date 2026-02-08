@@ -79,15 +79,14 @@ else:
 # Device helpers
 # -------------------------------------------------
 
-def print_env(rank):
-    if rank == 0:
-        print("-------------------")
-        print("IS_CPU:  ", IS_CPU)
-        print("IS_GPU:  ", IS_GPU)
-        print("IS_TPU:  ", IS_TPU)
-        print("IS_GCP:  ", IS_GCP)
-        print("IS_COLAB:", IS_COLAB)
-        print("-------------------")
+def print_env():
+    print("-------------------")
+    print("IS_CPU:  ", IS_CPU)
+    print("IS_GPU:  ", IS_GPU)
+    print("IS_TPU:  ", IS_TPU)
+    print("IS_GCP:  ", IS_GCP)
+    print("IS_COLAB:", IS_COLAB)
+    print("-------------------")
 
 def get_device():
     if IS_TPU:
@@ -96,11 +95,6 @@ def get_device():
         return torch.device("cuda")
     else:
         return torch.device("cpu")
-
-
-def master_print(msg, rank):
-    if rank == 0:
-        print(msg)
 
 def is_master():
     return (not IS_TPU) or xm.is_master_ordinal()

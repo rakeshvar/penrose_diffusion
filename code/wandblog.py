@@ -8,18 +8,17 @@ except ModuleNotFoundError:
     WANDB_AVAILABLE = False
 
 class WandBLog:
-    def __init__(self, rank:int, wbconfig: Dict):
+    def __init__(self, is_master, wbconfig: Dict):
         self.config = wbconfig
-        self.rank = rank
-        self.is_master = (rank == 0)
+        self.is_master = is_master
         self.enabled = False
         self.run = None
 
-        if not WANDB_AVAILABLE:
-            print("WandB logging disabled: wandb module not found.")
+        if not self.is_master:
             return
 
-        if not self.is_master:
+        if not WANDB_AVAILABLE:
+            print("WandB logging disabled: wandb module not found.")
             return
 
         if not wbconfig['enable']:
@@ -96,7 +95,7 @@ class WandBLog:
             return
 
         self.log_step({
-            f'samples/epoch_{epoch}': wandb.Html(svg_content),
+            f'samples/epoch_{epoch}': wandb.Html(svg_content), # type: ignore
             f'samples/class_label': class_label,
             f'samples/class_name': class_name,
         }, step=epoch)
