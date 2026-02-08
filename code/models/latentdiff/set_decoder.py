@@ -22,15 +22,19 @@ class PerceiverBlock(nn.Module):
 
     def forward(self, x, z):
         z = z.unsqueeze(1)                      # (B, D) -> (B, 1, D)
-        h, _ = self.cross_attn(x, z, z) # x <- z
-        x = self.norm1(x + h)
-
-        h, _ = self.self_attn(x, x, x)  # x <- x
-        x = self.norm2(x + h)
-
-        h = self.ff(x)
-        x = self.norm3(x + h)
         
+        x_norm = self.norm1(x)
+        h, _ = self.cross_attn(x_norm, z, z)
+        x = x + h
+
+        x_norm = self.norm2(x)
+        h, _ = self.self_attn(x_norm, x_norm, x_norm)
+        x = x + h
+
+        x_norm = self.norm3(x)
+        h = self.ff(x_norm)
+        x = x + h
+
         return x
 
 
