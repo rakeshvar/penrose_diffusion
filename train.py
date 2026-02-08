@@ -174,6 +174,7 @@ def train_fn(rank:int, config:Config):
         aux_loss_avgs = (aux_loss_sums / count).cpu().numpy()
         for name, value in zip(model.aux_loss_names, aux_loss_avgs):
             to_log["loss/"+name] = float(value)
+            mprint(f"{name} = {value:.4f}")
 
         if is_master:
           ckptr.save_checkpoint(epoch, model, optimizer, scheduler, avg_loss) # type: ignore
