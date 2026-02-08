@@ -143,7 +143,8 @@ def train_fn(rank:int, config:Config):
 
             if torch.isnan(loss):
                 if num_nans == 0:
-                    print(f"Loss is NaN for batch:{count+num_nans} epoch:{epoch} device:{device}")
+                    print(f"Loss is NaN for batch:{count+num_nans} epoch:{epoch} process:{rank}")
+                    print(f"norm = {nn_utils.clip_grad_norm_(model.parameters(), float('inf')):.4f}")
                 num_nans += 1
                 continue
 
@@ -188,7 +189,7 @@ def train_fn(rank:int, config:Config):
         wandblog.log_step(to_log, step=epoch)
         mprint(f"Epoch {epoch} done. Average Loss: {avg_loss:.4f}\n")
         if num_nans > 0:
-            print(f"Count={count} vs Nans={num_nans} on device:{device}")
+            print(f"Count={count} vs Nans={num_nans} on process:{rank}")
             if count == 0:
                 break
 
