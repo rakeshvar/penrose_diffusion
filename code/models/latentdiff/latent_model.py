@@ -122,10 +122,13 @@ class LatentDiffusionModel(AbstractModel):
         # Angle Variance
         loss_equiangle = torch.var(x_hat[:, :, 2], dim=1, unbiased=True).mean()
 
-        loss = loss_recons \
-                + self.config["beta_kl"] * loss_kl \
-                + self.config["beta_dl"] * loss_diffusion \
-                + self.config["beta_ll"] * loss_lattice
+        loss = loss_recons
+        if self.config["beta_kl"] > 0.:
+            loss += self.config["beta_kl"] * loss_kl 
+        if self.config["beta_dl"] > 0.:
+            loss += self.config["beta_dl"] * loss_diffusion
+        if self.config["beta_ll"] > 0.:
+            loss += self.config["beta_ll"] * loss_lattice
 
         aux_losses = torch.stack([
             loss_recons,
