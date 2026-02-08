@@ -59,7 +59,7 @@ def _lattice_loss_logarithmic(xy_hat, min_dist_to_nearest, max_dist_to_nearest, 
     r_nn = d_nn / max_dist_to_nearest
     gap_loss = r_nn - 1. - torch.log(r_nn + eps)
     gap_mask = (r_nn > 1.0).to(gap_loss.dtype)
-    gap_loss = (gap_loss * gap_mask).mean() 
+    gap_loss = (gap_loss * gap_mask).mean()
 
     # global logarithmic repulsion (only when too close)
     r_ij = dist / min_dist_to_nearest

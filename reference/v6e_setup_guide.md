@@ -31,6 +31,8 @@ pip install torch_xla[tpu]~=2.6.0 \
 
 git clone https://github.com/rakeshvar/penrose_diffusion
 cd penrose_diffusion
+mkdir datasets/
+gsutil -m cp -r gs://penrose_diffusion/datasets/*.npz datasets/
 ```
 
 ### Train
@@ -50,8 +52,6 @@ sudo fuser -v /dev/vfio/*
 
 ### Toys
 ```bash
-mkdir datasets/
-gsutil -m cp -r gs://penrose_diffusion/datasets/*.npz datasets/
 python train.py ddtoy datasets/hex_t096_c01_u18.npz -w enable=False -t save_samples=False
 python train.py ddtoy isab datasets/hex_t096_c01_u18.npz -w enable=False -t save_samples=False
 python train.py ddtoy llm datasets/hexqr_t128_c01_u16.npz -w enable=False -t save_samples=False

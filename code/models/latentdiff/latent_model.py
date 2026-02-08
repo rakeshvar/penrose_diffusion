@@ -124,7 +124,7 @@ class LatentDiffusionModel(AbstractModel):
 
         loss = loss_recons
         if self.config["beta_kl"] > 0.:
-            loss += self.config["beta_kl"] * loss_kl 
+            loss += self.config["beta_kl"] * loss_kl
         if self.config["beta_dl"] > 0.:
             loss += self.config["beta_dl"] * loss_diffusion
         if self.config["beta_ll"] > 0.:

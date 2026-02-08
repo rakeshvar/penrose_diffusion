@@ -8,30 +8,33 @@ import torch.nn as nn
 class PerceiverBlock(nn.Module):
     def __init__(self, dim, heads):
         super().__init__()
+        self.normcax = nn.LayerNorm(dim)
+        self.normcaz = nn.LayerNorm(dim)
         self.cross_attn = nn.MultiheadAttention(dim, heads, batch_first=True)
-        self.norm1 = nn.LayerNorm(dim)
-        self.self_attn = nn.MultiheadAttention(dim, heads, batch_first=True)
-        self.norm2 = nn.LayerNorm(dim)
 
+        self.normsa = nn.LayerNorm(dim)
+        self.self_attn = nn.MultiheadAttention(dim, heads, batch_first=True)
+
+        self.normff = nn.LayerNorm(dim)
         self.ff = nn.Sequential(
             nn.Linear(dim, 4 * dim),
             nn.ReLU(),
             nn.Linear(4 * dim, dim),
         )
-        self.norm3 = nn.LayerNorm(dim)
 
     def forward(self, x, z):
         z = z.unsqueeze(1)                      # (B, D) -> (B, 1, D)
-        
-        x_norm = self.norm1(x)
-        h, _ = self.cross_attn(x_norm, z, z)
+
+        x_norm = self.normcax(x)
+        z_norm = self.normcaz(z)
+        h, _ = self.cross_attn(x_norm, z_norm, z_norm)
         x = x + h
 
-        x_norm = self.norm2(x)
+        x_norm = self.normsa(x)
         h, _ = self.self_attn(x_norm, x_norm, x_norm)
         x = x + h
 
-        x_norm = self.norm3(x)
+        x_norm = self.normff(x)
         h = self.ff(x_norm)
         x = x + h
 

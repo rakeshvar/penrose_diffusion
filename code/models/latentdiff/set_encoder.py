@@ -43,7 +43,7 @@ class SetEncoder(nn.Module):
         # We do num_pools and concatenate them
         h = self.attn_pool(seeds, h)                # B, P, D
         h = h.reshape(B, -1)                        # B, P*D
-        
+
         mu = self.mu_head(h)                     # B, L
         logvar = self.logvar_head(h)             # B, L
         return mu, logvar

@@ -33,12 +33,12 @@ def train_fn(rank:int, config:Config):
     print(f"Process {rank} initialized on {device}.")
 
     is_master = compat.is_master()
-    if is_master: 
+    if is_master:
         print(f"{rank} is master.")
         compat.print_env()
         mprint = print
-    else: 
-        mprint = lambda *args, **kwargs: None 
+    else:
+        mprint = lambda *args, **kwargs: None
 
     #--------------------------------------------
     # Load Data
