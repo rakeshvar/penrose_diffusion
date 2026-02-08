@@ -107,6 +107,9 @@ discrete:
 latentcommon: &latentcommon
   model: "latent"
   loss: "sinkhorn"
+  beta_kl: .001
+  beta_dl: 1.
+  beta_ll: 1.
 
 latent32: &latent32
   <<: *latentcommon
@@ -245,3 +248,7 @@ ld256:
     <<: *default_train
   wandb:
     <<: *default_latent_wandb
+
+vaeonly:
+  model:
+    beta_dl: 0.

@@ -59,7 +59,7 @@ class WandBLog:
             'data_path': str(tr_conf.data_path_orig),
             'resume_epoch': tr_conf.resume_epoch,
             'device_type': 'TPU' if compat.IS_TPU else ('GPU' if compat.IS_GPU else 'CPU'),
-            'locale': 'GCP' if 'is_gcp' else ('COLAB' if compat.IS_COLAB else 'LOCAL'),
+            'locale': 'GCP' if compat.IS_GCP else ('COLAB' if compat.IS_COLAB else 'LOCAL'),
             'num_tiles': dataset.num_tiles,
             'symmetry': dataset.symmetry,
             'side': dataset.side,
@@ -69,7 +69,7 @@ class WandBLog:
         num_params = sum(p.numel() for p in model.parameters())
         num_trainable = sum(p.numel() for p in model.parameters() if p.requires_grad)
         self.update_run_config({
-            'loss_function': type(model.descriptor).__qualname__,
+            'model_class': type(model).__qualname__,
             'num_parameters': num_params,
             'num_trainable_parameters': num_trainable,
         })

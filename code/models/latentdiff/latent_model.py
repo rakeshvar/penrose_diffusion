@@ -65,7 +65,6 @@ class LatentDiffusionModel(AbstractModel):
         N = config['num_tiles']
         Kl = config['num_latent_blocks']
         Kv = config['num_vae_blocks']
-        self.beta_kl = 1e-3
         self.p_uncond = 1/7.
         self.config = config
 
@@ -124,9 +123,9 @@ class LatentDiffusionModel(AbstractModel):
         loss_equiangle = torch.var(x_hat[:, :, 2], dim=1, unbiased=True).mean()
 
         loss = loss_recons \
-                + self.beta_kl * loss_kl \
-                + loss_diffusion \
-                + loss_lattice
+                + self.config["beta_kl"] * loss_kl \
+                + self.config["beta_dl"] * loss_diffusion \
+                + self.config["beta_ll"] * loss_lattice
 
         aux_losses = torch.stack([
             loss_recons,

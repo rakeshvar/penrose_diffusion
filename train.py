@@ -31,9 +31,9 @@ def train_fn(rank:int, config:Config):
         config: Instance of config.Config containing parsed settings.
     """
     device = compat.get_device()
-    print(f"Process {rank} initialized on {device}")
     compat.print_env(rank)
     is_master = compat.is_master()
+    print(f"Process {rank} initialized on {device}. Master: {is_master}")
 
     #--------------------------------------------
     # Load Data
@@ -138,7 +138,7 @@ def train_fn(rank:int, config:Config):
 
             if torch.isnan(loss):
                 num_nans += 1
-                return
+                continue
 
             # Backpropagate
             optimizer.zero_grad()
@@ -180,6 +180,9 @@ def train_fn(rank:int, config:Config):
 
         wandblog.log_step(to_log, step=epoch)
         mprint(f"Epoch {epoch} done. Average Loss: {avg_loss:.4f}\n", rank)
+        if count == 0:
+            print(f"All nans on epoch {epoch} on device:{rank}. Count={count} vs Nans={num_nans}")
+            break
 
     wandblog.finish()
     mprint("\n======\nDone!\n======", rank)
