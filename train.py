@@ -142,7 +142,8 @@ def train_fn(rank:int, config:Config):
             loss, aux_losses = model.train_step(xya, colors, labels)
 
             if torch.isnan(loss):
-                print(f"Loss is NaN for batch:{count+num_nans} epoch:{epoch} device:{device}")
+                if num_nans == 0:
+                    print(f"Loss is NaN for batch:{count+num_nans} epoch:{epoch} device:{device}")
                 num_nans += 1
                 continue
 
