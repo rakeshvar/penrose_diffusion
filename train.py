@@ -30,13 +30,15 @@ def train_fn(rank:int, config:Config):
         config: Instance of config.Config containing parsed settings.
     """
     device = compat.get_device()
+    print(f"Process {rank} initialized on {device}.")
+
     is_master = compat.is_master()
     if is_master: 
+        print(f"{rank} is master.")
         compat.print_env()
         mprint = print
     else: 
         mprint = lambda *args, **kwargs: None 
-    print(f"Process {rank} initialized on {device}."  " (Master)" if is_master else "")
 
     #--------------------------------------------
     # Load Data
@@ -140,6 +142,7 @@ def train_fn(rank:int, config:Config):
             loss, aux_losses = model.train_step(xya, colors, labels)
 
             if torch.isnan(loss):
+                print(f"Loss is NaN for batch:{count+num_nans} epoch:{epoch} device:{device}")
                 num_nans += 1
                 continue
 
@@ -183,9 +186,10 @@ def train_fn(rank:int, config:Config):
 
         wandblog.log_step(to_log, step=epoch)
         mprint(f"Epoch {epoch} done. Average Loss: {avg_loss:.4f}\n")
-        if count == 0:
-            print(f"All nans on epoch {epoch} on device:{rank}. Count={count} vs Nans={num_nans}")
-            break
+        if num_nans > 0:
+            print(f"Count={count} vs Nans={num_nans} on device:{device}")
+            if count == 0:
+                break
 
     wandblog.finish()
     mprint("\n======\nDone!\n======")
