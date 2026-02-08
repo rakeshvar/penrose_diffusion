@@ -5,7 +5,7 @@ import torch.nn.functional as F
 from code.augment import GeometryAugment
 from code.models.base_model import AbstractModel
 from code.models.latentdiff.latent_denoiser import LatentDenoiser
-from code.utils.lossy import hex_lattice_loss_logarthmic
+from code.utils.lossy import lattice_loss
 
 from .set_decoder import PerceiverDecoder
 from .set_encoder import SetEncoder
@@ -118,7 +118,7 @@ class LatentDiffusionModel(AbstractModel):
         loss_recons = self.recons_loss_fn(x, x_hat, color)
 
         # Lattice
-        loss_lattice = hex_lattice_loss_logarthmic(x_hat, .18)
+        loss_lattice = lattice_loss(self.config['symmetry'], x_hat, self.config['side'])
 
         # Angle Variance
         loss_equiangle = torch.var(x_hat[:, :, 2], dim=1, unbiased=True).mean()

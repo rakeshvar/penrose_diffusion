@@ -10,7 +10,7 @@ import torch.nn.utils as nn_utils
 import code.compatibility as compat
 from code.config import Config
 from code.utils.advanced import get_random_colors, xyac_to_svgs
-from code.utils.lossy import hex_lattice_loss_quadratic
+from code.utils.lossy import lattice_loss
 from code.wandblog import WandBLog
 from code.data.load import MyDataset
 from code.filesystem import CheckPointer, load_checkpoint
@@ -56,6 +56,8 @@ def train_fn(rank:int, config:Config):
     mprint(f"Batches/Core:  {len(raw_loader)}", rank)
     config.model['num_tiles'] = dataset.num_tiles
     config.model['num_classes'] = dataset.num_classes
+    config.model['side'] = dataset.side
+    config.model['symmetry'] = dataset.symmetry
     #--------------------------------------------
     # Model Initialization
     #--------------------------------------------
@@ -136,7 +138,7 @@ def train_fn(rank:int, config:Config):
 
             if torch.isnan(loss):
                 num_nans += 1
-                continue
+                return
 
             # Backpropagate
             optimizer.zero_grad()
@@ -172,9 +174,9 @@ def train_fn(rank:int, config:Config):
             svg_fname = f"sv{config.timestamp}_e{epoch:03d}_{sample_name}.svg"
             ckptr.save_svg(svg, svg_fname)                                    # type: ignore
             wandblog.lsvg(epoch, svg, sample_label, sample_name)
-            lattice_loss = hex_lattice_loss_quadratic(samples, dataset.side)
-            to_log['loss/lattice_sample'] = lattice_loss
-            mprint(f"Lattice loss: {lattice_loss:.4f}", rank)
+            loss_lattice = lattice_loss(dataset.symmetry, samples, dataset.side)
+            to_log['loss/lattice_sample'] = loss_lattice
+            mprint(f"Lattice loss: {loss_lattice:.4f}", rank)
 
         wandblog.log_step(to_log, step=epoch)
         mprint(f"Epoch {epoch} done. Average Loss: {avg_loss:.4f}\n", rank)

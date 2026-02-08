@@ -6,7 +6,7 @@ from code.data.load import MyDataset
 from code.models import get_model_class
 from code.utils.advanced import xyac_to_svgs
 from code.utils.basic import print_config
-from code.utils.lossy import hex_lattice_loss_quadratic
+from code.utils.lossy import lattice_loss
 
 def main():
     # 1. Setup
@@ -63,8 +63,8 @@ def main():
 
         xyac_to_svgs(samples, symmetry, side, paths, True) # type: ignore
 
-        lattice_loss = hex_lattice_loss_quadratic(samples, side)
-        print(f"Lattice loss: {lattice_loss:.4f}")
+        loss_lattice = lattice_loss(symmetry, samples, side)
+        print(f"Lattice loss: {loss_lattice:.4f}")
 
         i += TEN
 

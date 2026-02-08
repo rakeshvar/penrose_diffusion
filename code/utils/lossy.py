@@ -29,52 +29,63 @@ def equiangle_loss_sincos(xysc_hat, eps=1e-6):
 #---------------------------
 # Lattice Loss
 #---------------------------
-def hex_lattice_loss_quadratic(xy_hat, unit_side):
-    """
-    0 when all nearest neighbors are exactly s units away.
-    """
-    dist2nearest = math.sqrt(3) * unit_side
-
+def sq_dists(xy_hat):
     N = xy_hat.shape[1]
-    xy_hat = xy_hat[..., :2]
-
-    sq_dist = ((xy_hat.unsqueeze(2) - xy_hat.unsqueeze(1)) ** 2).sum(-1)  # B, N, N
-    dist_to_self = torch.eye(N, device=xy_hat.device, dtype=sq_dist.dtype).unsqueeze(0) * 1e6
+    xy = xy_hat[..., :2]
+    sq_dist = ((xy.unsqueeze(2) - xy.unsqueeze(1)) ** 2).sum(-1)  # B, N, N
+    dist_to_self = torch.eye(N, device=xy.device, dtype=sq_dist.dtype).unsqueeze(0) * 1e6
     sq_dist += dist_to_self
-    min_sq_dist = sq_dist.min(-1)[0]                    # B, N
-    min_dist = torch.sqrt(min_sq_dist)
+    return sq_dist
 
-    target = torch.full_like(min_dist, fill_value=dist2nearest)
-    return F.mse_loss(min_dist, target) / dist2nearest**2
+def _lattice_loss_quadratic(xy_hat, min_dist_to_nearest, max_dist_to_nearest, eps=1e-6):
+    sq_dist = sq_dists(xy_hat)
+    sq_dist_nn = sq_dist.min(-1)[0]
+    dist_nn = torch.sqrt(sq_dist_nn + eps)
+
+    r1 = dist_nn / min_dist_to_nearest
+    r2 = dist_nn / max_dist_to_nearest
+    loss = F.relu(1.0 - r1)**2 + F.relu(r2 - 1.0)**2
+    return loss.mean()
 
 #---------------------------
 # Lattice Loss (NN attract + global log-repel)
 #---------------------------
-def hex_lattice_loss_logarthmic(xy_hat, unit_side):
-    eps = 1e-6
-    dist2nearest = math.sqrt(3) * unit_side
-
-    B, N, _ = xy_hat.shape
-    xy = xy_hat[..., :2]
-    diff = xy.unsqueeze(2) - xy.unsqueeze(1)                 # (B, N, N, 2)
-    sq_dist = (diff ** 2).sum(-1)                             # (B, N, N)
-    eye = torch.eye(N, device=xy.device, dtype=sq_dist.dtype).unsqueeze(0)
-    sq_dist = sq_dist + eye * 1e6
-    dists = torch.sqrt(sq_dist + eps)                         # (B, N, N)
+def _lattice_loss_logarithmic(xy_hat, min_dist_to_nearest, max_dist_to_nearest, eps=1e-6):
+    sq_dist = sq_dists(xy_hat)
+    dist = torch.sqrt(sq_dist)
 
     # nearest-neighbor attraction
-    d_nn = dists.min(dim=-1)[0]                               # (B, N)
-    r = d_nn / dist2nearest
-    loss_gapping = (r - 1.0 - torch.log(r + eps)) / 10.         # TODO: this is a hyperparameter
+    d_nn = dist.min(dim=-1)[0]
+    r_nn = d_nn / max_dist_to_nearest
+    gap_loss = r_nn - 1. - torch.log(r_nn + eps)
+    gap_mask = (r_nn > 1.0).to(gap_loss.dtype)
+    gap_loss = (gap_loss * gap_mask).mean() 
 
     # global logarithmic repulsion (only when too close)
-    r_ij = dists / dist2nearest
-    repulse = -torch.log(r_ij + eps)
-    repulse = torch.where(r_ij < 1.0, repulse, torch.zeros_like(repulse))
-    repulse = repulse * (1.0 - eye)
-    loss_overlapping = repulse.sum(dim=-1)
+    r_ij = dist / min_dist_to_nearest
+    lap_loss = r_ij - 1.0 - torch.log(r_ij + eps)  # (B, N, N)
+    lap_mask = (r_ij < 1.0).to(lap_loss.dtype)
+    lap_loss = (lap_loss * lap_mask).mean()
 
-    return (loss_gapping + loss_overlapping).mean()
+    return (gap_loss + lap_loss) / 2.
+
+
+def lattice_loss(symmetry, xy_hat, unit_side, algo="logarithmic"):
+    if symmetry == 6:
+        min_dist_to_nearest = max_dist_to_nearest = math.sqrt(3) * unit_side
+    elif symmetry == 5:
+        raise NotImplementedError
+        min_dist_to_nearest = 0 * unit_side
+        max_dist_to_nearest = 0 * unit_side
+    else:
+        raise ValueError(f"Unsupported symmetry: {symmetry} (must be 6 or 5)")
+
+    if algo == "quadratic":
+        return _lattice_loss_quadratic(xy_hat, min_dist_to_nearest, max_dist_to_nearest)
+    elif algo == "logarithmic":
+        return _lattice_loss_logarithmic(xy_hat, min_dist_to_nearest, max_dist_to_nearest)
+    else:
+        raise ValueError(f"Unsupported algo: {algo}")
 
 #---------------------------
 # Sinkhorn Soft-Permutation Calculation

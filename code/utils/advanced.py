@@ -70,7 +70,7 @@ def xya_to_xysc(xya):
     return xysc, colors
 
 
-def pairwise_sq_dist(x, y, colors, σₑsq=1.):
+def pairwise_sq_dist(x, y, colors, σₑsq: float | torch.Tensor = 1.):
     """
     Used to caluclate raw logits:        ‖x₀ - ̂x₀‖² / 2σₑ²
     We use σₑ² here only to estimate BIG, to avoid overflow.
