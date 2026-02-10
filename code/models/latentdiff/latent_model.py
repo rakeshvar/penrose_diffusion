@@ -53,11 +53,12 @@ class LatentDiffuser(Diffuser):
 
 def check_tensor(name, x):
     if not torch.isfinite(x).all():
-        print(f"\nNaN/Inf detected in: {name}")
-        print(f"  min: {x.min().item()}")
-        print(f"  max: {x.max().item()}")
-        print(f"  mean: {x.mean().item()}")
-        raise RuntimeError(f"Invalid values in {name}")
+        raise RuntimeError(
+            f"{name}: NaN/Inf "
+            f"  min: {x.min().item()}"
+            f"  avg: {x.mean().item()}"
+            f"  max: {x.max().item()}"
+        )
 
 #------------------------------------------------------------
 # Model

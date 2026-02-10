@@ -20,6 +20,7 @@ from code.models import get_model_class
 # Suppress nested tensor warnings
 import warnings
 warnings.filterwarnings("ignore", message="enable_nested_tensor is True")
+warnings.filterwarnings("ignore", category=FutureWarning)
 
 
 def train_fn(rank:int, config:Config):
