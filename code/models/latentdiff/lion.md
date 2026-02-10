@@ -92,8 +92,8 @@ end
 
 NOISE(["zₜ  ~ 𝒩 (0, I)"]) --> Denoiser
 CLASS --> Denoiser
-Denoiser --> Z0(("z_(t-1)")) --> Decoder
-
+Denoiser --> Z0(("z₍ₜ₋₁₎")) --> Decoder
+Z0 --> Denoiser
 COLORS --> Decoder --> X(("Sample"))
 
 ```
@@ -112,36 +112,23 @@ graph TB
 
 ```mermaid
 graph TB
-    subgraph "FiLM Approach"
-        B1[Input x] --> B3[Network]
-        B3 --> B4["Normalize"]
-        B4 --> Mod["× (1+scale) + shift"]
-        B2[Conditioning] --> Learn["Learn<br/>scale & shift"]
-        Learn --> Mod
-        Mod --> B5[Activation]
-        B5 --> B6[Output]
-    end
-```
-
-```mermaid
-graph TB
     subgraph "FiLM Block"
-        Input[/"Input x<br/>(B, in_dim)"/]
-        Cond[/"Conditioning c<br/>(B, cond_dim)<br/>(time + class embeddings)"/]
+        Input[/"zₜ"/]
+        Cond[/"Class, Time"/]
 
-        Input --> Linear["Linear Layer<br/>(in_dim → out_dim)"]
-        Linear --> Norm["LayerNorm<br/>(normalize)"]
+        Input --> Linear["Linear "]
+        Linear --> Norm["LayerNorm"]
 
-        Cond --> FiLMNet["Linear Layer<br/>(cond_dim → 2×out_dim)"]
-        FiLMNet --> Split["Split into 2"]
-        Split --> Scale["Scale γ<br/>(B, out_dim)"]
-        Split --> Shift["Shift β<br/>(B, out_dim)"]
+        Cond --> FiLMNet["Linear"]
+        FiLMNet --> Split["Split"]
+        Split --> Scale["Scale γ"]
+        Split --> Shift["Shift β"]
 
-        Norm --> Modulate["h × (1 + γ) + β<br/>(element-wise)"]
+        Norm --> Modulate["β + (1+γ)h"]
         Scale --> Modulate
         Shift --> Modulate
 
-        Modulate --> Act["SiLU/GELU<br/>Activation"]
-        Act --> Output[/"Output<br/>(B, out_dim)"/]
+        Modulate --> Act["Activation"]
+        Act --> Output[/"Output"/]
     end
 ```

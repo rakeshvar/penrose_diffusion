@@ -17,7 +17,7 @@ while sudo fuser /var/lib/dpkg/lock-frontend >/dev/null 2>&1; do
 done
 
 sudo NEEDRESTART_MODE=a apt update
-sudo NEEDRESTART_MODE=a apt install -y python3.10-venv
+sudo NEEDRESTART_MODE=a apt install -y python3-venv
 python3 -m venv ~/tpu-env
 source ~/tpu-env/bin/activate
 

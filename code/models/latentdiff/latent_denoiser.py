@@ -77,6 +77,9 @@ class FiLMBlock(nn.Module):
 
         # Learn scale and shift from conditioning
         self.film = nn.Linear(cond_dim, out_dim * 2)
+        nn.init.zeros_(self.film.weight)
+        nn.init.zeros_(self.film.bias)
+
         self.act = nn.SiLU()
 
         # Residual connection
