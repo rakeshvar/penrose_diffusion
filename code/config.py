@@ -5,8 +5,8 @@ import yaml
 from datetime import datetime
 
 import code.compatibility as compat
-from code.filesystem import safe_torch_load, maybe_download
-from code.utils.basic import infer_type
+from .filesystem import safe_torch_load, maybe_download
+from .utils.basic import infer_type
 
 
 def deep_merge_dict(target, source):

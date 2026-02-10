@@ -16,14 +16,13 @@ from .latent_losses import loss_registry
 # ------------------------------------------------------------
 
 def reparameterize(mu, logvar):
-    logvar = torch.clamp(logvar, max=20.0, min=-20.0)
     mu = torch.clamp(mu, min=-100.0, max=100.0)
-    std = torch.exp(0.5 * logvar)
+    std = torch.exp(logvar/2.)
     eps = torch.randn_like(std)
     return mu + eps * std
 
 def kl_loss(mu, logvar):
-    return -0.5 * torch.mean(1 + logvar - mu.pow(2) - logvar.exp())
+    return torch.mean(mu.pow(2) + logvar.exp() - 1 - logvar)/2.
 
 #------------------------------------------------------------
 # Diffuser
@@ -51,6 +50,14 @@ class LatentDiffuser(Diffuser):
 
         return z
 
+
+def check_tensor(name, x):
+    if not torch.isfinite(x).all():
+        print(f"\nNaN/Inf detected in: {name}")
+        print(f"  min: {x.min().item()}")
+        print(f"  max: {x.max().item()}")
+        print(f"  mean: {x.mean().item()}")
+        raise RuntimeError(f"Invalid values in {name}")
 
 #------------------------------------------------------------
 # Model
@@ -91,18 +98,26 @@ class LatentDiffusionModel(AbstractModel):
     def train_step(self, x, color, cls):
         x = self.augmenter(x)
         x = x * torch.tensor([1., 1., sqrt(3)/pi], device=x.device)
+        check_tensor("input x", x)
 
         self.train()
         B = x.shape[0]
 
         # Encode to Latents
         mu, logvar = self.encoder(x, color, cls)                    # mu: (B, D), logvar: (B, D)
+        # logvar = torch.clamp(logvar, min=-20.0, max=20.0)           # TPU friendly
+        check_tensor("mu", mu)
+        check_tensor("logvar", logvar)
         loss_kl = kl_loss(mu, logvar)                               # (1,)
-        z0 = reparameterize(mu, logvar)                             # (B, D)
+        check_tensor("loss_kl", loss_kl)
 
+        z0 = reparameterize(mu, logvar)                             # (B, D)
+        check_tensor("z0", z0)
         # Latent Diffusion
         t = torch.randint(0, self.diffuser.num_timesteps, (B,), device=self.device) # (B,)
         zt, ε = self.diffuser.q_sample(z0, t)                       # zt: (B, D), ε: (B, D)
+        check_tensor("zt", zt)
+        check_tensor("ε", ε)
 
         # Drop some classes for Classifier Free Guidance
         cls_cond = cls.clone()
@@ -112,17 +127,25 @@ class LatentDiffusionModel(AbstractModel):
 
         # Denoiser
         εhat = self.denoiser(zt, t, cls_cond)                       # (B, D)
+        check_tensor("εhat", εhat)
+
         loss_diffusion = F.mse_loss(εhat, ε)                        # (1,)
+        check_tensor("loss_diffusion", loss_diffusion)
 
         # Decoder
         x_hat = self.decoder(z0, color)
+        check_tensor("x_hat", x_hat)
+
         loss_recons = self.recons_loss_fn(x, x_hat, color)
+        check_tensor("loss_recons", loss_recons)
 
         # Lattice
         loss_lattice = lattice_loss(self.config['symmetry'], x_hat, self.config['side'])
+        check_tensor("loss_lattice", loss_lattice)
 
         # Angle Variance
         loss_equiangle = torch.var(x_hat[:, :, 2], dim=1, unbiased=True).mean()
+        check_tensor("loss_equiangle", loss_equiangle)
 
         loss = loss_recons
         if self.config["beta_kl"] > 0.:
@@ -131,6 +154,8 @@ class LatentDiffusionModel(AbstractModel):
             loss += self.config["beta_dl"] * loss_diffusion
         if self.config["beta_ll"] > 0.:
             loss += self.config["beta_ll"] * loss_lattice
+
+        check_tensor("final_loss", loss)
 
         aux_losses = torch.stack([
             loss_recons,

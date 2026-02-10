@@ -30,7 +30,7 @@ def sinkhorn_loss(x, y, colors):
     t = t_from_s()
     sq_dist = pairwise_sq_dist(x, y, colors, t**2)
     logits = -sq_dist/(2*(t**2))
-    logits = torch.clamp(logits, min=-50.0)
+    # logits = torch.clamp(logits, min=-50., max=50.)
     P = sinkhorn_permutation(logits)
     y_post = torch.bmm(P, y)
     return F.mse_loss(x, y_post)
