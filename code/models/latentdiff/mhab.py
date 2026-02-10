@@ -77,7 +77,7 @@ class StableAttentionBlock(nn.Module):
             nn.Linear(4 * dim, dim),
         )
 
-    def forward(self, x):
+    def forward(self, x, ignore):
         B, N, D = x.shape
 
         h = self.ln1(x)
