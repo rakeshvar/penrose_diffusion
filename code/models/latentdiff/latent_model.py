@@ -114,8 +114,9 @@ class LatentDiffusionModel(AbstractModel):
             loss_kl = kl_loss(mu, logvar)                               # (1,)
             check_tensor("loss_kl", loss_kl)
 
-        z0 = reparameterize(mu, logvar)                             # (B, D)
-        check_tensor("z0", z0)
+            z0 = reparameterize(mu, logvar)                             # (B, D)
+            check_tensor("z0", z0)
+
         # Latent Diffusion
         t = torch.randint(0, self.diffuser.num_timesteps, (B,), device=self.device) # (B,)
         zt, ε = self.diffuser.q_sample(z0, t)                       # zt: (B, D), ε: (B, D)
