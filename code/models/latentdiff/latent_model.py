@@ -107,12 +107,12 @@ class LatentDiffusionModel(AbstractModel):
         B = x.shape[0]
 
         with compat.fp32():
-        # Encode to Latents
+            # Encode to Latents
             mu, logvar = self.encoder(x, color, cls)                    # mu: (B, D), logvar: (B, D)
-        check_tensor("mu", mu)
-        check_tensor("logvar", logvar)
-        loss_kl = kl_loss(mu, logvar)                               # (1,)
-        check_tensor("loss_kl", loss_kl)
+            check_tensor("mu", mu)
+            check_tensor("logvar", logvar)
+            loss_kl = kl_loss(mu, logvar)                               # (1,)
+            check_tensor("loss_kl", loss_kl)
 
         z0 = reparameterize(mu, logvar)                             # (B, D)
         check_tensor("z0", z0)
