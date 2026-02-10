@@ -3,6 +3,8 @@
 import os
 import sys
 import socket
+
+from  contextlib import contextmanager
 from pathlib import Path
 
 import torch
@@ -179,3 +181,14 @@ def launch(train_fn, args=()):
 def local_save(data, local_path):
     if IS_TPU:       xm.save(data, local_path)
     else:            torch.save(data, local_path)
+
+#--------------------------------------------------
+# Float32
+#--------------------------------------------------
+@contextmanager
+def fp32():
+    if IS_TPU:
+        with torch.autocast(enabled=False): # type: ignore
+            yield
+    else:
+        yield

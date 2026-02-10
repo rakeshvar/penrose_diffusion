@@ -2,6 +2,7 @@ from math import pi, sqrt
 import torch
 import torch.nn.functional as F
 
+import code.compatibility as compat
 from code.augment import GeometryAugment
 from code.models.base_model import AbstractModel
 from code.models.latentdiff.latent_denoiser import FiLMLatentDenoiser, MLPLatentDenoiser
@@ -105,9 +106,9 @@ class LatentDiffusionModel(AbstractModel):
         self.train()
         B = x.shape[0]
 
+        with compat.fp32():
         # Encode to Latents
-        mu, logvar = self.encoder(x, color, cls)                    # mu: (B, D), logvar: (B, D)
-        # logvar = torch.clamp(logvar, min=-20.0, max=20.0)           # TPU friendly
+            mu, logvar = self.encoder(x, color, cls)                    # mu: (B, D), logvar: (B, D)
         check_tensor("mu", mu)
         check_tensor("logvar", logvar)
         loss_kl = kl_loss(mu, logvar)                               # (1,)
