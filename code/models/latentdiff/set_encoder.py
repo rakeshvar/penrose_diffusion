@@ -1,7 +1,13 @@
 import torch
 import torch.nn as nn
 
-from .mhab import MultiheadAttentionBlock
+from .mhab import MultiheadAttentionBlock, StableAttentionBlock
+
+import code.compatibility as compat
+if compat.IS_TPU:
+    MAB = StableAttentionBlock
+else:
+    MAB = MultiheadAttentionBlock
 
 class SetEncoder(nn.Module):
     def __init__(self, num_classes, latent_dim, num_pools, num_blocks, num_heads):
@@ -18,7 +24,7 @@ class SetEncoder(nn.Module):
         )
 
         self.self_attn_blocks = nn.ModuleList([
-            MultiheadAttentionBlock(dim, num_heads)
+            MAB(dim, num_heads)
             for _ in range(num_blocks)
         ])
 
