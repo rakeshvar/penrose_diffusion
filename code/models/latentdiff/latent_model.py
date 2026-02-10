@@ -117,49 +117,49 @@ class LatentDiffusionModel(AbstractModel):
             z0 = reparameterize(mu, logvar)                             # (B, D)
             check_tensor("z0", z0)
 
-        # Latent Diffusion
-        t = torch.randint(0, self.diffuser.num_timesteps, (B,), device=self.device) # (B,)
-        zt, ε = self.diffuser.q_sample(z0, t)                       # zt: (B, D), ε: (B, D)
-        check_tensor("zt", zt)
-        check_tensor("ε", ε)
+            # Latent Diffusion
+            t = torch.randint(0, self.diffuser.num_timesteps, (B,), device=self.device) # (B,)
+            zt, ε = self.diffuser.q_sample(z0, t)                       # zt: (B, D), ε: (B, D)
+            check_tensor("zt", zt)
+            check_tensor("ε", ε)
 
-        # Drop some classes for Classifier Free Guidance
-        cls_cond = cls.clone()
-        drop = torch.rand_like(z0[:, 0]) < self.p_uncond
-        nulls = torch.full_like(cls_cond, self.null_class)
-        cls_cond = torch.where(drop, nulls, cls_cond)
+            # Drop some classes for Classifier Free Guidance
+            cls_cond = cls.clone()
+            drop = torch.rand_like(z0[:, 0]) < self.p_uncond
+            nulls = torch.full_like(cls_cond, self.null_class)
+            cls_cond = torch.where(drop, nulls, cls_cond)
 
-        # Denoiser
-        εhat = self.denoiser(zt, t, cls_cond)                       # (B, D)
-        check_tensor("εhat", εhat)
+            # Denoiser
+            εhat = self.denoiser(zt, t, cls_cond)                       # (B, D)
+            check_tensor("εhat", εhat)
 
-        loss_diffusion = F.mse_loss(εhat, ε)                        # (1,)
-        check_tensor("loss_diffusion", loss_diffusion)
+            loss_diffusion = F.mse_loss(εhat, ε)                        # (1,)
+            check_tensor("loss_diffusion", loss_diffusion)
 
-        # Decoder
-        x_hat = self.decoder(z0, color)
-        check_tensor("x_hat", x_hat)
+            # Decoder
+            x_hat = self.decoder(z0, color)
+            check_tensor("x_hat", x_hat)
 
-        loss_recons = self.recons_loss_fn(x, x_hat, color)
-        check_tensor("loss_recons", loss_recons)
+            loss_recons = self.recons_loss_fn(x, x_hat, color)
+            check_tensor("loss_recons", loss_recons)
 
-        # Lattice
-        loss_lattice = lattice_loss(self.config['symmetry'], x_hat, self.config['side'])
-        check_tensor("loss_lattice", loss_lattice)
+            # Lattice
+            loss_lattice = lattice_loss(self.config['symmetry'], x_hat, self.config['side'])
+            check_tensor("loss_lattice", loss_lattice)
 
-        # Angle Variance
-        loss_equiangle = torch.var(x_hat[:, :, 2], dim=1, unbiased=True).mean()
-        check_tensor("loss_equiangle", loss_equiangle)
+            # Angle Variance
+            loss_equiangle = torch.var(x_hat[:, :, 2], dim=1, unbiased=True).mean()
+            check_tensor("loss_equiangle", loss_equiangle)
 
-        loss = loss_recons
-        if self.config["beta_kl"] > 0.:
-            loss += self.config["beta_kl"] * loss_kl
-        if self.config["beta_dl"] > 0.:
-            loss += self.config["beta_dl"] * loss_diffusion
-        if self.config["beta_ll"] > 0.:
-            loss += self.config["beta_ll"] * loss_lattice
+            loss = loss_recons
+            if self.config["beta_kl"] > 0.:
+                loss += self.config["beta_kl"] * loss_kl
+            if self.config["beta_dl"] > 0.:
+                loss += self.config["beta_dl"] * loss_diffusion
+            if self.config["beta_ll"] > 0.:
+                loss += self.config["beta_ll"] * loss_lattice
 
-        check_tensor("final_loss", loss)
+            check_tensor("final_loss", loss)
 
         aux_losses = torch.stack([
             loss_recons,
