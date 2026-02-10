@@ -59,7 +59,7 @@ class Config:
         # Load All Configs
         #-----------------------
         contents = []
-        for f in Path('configs').glob('*.yaml'):
+        for f in sorted(Path('configs').glob('*.yaml')):
             contents.append(f.read_text())
         self.allconfigs = yaml.safe_load('\n'.join(contents))
 
