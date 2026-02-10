@@ -188,7 +188,7 @@ def local_save(data, local_path):
 @contextmanager
 def fp32():
     if IS_TPU:
-        with torch.autocast(enabled=False): # type: ignore
+        with torch.autocast(device_type="xla", enabled=False):
             yield
     else:
         yield
