@@ -4,7 +4,7 @@ import torch.nn.functional as F
 
 from code.augment import GeometryAugment
 from code.models.base_model import AbstractModel
-from code.models.latentdiff.latent_denoiser import LatentDenoiser
+from code.models.latentdiff.latent_denoiser import FiLMLatentDenoiser, MLPLatentDenoiser
 from code.utils.lossy import lattice_loss
 
 from .set_decoder import PerceiverDecoder
@@ -62,6 +62,7 @@ def check_tensor(name, x):
 #------------------------------------------------------------
 # Model
 # ------------------------------------------------------------
+LatentDenoiser = FiLMLatentDenoiser
 
 class LatentDiffusionModel(AbstractModel):
     def __init__(self, config):

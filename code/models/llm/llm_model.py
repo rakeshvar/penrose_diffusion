@@ -9,6 +9,10 @@ from code.utils.qrs import get_colors, qr_to_xya
 class LLModel(AbstractModel):
     def __init__(self, config):
         super().__init__()
+
+        if config['symmetry'] == 5:
+            raise NotImplementedError("LLM doesn't support 5-fold symmetry.")
+
         # 1. Configuration
         self.config = config
         self.num_tiles = config["num_tiles"]
@@ -81,6 +85,8 @@ class LLModel(AbstractModel):
     def train_step(self, qr, colors, labels):
         self.train()
         B, N, TWO = qr.shape
+        assert TWO == 2, "Expecting q and r as two columns, did you pass xya?"
+
         logits = self._forward(qr, labels)                           # (B, 2N+1, V)
 
         # 3. Calculate Loss (Next Token Prediction)

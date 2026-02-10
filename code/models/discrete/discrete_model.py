@@ -11,9 +11,11 @@ from code.utils.qrs import get_colors, qr_to_xya
 class MaskedDiscreteModel(AbstractModel):
     def __init__(self, config):
         super().__init__()
-        self.config = config
+        if config['symmetry'] == 5:
+            raise NotImplementedError("LLM doesn't support 5-fold symmetry.")
 
         # Hyperparameters
+        self.config = config
         self.num_tiles = config['num_tiles']
         self.d_model = config['d_model']
         self.num_layers = config['num_layers']
@@ -98,14 +100,15 @@ class MaskedDiscreteModel(AbstractModel):
     def train_step(self, qr, colors, labels):
         self.train()
         B, N, TWO = qr.shape
+        assert TWO == 2, "Expecting q and r as two columns, did you pass xya?"
         def R(*a):  return torch.rand(*a, device=qr.device)
 
         # Tokeinze
         x_0 = qr.view(B, -1)                                # B, 2N
         x_0 = x_0 + self.offset    # clamp to vocab_size if runtime-error
 
-        # Sample Masking Ratio = cos(uniform(0, pi/2))
-        mask_ratio = torch.cos(R(B) * math.pi * 0.5)
+        # Sample Masking Ratio = sin(uniform(0, pi/2))
+        mask_ratio = torch.sin(R(B) * math.pi * 0.5)
         mask_bool = R(B, 2*N) < mask_ratio.unsqueeze(1)
         mask_token_tensor = torch.full_like(x_0, self.mask_token_id)
         x_t = torch.where(mask_bool, mask_token_tensor, x_0)

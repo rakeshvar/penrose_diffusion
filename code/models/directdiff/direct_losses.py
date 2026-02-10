@@ -58,7 +58,7 @@ class NoisePredictionLoss(AbstractLoss):
 # NoisePredictionLoss
 #------------------------------------------------------------------------------
 @register_loss('vpl', 'v')
-class VPredictionLoss(AbstractLoss):
+class VelocityPredictionLoss(AbstractLoss):
     """
     Assumes the denoiser predicts: v =  −√(1−αₜ) ⋅ x₀ + √αₜ ⋅ ε
     This loss has stable scale across timesteps and does NOT require reweighting.

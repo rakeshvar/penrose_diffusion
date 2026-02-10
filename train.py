@@ -132,7 +132,6 @@ def train_fn(rank:int, config:Config):
         total_loss = 0
         aux_loss_sums = torch.zeros(num_aux_losses, device=device)
         count = 0
-        num_nans = 0
 
         # Enable progress bar only on master process
         progressbar = tqdm(train_loader, disable = not is_master)
@@ -140,15 +139,6 @@ def train_fn(rank:int, config:Config):
         for batch in progressbar:
             xya, colors, labels = batch
             loss, aux_losses = model.train_step(xya, colors, labels)
-
-            if torch.isnan(loss):
-                if num_nans == 0:
-                    print(f"Loss is NaN for batch:{count+num_nans} epoch:{epoch} process:{rank}")
-                    mprint(f"norm = {nn_utils.clip_grad_norm_(model.parameters(), float('inf')):.4f}")
-                    for name, value in zip(model.aux_loss_names, aux_losses.detach().cpu().numpy()):
-                        mprint(f"{name} = {value:.4f}")
-                num_nans += 1
-                continue
 
             # Backpropagate
             optimizer.zero_grad()
@@ -168,7 +158,6 @@ def train_fn(rank:int, config:Config):
             'loss/avg_loss': avg_loss,
             'grad_norm': nn_utils.clip_grad_norm_(model.parameters(), float('inf')),
             'learning_rate': optimizer.param_groups[0]['lr'],
-            'num_nans': num_nans/(count + num_nans)
         }
         # Add averaged aux losses
         aux_loss_avgs = (aux_loss_sums / count).cpu().numpy()
@@ -191,10 +180,6 @@ def train_fn(rank:int, config:Config):
 
         wandblog.log_step(to_log, step=epoch)
         mprint(f"Epoch {epoch} done. Average Loss: {avg_loss:.4f}\n")
-        if num_nans > 0:
-            print(f"Count={count} vs Nans={num_nans} on process:{rank}")
-            if count == 0:
-                break
 
     wandblog.finish()
     mprint("\n======\nDone!\n======")

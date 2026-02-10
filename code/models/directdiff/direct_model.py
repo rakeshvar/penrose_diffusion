@@ -56,7 +56,7 @@ class DirectDiffusionModel(AbstractModel):
 
     @property
     def descriptor(self):
-        return f"{self.config['model'][3]}{self.denoiser.d_model}x{self.config['num_layers']}_{self.loss_functor.abbr}"
+        return f"{self.config['model'][0]}{self.denoiser.d_model}x{self.config['num_layers']}_{self.loss_functor.abbr}"
 
     def train_step(self, xya, colors, cls):
         xya = self.augmenter(xya)

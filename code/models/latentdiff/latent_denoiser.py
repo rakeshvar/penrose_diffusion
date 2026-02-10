@@ -3,22 +3,22 @@ import torch.nn as nn
 from code.models.sinusoidal import SinusoidalPositionalEmbedding
 
 #------------------------------------------------------------
-# Vanilla MLP
+# Vanilla MLP Denoiser
 #------------------------------------------------------------
 class MLPLatentDenoiser(nn.Module):
-    def __init__(self, D, num_classes, T=1000):
+    def __init__(self, num_classes, latent_dim, num_blocks, T=1000):
         super().__init__()
-        self.D = D
+        self.D = latent_dim
 
-        self.time_embed = nn.Embedding(T, D)
-        self.class_embed = nn.Embedding(num_classes + 1, D) # CFG
+        self.time_embed = nn.Embedding(T, latent_dim)
+        self.class_embed = nn.Embedding(num_classes + 1, latent_dim) # CFG
 
         self.net = nn.Sequential(
-            nn.Linear(D, 512),
+            nn.Linear(latent_dim, 512),
             nn.ReLU(),
             nn.Linear(512, 512),
             nn.ReLU(),
-            nn.Linear(512, D),
+            nn.Linear(512, latent_dim),
         )
 
     def forward(self, z_t, t, cls):
@@ -30,9 +30,41 @@ class MLPLatentDenoiser(nn.Module):
         return next(self.parameters()).device
 
 #------------------------------------------------------------
-# FiLM
+# FiLM Denoiser
 #------------------------------------------------------------
-class LatentDenoiser(nn.Module):
+class FiLMBlock(nn.Module):
+    def __init__(self, in_dim, out_dim, cond_dim):
+        super().__init__()
+        self.norm = nn.LayerNorm(in_dim, elementwise_affine=False)
+        self.linear = nn.Linear(in_dim, out_dim)
+
+        # Learn scale and shift from conditioning
+        self.film = nn.Linear(cond_dim, out_dim * 2)
+        nn.init.zeros_(self.film.weight)
+        nn.init.zeros_(self.film.bias)
+
+        self.act = nn.SiLU()
+
+        # Residual connection
+        self.residual = nn.Linear(in_dim, out_dim) if in_dim != out_dim else nn.Identity()
+
+    def forward(self, x, cond):
+        # Normalize
+        h = self.norm(x)
+
+        # Apply linear
+        h = self.linear(h)
+
+        # FiLM modulation
+        scale, shift = self.film(cond).chunk(2, dim=-1)
+        h = h * (1 + scale) + shift
+
+        # Activation and residual
+        h = self.act(h)
+        return h + self.residual(x)
+
+
+class FiLMLatentDenoiser(nn.Module):
     def __init__(self, num_classes, latent_dim, num_blocks):
         super().__init__()
         self.dim = time_emb_dim = hidden_dim = latent_dim
@@ -67,36 +99,3 @@ class LatentDenoiser(nn.Module):
     @property
     def device(self):
         return next(self.parameters()).device
-
-
-class FiLMBlock(nn.Module):
-    def __init__(self, in_dim, out_dim, cond_dim):
-        super().__init__()
-        self.norm = nn.LayerNorm(in_dim, elementwise_affine=False)
-        self.linear = nn.Linear(in_dim, out_dim)
-
-        # Learn scale and shift from conditioning
-        self.film = nn.Linear(cond_dim, out_dim * 2)
-        nn.init.zeros_(self.film.weight)
-        nn.init.zeros_(self.film.bias)
-
-        self.act = nn.SiLU()
-
-        # Residual connection
-        self.residual = nn.Linear(in_dim, out_dim) if in_dim != out_dim else nn.Identity()
-
-    def forward(self, x, cond):
-        # Normalize
-        h = self.norm(x)
-
-        # Apply linear
-        h = self.linear(h)
-
-        # FiLM modulation
-        scale, shift = self.film(cond).chunk(2, dim=-1)
-        h = h * (1 + scale) + shift
-
-        # Activation and residual
-        h = self.act(h)
-        return h + self.residual(x)
-
