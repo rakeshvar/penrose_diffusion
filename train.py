@@ -138,7 +138,11 @@ def train_fn(rank:int, config:Config):
 
         for batch in progressbar:
             xya, colors, labels = batch
-            loss, aux_losses = model.train_step(xya, colors, labels)
+            try:
+                loss, aux_losses = model.train_step(xya, colors, labels)
+            except RuntimeError as e:
+                print(f"RuntimeError in Epoch {epoch} at Batch {count}. Total Loss: {total_loss:.4f}")
+                raise e
 
             # Backpropagate
             optimizer.zero_grad()
