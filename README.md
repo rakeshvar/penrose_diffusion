@@ -249,37 +249,28 @@ The sampler will prompt for class selection, and creates a series of svg images 
 
 
 ## Configuration
-Given the tensor of options available, we configure everything via dictionaries. Model and training settings are defined in `configs.yaml`. Some examples look like:
+Given the tensor of options available, we configure everything via dictionaries. Model and training settings are defined in `configs/*.yaml`. Some examples might look like:
 
 ```yaml
-# Model settings
-direct64:
-  num_classes: 70
-  d_model: 64
-  num_layers: 4
-  loss: 'shl'
+dd64:
+  model:              # Model settings
+    model: 'direct'
+    num_classes: 70
+    d_model: 64
+    num_layers: 4
+    loss: 'shl'
 
-# Training settings
-default_train:
-  lr: 0.001
-  batch_size: 64
-  num_epochs: 100
+  train:              # Training settings
+    lr: 0.001
+    batch_size: 64
+    num_epochs: 100
+  
+  wandb:              # WANDB setting
+    enable: true
+    project: 'penrose-train'
+    run_name: null        # Auto-generated if null
+    run_id: null          # Specify to resume a specific run
 
-# WANDB setting
-default_wandb: &default_wandb
-  enable: true
-  project: 'penrose-train'
-  run_name: null        # Auto-generated if null
-  run_id: null          # Specify to resume a specific run
-
-# Combined settings
-default:
-  model:
-    <<: *direct64
-  train:
-    <<: *default_train
-  wandb:
-    <<: *default_wandb
 ```
 
 **Override options:**

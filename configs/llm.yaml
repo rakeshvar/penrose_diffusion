@@ -1,0 +1,45 @@
+_llm_common: &llm_common
+  train:
+    <<: *default_train
+  wandb:
+    <<: *default_wandb
+    project: "penrose-llm"
+
+#----------------------------------------------------------------
+# llm Models
+#----------------------------------------------------------------
+ll32:
+  <<: *llm_common
+  model:
+    model: "llm"
+    d_model: 32
+    num_heads: 4
+    num_layers: 2
+    dropout: 0.
+
+ll64:
+  <<: *llm_common
+  model:
+    model: "llm"
+    d_model: 64
+    num_heads: 4
+    num_layers: 4
+    dropout: 0.1
+
+ll128:
+  <<: *llm_common
+  model:
+    model: "llm"
+    d_model: 128
+    num_heads: 8
+    num_layers: 4
+    dropout: 0.1
+
+ll256:
+  <<: *llm_common
+  model:
+    model: "llm"
+    d_model: 256
+    num_heads: 8
+    num_layers: 6
+    dropout: 0.2

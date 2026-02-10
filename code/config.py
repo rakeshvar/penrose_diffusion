@@ -1,39 +1,24 @@
-import sys
 import argparse
-from textwrap import dedent
+import sys
 import yaml
+
 from datetime import datetime
+from textwrap import dedent
+from pathlib import Path
 
 import code.compatibility as compat
 from .filesystem import safe_torch_load, maybe_download
 from .utils.basic import infer_type
 
-
-def deep_merge_dict(target, source):
-    """Helper: Merges update into base recursively."""
-    for k, v in source.items():
-        if isinstance(v, dict) and k in target and isinstance(target[k], dict):
-            deep_merge_dict(target[k], v)
-        else:
-            if k not in target:
-                print(f"WARNING: Adding new/unrecognized config key: {k}")
-            target[k] = v
-
-
-VALID_SUBCONFIGS = ['train', 'model', 'wandb']
+SUBCONFIGS = ['train', 'model', 'wandb']
 
 def update_config(target, source):
     for subconfig in source:
-        if subconfig not in VALID_SUBCONFIGS:
-            print(f"WARNING: Unknown config section: {subconfig}. Ignoring.")
-            continue
-
-        assert isinstance( source[subconfig], dict), f"Sub-Config {subconfig} is not a dictionary. Got {source[subconfig]}."
-
-        if subconfig not in target:
-            target[subconfig] = {}
-
-        deep_merge_dict(target[subconfig], source[subconfig])
+        if subconfig not in SUBCONFIGS:
+            raise ValueError(f"Unknown subconfig: {subconfig}")
+        
+        for k, v in source[subconfig].items():
+            target[subconfig][k] = v
 
 
 class Config:
@@ -42,10 +27,9 @@ class Config:
         # Setup Argparse
         #-----------------------
         parser = argparse.ArgumentParser(description="Training Argument Parser")
-        parser.add_argument('base_config', help="First arguments must be the base config from configs.yaml")
 
         # Catch-all for your flexible positional args (ckpt, npz, config keys, .conf files)
-        parser.add_argument('args', nargs='*', help="Sequence of .pt, .npz, .conf files, or config keys")
+        parser.add_argument('args', nargs='*', help="Sequence of .pt, .npz, and config keys")
 
         # Flags for overrides
         parser.add_argument('-t', '--train', action='append', help="Override train config (key=value)")
@@ -60,19 +44,24 @@ class Config:
         self.parsed = parser.parse_args()
 
         #-----------------------
-        # Setup Config
+        # Init Config
         #-----------------------
-        self.library = {}
         self.checkpoint_path = None
         self.resume_epoch = 0
         self.config = {}
 
+        # Initialize and link to sub-configs
+        self.train = self.config.setdefault('train', {})
+        self.model = self.config.setdefault('model', {})
+        self.wandb = self.config.setdefault('wandb', {})
+
         #-----------------------
-        # Load Base Config
+        # Load All Configs
         #-----------------------
-        with open('configs.yaml', 'r') as f:
-            self.library = yaml.safe_load(f)
-        self.config = self.library[self.parsed.base_config]
+        contents = []
+        for f in Path('configs').glob('*.yaml'):
+            contents.append(f.read_text())
+        self.allconfigs = yaml.safe_load('\n'.join(contents))
 
         #-----------------------
         # Update from Checkpoint
@@ -96,17 +85,9 @@ class Config:
             # Preserve wandb run_id for resuming
             if 'wandb_run_id' in ckpt:
                 if ckpt['wandb_run_id']:
-                    self.config.setdefault('wandb', {})['run_id'] = ckpt['wandb_run_id']
+                    self.wandb['run_id'] = ckpt['wandb_run_id']
 
             del ckpt
-
-        #-----------------------
-        # Link to sub configs
-        # - initialize if they don't exist
-        #-----------------------
-        self.train = self.config.setdefault('train', {})
-        self.model = self.config.setdefault('model', {})
-        self.wandb = self.config.setdefault('wandb', {})
 
         #-----------------------
         # Process Positional Arguments (Files & Config Groups)
@@ -127,11 +108,13 @@ class Config:
 
             # Config Group from configs.yaml (e.g., 'small', 'toy')
             elif '.' not in arg and '=' not in arg:
-                if arg in self.library:
-                    update_config(self.config, self.library[arg])
+                if arg in self.allconfigs:
+                    update_config(self.config, self.allconfigs[arg])
                 else:
-                    raise ValueError(f"Config group '{arg}' not found in configs.yaml. "
-                                     f"\nAvailable groups: {sorted(self.library.keys())}")
+                    avl = sorted(self.allconfigs.keys())
+                    avl = [a for a in avl if not a.startswith('_')]
+                    raise ValueError(f"Config group '{arg}' not found in configs/*.yaml. "
+                                     f"Available groups: {avl}")
 
         #-----------------------
         # Apply Flag Overrides (-t, -m, -w)

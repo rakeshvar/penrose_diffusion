@@ -1,0 +1,65 @@
+_lmcommon: &lmcommon
+  model: "latent"
+  loss: "shl"
+  beta_kl: .001
+  beta_dl: 1.
+  beta_ll: 1.
+
+_latent_common: &latent_common
+  train:
+    <<: *default_train
+  wandb:
+    <<: *default_wandb
+    project: 'penrose-latent'
+    enable: true
+
+#----------------------------------------------------------------
+# Latent Models
+#----------------------------------------------------------------
+ld32:
+  <<: *latent_common
+  model:
+    <<: *lmcommon
+    latent_dim: 32
+    num_latent_blocks: 2
+    num_vae_blocks: 2
+    num_pools: 4
+    num_heads: 2
+
+ld64:
+  <<: *latent_common
+  model:
+    <<: *lmcommon
+    latent_dim: 64
+    num_latent_blocks: 4
+    num_vae_blocks: 4
+    num_pools: 4
+    num_heads: 4
+
+ld128:
+  <<: *latent_common
+  model:
+    <<: *lmcommon
+    latent_dim: 128
+    num_latent_blocks: 4
+    num_vae_blocks: 4
+    num_pools: 8
+    num_heads: 4
+
+ld256:
+  <<: *latent_common
+  model:
+    <<: *lmcommon
+    latent_dim: 256
+    num_latent_blocks: 6
+    num_vae_blocks: 6
+    num_pools: 8
+    num_heads: 4
+
+
+#--------------
+# Extra Tweaks
+#--------------
+vae:
+  model:
+    beta_dl: 0.

@@ -1,0 +1,95 @@
+toy:
+  train:
+    num_epochs: 3
+    save_samples: false
+  wandb:
+    enable: false
+    project: 'penrose-toy'
+
+#----------
+# Epochs
+#----------
+ne1:
+  train:
+    num_epochs: 1
+
+ne3:
+  train:
+    num_epochs: 3
+
+ne9:
+  train:
+    num_epochs: 9
+
+ne10:
+  train:
+    num_epochs: 10
+
+ne99:
+  train:
+    num_epochs: 99
+
+ne100:
+  train:
+    num_epochs: 100
+
+ne200:
+  train:
+    num_epochs: 200
+    
+ne300:
+  train:
+    num_epochs: 300
+
+ne333:
+  train:
+    num_epochs: 333
+
+ne999:
+  train:
+    num_epochs: 999
+
+#----------
+# WandB
+#----------
+w0:
+  wandb:
+    enable: false
+
+w1:
+  wandb:
+    enable: true
+
+#----------
+# Samples
+#----------
+s0:
+  train:
+    save_samples: false
+
+s1:
+  train:
+    save_samples: true
+
+#----------
+# Losses
+#----------
+shl:
+  model:
+    loss: "shl"
+
+pil:
+  model:
+    loss: "pil"
+
+cfl:
+  model:
+    loss: "cfl"
+
+lpl:
+  model:
+    loss: "lpl"
+
+lsa:
+  model:
+    loss: "lpl"

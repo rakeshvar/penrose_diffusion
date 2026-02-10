@@ -52,11 +52,11 @@ sudo fuser -v /dev/vfio/*
 
 ### Toys
 ```bash
-python train.py ddtoy datasets/hex_t096_c01_u18.npz -w enable=False -t save_samples=False
-python train.py ddtoy isab datasets/hex_t096_c01_u18.npz -w enable=False -t save_samples=False
-python train.py ddtoy llm datasets/hexqr_t128_c01_u16.npz -w enable=False -t save_samples=False
-python train.py ddtoy discrete datasets/hexqr_t128_c01_u16.npz -w enable=False -t save_samples=False
-python train.py ldtoy datasets/hex_t096_c01_u18.npz -w enable=False -t save_samples=False
+python train.py dd32 toy datasets/hex_t096_c01_u18.npz
+python train.py is32 toy datasets/hex_t096_c01_u18.npz
+python train.py ld32 toy datasets/hex_t096_c01_u18.npz
+python train.py ll32 toy datasets/hexqr_t128_c01_u16.npz
+python train.py di32 toy datasets/hexqr_t128_c01_u16.npz
 ```
 
 # Working Area

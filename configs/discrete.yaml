@@ -1,0 +1,45 @@
+_discrete_common: &discrete_common
+  train:
+    <<: *default_train
+  wandb:
+    <<: *default_wandb
+    project: "penrose-discrete"
+
+#----------------------------------------------------------------
+# Discrete Models
+#----------------------------------------------------------------
+di32:
+  <<: *discrete_common
+  model:
+    model: "discrete"
+    d_model: 32
+    num_heads: 4
+    num_layers: 2
+    dropout: 0.
+
+di64:
+  <<: *discrete_common
+  model:
+    model: "discrete"
+    d_model: 64
+    num_heads: 4
+    num_layers: 4
+    dropout: 0.1
+
+di128:
+  <<: *discrete_common
+  model:
+    model: "discrete"
+    d_model: 128
+    num_heads: 8
+    num_layers: 4
+    dropout: 0.1
+
+di256:
+  <<: *discrete_common
+  model:
+    model: "discrete"
+    d_model: 256
+    num_heads: 8
+    num_layers: 6
+    dropout: 0.2

@@ -1,0 +1,18 @@
+#---------------------------------------------------------
+# Training
+#---------------------------------------------------------
+_default_train: &default_train
+  lr: 0.001
+  batch_size: 64
+  num_epochs: 101
+  save_samples: true
+
+#---------------------------------------------------------
+# WandB
+#---------------------------------------------------------
+_default_wandb: &default_wandb
+  enable: true
+  project: 'penrose-train'
+  run_name: null        # Auto-generated if null
+  run_id: null          # Specify to resume a specific run
+  watch_freq: 0         # Frequency to log gradients and parameters

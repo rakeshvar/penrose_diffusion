@@ -1,0 +1,39 @@
+
+#---------------
+# ISAB
+#---------------
+_isabcommon: &isabcommon
+  wandb:
+    <<: *default_wandb
+    project: 'penrose-isab'
+    enable: true
+  train:
+    <<: *default_train
+
+_ismc: &ismc
+  model: "isab"
+  loss: "shl"
+
+is32:
+  <<: *isabcommon
+  model:
+    <<: *ismc
+    <<: *dm32
+
+is64:
+  <<: *isabcommon
+  model:
+    <<: *ismc
+    <<: *dm64
+
+is128:
+  <<: *isabcommon
+  model:
+    <<: *ismc
+    <<: *dm128
+
+is256:
+  <<: *isabcommon
+  model:
+    <<: *ismc
+    <<: *dm256
