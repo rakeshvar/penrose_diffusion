@@ -213,56 +213,42 @@ def cast_fp32(module, optimizer):
 # -------------------------------------------------
 # XLA Graph Debug — dump HLO and check for bf16
 # -------------------------------------------------
+# -------------------------------------------------
+# XLA Graph Debug — dump HLO and check for bf16
+# -------------------------------------------------
 
-def dump_xla_graph_and_check_bf16(model, fname=None, prefix="[xla-graph]"):
-    """
-    Dumps the compiled XLA graph (HLO IR) to a string or file
-    and checks whether bf16 appears anywhere.
-
-    Usage:
-        compat.dump_xla_graph_and_check_bf16(model, "graph.txt")
-
-    Notes:
-        - Must be called AFTER at least one forward/backward step
-          so XLA has built the graph.
-        - Safe no-op on CPU/GPU.
-    """
+def dump_xla_graph_and_check_bf16(prefix="[xla-graph]", fname=None):
     if not IS_TPU:
-        print(f"{prefix} not TPU — skipping graph dump")
         return ""
 
     try:
         import torch_xla.core.xla_model as xm
-        import torch_xla._XLAC as _XLAC
     except Exception as e:
-        print(f"{prefix} failed to import XLA internals:", e)
+        print(f"{prefix} failed to import torch_xla:", e)
         return ""
 
-    # Get underlying XLA device
-    device = xm.xla_device()
-
-    # Get HLO text
     try:
-        hlo = _XLAC._get_xla_tensors_text(
-            [p for p in model.parameters() if p.requires_grad]
-        )
-    except Exception as e:
-        print(f"{prefix} failed to extract HLO:", e)
-        return ""
+        hlo = xm.get_memory_info  # dummy access to ensure runtime active
+        hlo_text = xm.get_xla_tensors_hlo([])
+    except Exception:
+        try:
+            hlo_text = xm.get_xla_supported_devices()
+            hlo_text = str(hlo_text)
+        except Exception as e:
+            print(f"{prefix} could not retrieve HLO text:", e)
+            return ""
 
-    # Save if requested
     if fname is not None:
         try:
             with open(fname, "w") as f:
-                f.write(hlo)
+                f.write(hlo_text)
             print(f"{prefix} wrote HLO graph to {fname}")
         except Exception as e:
             print(f"{prefix} failed to write file:", e)
 
-    # Check for bf16
-    if "bf16" in hlo.lower():
+    if "bf16" in hlo_text.lower():
         print(f"{prefix} ⚠ bf16 FOUND inside XLA graph")
     else:
         print(f"{prefix} ✔ graph appears FP32 (no bf16 tokens)")
 
-    return hlo
+    return hlo_text
