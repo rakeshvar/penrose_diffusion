@@ -154,7 +154,9 @@ def train_fn(rank:int, config:Config):
             total_loss += loss.item()
             aux_loss_sums += aux_losses.detach()
             count += 1
-
+            if epoch == start_epoch and count == 1:
+                compat.dump_xla_graph_and_check_bf16(model, "latent_hlo.txt")
+            
             progressbar.set_description(f"Epoch {epoch} | Loss: {loss.item():.4f}")
 
         scheduler.step()

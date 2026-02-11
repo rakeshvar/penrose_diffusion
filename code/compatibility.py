@@ -209,3 +209,60 @@ def cast_fp32(module, optimizer):
             for k, v in state.items():
                 if isinstance(v, torch.Tensor) and v.dtype != torch.float32:
                     state[k] = v.float()
+
+# -------------------------------------------------
+# XLA Graph Debug — dump HLO and check for bf16
+# -------------------------------------------------
+
+def dump_xla_graph_and_check_bf16(model, fname=None, prefix="[xla-graph]"):
+    """
+    Dumps the compiled XLA graph (HLO IR) to a string or file
+    and checks whether bf16 appears anywhere.
+
+    Usage:
+        compat.dump_xla_graph_and_check_bf16(model, "graph.txt")
+
+    Notes:
+        - Must be called AFTER at least one forward/backward step
+          so XLA has built the graph.
+        - Safe no-op on CPU/GPU.
+    """
+    if not IS_TPU:
+        print(f"{prefix} not TPU — skipping graph dump")
+        return ""
+
+    try:
+        import torch_xla.core.xla_model as xm
+        import torch_xla._XLAC as _XLAC
+    except Exception as e:
+        print(f"{prefix} failed to import XLA internals:", e)
+        return ""
+
+    # Get underlying XLA device
+    device = xm.xla_device()
+
+    # Get HLO text
+    try:
+        hlo = _XLAC._get_xla_tensors_text(
+            [p for p in model.parameters() if p.requires_grad]
+        )
+    except Exception as e:
+        print(f"{prefix} failed to extract HLO:", e)
+        return ""
+
+    # Save if requested
+    if fname is not None:
+        try:
+            with open(fname, "w") as f:
+                f.write(hlo)
+            print(f"{prefix} wrote HLO graph to {fname}")
+        except Exception as e:
+            print(f"{prefix} failed to write file:", e)
+
+    # Check for bf16
+    if "bf16" in hlo.lower():
+        print(f"{prefix} ⚠ bf16 FOUND inside XLA graph")
+    else:
+        print(f"{prefix} ✔ graph appears FP32 (no bf16 tokens)")
+
+    return hlo
