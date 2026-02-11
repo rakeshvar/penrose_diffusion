@@ -56,6 +56,13 @@ python train.py di32 toy datasets/hexqr_t128_c01_u16.npz
 ```
 
 # Info
+
+## Zone
 ```bash
 echo "Zone: $(curl -s http://metadata.google.internal/computeMetadata/v1/instance/zone -H "Metadata-Flavor: Google" | cut -d/ -f4)"
+```
+
+## bf16
+```
+XLA_FLAGS="--xla_dump_to=/tmp/xla_dump" XLA_USE_BF16=0 XLA_DOWNCAST_BF16=0  python train.py ld32 toy w0 ne3 s0 datasets/hex_t096_c16_u18.npz 
 ```
