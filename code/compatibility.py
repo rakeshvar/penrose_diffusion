@@ -192,3 +192,20 @@ def fp32():
             yield
     else:
         yield
+
+def cast_fp32(module, optimizer):
+    if IS_TPU:
+        for p in module.parameters():
+            if p.data.dtype != torch.float32:
+                p.data = p.data.float()
+            if p.grad is not None and p.grad.data.dtype != torch.float32:
+                p.grad.data = p.grad.data.float()
+
+        for b in module.buffers():
+            if b.data.dtype != torch.float32:
+                b.data = b.data.float()
+
+        for state in optimizer.state.values():
+            for k, v in state.items():
+                if isinstance(v, torch.Tensor) and v.dtype != torch.float32:
+                    state[k] = v.float()

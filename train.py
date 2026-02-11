@@ -70,6 +70,7 @@ def train_fn(rank:int, config:Config):
     Model = get_model_class(config.model['model'])
     model = Model(config.model).to(device)
     optimizer = torch.optim.AdamW(model.parameters(), lr=config.train['lr'])
+    model.runtime_setup(optimizer)
 
     # Scheduler (Create it NOW, before loading state)
     warmup_epochs = min(10, int(config.train['num_epochs'] * 0.05))

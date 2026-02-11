@@ -93,6 +93,9 @@ class LatentDiffusionModel(AbstractModel):
         D = self.config['latent_dim']
         K = self.config['num_latent_blocks']
         return f"lat{D}x{K}_{self.recons_loss_fn.abbr}"
+    
+    def runtime_setup(self, optimizer):
+        compat.cast_fp32(self, optimizer)
 
     def train_step(self, x, color, cls):
         with compat.fp32():

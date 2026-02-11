@@ -32,3 +32,6 @@ class AbstractModel(nn.Module, ABC):
     @property
     def device(self):
         return next(self.parameters()).device
+
+    def runtime_setup(self, *args, **kwargs):
+        return
