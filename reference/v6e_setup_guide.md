@@ -22,8 +22,7 @@ python3 -m venv ~/tpu-env
 source ~/tpu-env/bin/activate
 
 pip install --upgrade pip
-pip install fsspec gcsfs
-pip install tqdm scipy wandb
+pip install fsspec gcsfs tqdm scipy wandb  --no-warn-script-location
 pip install torch~=2.6.0 --index-url https://download.pytorch.org/whl/cpu
 pip install torch_xla[tpu]~=2.6.0 \
   -f https://storage.googleapis.com/libtpu-releases/index.html \
@@ -32,15 +31,12 @@ pip install torch_xla[tpu]~=2.6.0 \
 git clone https://github.com/rakeshvar/penrose_diffusion
 cd penrose_diffusion
 mkdir datasets/
-gsutil -m cp -r gs://penrose_diffusion/datasets/*.npz datasets/
+gcloud storage cp -r "gs://penrose_diffusion/datasets/*.npz" datasets/
 ```
 
 ### Train
 ```bash
-# toy
-python train.py gs://penrose_diffusion/datasets/hex_t096_c96_u18.npz toy -t num_epochs=3 -t loss=pil
-# main
-python train.py dd128 isab gs://penrose_diffusion/datasets/hex_t096_c96_u18.npz model128 -t num_epochs=301 -t loss=pil
+python train.py datasets/hex_t096_c96_u18.npz ...
 ```
 
 ### Kill jobs
@@ -59,7 +55,7 @@ python train.py ll32 toy datasets/hexqr_t128_c01_u16.npz
 python train.py di32 toy datasets/hexqr_t128_c01_u16.npz
 ```
 
-# Working Area
-```
-/home/raka/.local/lib/python3.10/site-packages/torch/optim/lr_scheduler.py:243: UserWarning: The epoch parameter in `scheduler.step()` was not necessary and is being deprecated where possible. Please use `scheduler.step()` to step the scheduler. During the deprecation, if epoch is different from None, the closed form is used instead of the new chainable form, where available. Please open an issue if you are unable to replicate your use case: https://github.com/pytorch/pytorch/issues/new/choose.
+# Info
+```bash
+echo "Zone: $(curl -s http://metadata.google.internal/computeMetadata/v1/instance/zone -H "Metadata-Flavor: Google" | cut -d/ -f4)"
 ```
