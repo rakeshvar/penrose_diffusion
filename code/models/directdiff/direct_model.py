@@ -17,7 +17,7 @@ from .direct_losses import loss_registry
 class DirectDiffuser(Diffuser):
     @torch.no_grad()
     def sample(self, denoiser, colors, labels, num_steps=50, ddpm=0.):
-        device = denoiser.device
+        device = next(denoiser.parameters()).device
         B, N = colors.shape
         D = denoiser.io_dim
         x = torch.randn((B, N, D), device=device)
@@ -49,10 +49,6 @@ class DirectDiffusionModel(AbstractModel):
             raise NotImplementedError(f"Unknown model: {model_config['model']}")
         Loss = loss_registry[model_config['loss']]
         self.loss_functor = Loss(self.denoiser, self.diffuser)
-
-    @property
-    def device(self):
-        return next(self.parameters()).device
 
     @property
     def descriptor(self):

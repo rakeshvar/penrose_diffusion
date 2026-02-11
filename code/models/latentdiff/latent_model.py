@@ -35,7 +35,7 @@ class LatentDiffuser(Diffuser):
     def sample(self, denoiser, labels, num_steps=50, guidance_scale=2.0):
         B = labels.shape[0]
         D = denoiser.dim
-        device = denoiser.device
+        device = next(denoiser.parameters()).device
         NULL = denoiser.class_embed.num_embeddings - 1
         nulls = torch.full_like(labels, NULL)
 
@@ -89,24 +89,20 @@ class LatentDiffusionModel(AbstractModel):
         self.null_class = C
 
     @property
-    def device(self):
-        return next(self.parameters()).device
-
-    @property
     def descriptor(self):
         D = self.config['latent_dim']
         K = self.config['num_latent_blocks']
         return f"lat{D}x{K}_{self.recons_loss_fn.abbr}"
 
     def train_step(self, x, color, cls):
-        x = self.augmenter(x)
-        x = x * torch.tensor([1., 1., sqrt(3)/pi], device=x.device)
-        check_tensor("input x", x)
-
-        self.train()
-        B = x.shape[0]
-
         with compat.fp32():
+            x = self.augmenter(x)
+            x = x * torch.tensor([1., 1., sqrt(3)/pi], device=x.device)
+            check_tensor("input x", x)
+
+            self.train()
+            B = x.shape[0]
+
             # Encode to Latents
             mu, logvar = self.encoder(x, color, cls)                    # mu: (B, D), logvar: (B, D)
             check_tensor("mu", mu)

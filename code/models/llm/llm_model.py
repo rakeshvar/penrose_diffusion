@@ -47,10 +47,6 @@ class LLModel(AbstractModel):
     def descriptor(self):
         return f"llm{self.d_model}x{self.n_layers}"
 
-    @property
-    def device(self):
-        return next(self.parameters()).device
-
     def _forward(self, qr, labels):
         """
         Args:

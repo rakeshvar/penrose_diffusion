@@ -70,10 +70,6 @@ class MaskedDiscreteModel(AbstractModel):
         return f"dis{self.d_model}x{self.num_layers}"
 
     @property
-    def device(self):
-        return next(self.parameters()).device
-
-    @property
     def aux_loss_names(self):
         return ['accuracy']
 

@@ -115,7 +115,3 @@ class TransformerDenoiser(nn.Module):
         noise_pred = self.output_proj(h_tiles)              # B, N, 4
 
         return noise_pred
-
-    @property
-    def device(self):
-        return next(self.parameters()).device

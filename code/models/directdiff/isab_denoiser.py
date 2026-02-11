@@ -140,7 +140,3 @@ class ISABDenoiser(nn.Module):
         noise_pred = self.output_proj(h)
 
         return noise_pred
-
-    @property
-    def device(self):
-        return next(self.parameters()).device

@@ -25,10 +25,6 @@ class MLPLatentDenoiser(nn.Module):
         h = z_t + self.time_embed(t) + self.class_embed(cls)
         return self.net(h)
 
-    @property
-    def device(self):
-        return next(self.parameters()).device
-
 #------------------------------------------------------------
 # FiLM Denoiser
 #------------------------------------------------------------
@@ -95,7 +91,3 @@ class FiLMLatentDenoiser(nn.Module):
         for block in self.blocks:
             h = block(h, cond)
         return self.out(h)
-
-    @property
-    def device(self):
-        return next(self.parameters()).device

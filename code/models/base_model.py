@@ -30,6 +30,5 @@ class AbstractModel(nn.Module, ABC):
         raise NotImplementedError
 
     @property
-    @abstractmethod
     def device(self):
-        raise NotImplementedError
+        return next(self.parameters()).device
