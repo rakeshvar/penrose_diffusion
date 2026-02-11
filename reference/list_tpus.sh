@@ -8,4 +8,7 @@ for z in \
 do
   echo "---- $z ----"
   gcloud compute tpus tpu-vm list --zone $z || true
+  gcloud compute tpus tpu-vm describe penrose-train --zone=$z \
+    --format="value(state,networkEndpoints[0].accessConfig.externalIp)" 2>/dev/null | \
+    awk '$1=="READY" {print "External IP: " $2}'
 done
