@@ -33,8 +33,8 @@ if True:
                         help='Unit side length (auto-calculated if not provided)')
 
     # Boolean flags with short options
-    parser.add_argument('-x', '--no-save-xya', dest='save_xya', action='store_false', 
-                        help='Do not save XYA')
+    parser.add_argument('-x', '--no-save-xyac', dest='save_xyac', action='store_false', 
+                        help='Do not save XYAC')
     parser.add_argument('-c', '--no-save-colors', dest='save_colors', action='store_false',
                         help='Do not save colors')
     parser.add_argument('-l', '--no-save-labels', dest='save_labels', action='store_false',
@@ -42,7 +42,7 @@ if True:
     parser.add_argument('-I', '--save-indices', dest='save_indices', action='store_true',
                         help='Save indices')
 
-    parser.set_defaults(save_xya=True, save_colors=True, save_labels=True, save_indices=False)
+    parser.set_defaults(save_xyac=True, save_colors=True, save_labels=True, save_indices=False)
 
     args = parser.parse_args()
 
@@ -59,11 +59,11 @@ else:
 
 print(f"SYMMETRY: {SYMMETRY} \nNUM_TILES: {NUM_TILES} \nNUM_COPIES: {NUM_COPIES} \nUNIT_SIDE: {UNIT_SIDE}")
 print("Saving...")
-print(f"\txya: {args.save_xya} \n\tcolors: {args.save_colors} \n\tlabels: {args.save_labels} \n\tindices: {args.save_indices}")
+print(f"\txyac: {args.save_xyac} \n\tlabels: {args.save_labels} \n\tindices: {args.save_indices}")
 
 prefix = "datasets/"
 prefix += "hex" if SYMMETRY == 6 else "pen"
-prefix += "xy" if args.save_xya else ""
+prefix += "xy" if args.save_xyac else ""
 prefix += "ind" if args.save_indices else ""
 print("Prefix: ", prefix, "\n")
 
@@ -79,9 +79,13 @@ else:
     GEN = Generator5
 
 gen = GEN(imageset, num_tiles=NUM_TILES, target_halfside=5., unit_side=UNIT_SIDE)
-file = generate_and_save(gen, SAMPLES_PER_CLASS, NUM_COPIES, prefix=prefix,\
-                         save_xya=args.save_xya, save_colors=args.save_colors, 
-                         save_labels=args.save_labels, save_indices=args.save_indices)
+file = generate_and_save(gen, 
+                         SAMPLES_PER_CLASS, 
+                         NUM_COPIES, 
+                         prefix=prefix,
+                         save_xyac=args.save_xyac,
+                         save_labels=args.save_labels, 
+                         save_indices=args.save_indices)
 
 npz_stats(file)
 

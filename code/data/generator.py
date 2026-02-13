@@ -73,9 +73,9 @@ class Generator(ABC):
         #---------------------
         # Translate Canvas
         #---------------------
-        if hw2c(H) > 2*self.halfside or hw2c(W) > 2*self.halfside:
-            print(f"  Sample too big: {sample.classname}-{sample.inclassid}"
-                  f"  {H}({hw2c(H):.2f}) x {W}({hw2c(W):.2f}) vs. {c2hw(2*self.halfside):.2f}({2*self.halfside:.2f})")
+        if False: #hw2c(H) > 2*self.halfside or hw2c(W) > 2*self.halfside:
+            print(f"  Sample too big: {sample.classname:20s}-{sample.inclassid}"
+                  f"  {H}({hw2c(H):.2f}) x {W}({hw2c(W):.2f}) vs. {c2hw(2*self.halfside):.2f}({2*self.halfside:.2f})", end="\r")
         x0 = np.random.uniform(-self.halfside, self.halfside - hw2c(H))
         y0 = np.random.uniform(-self.halfside, self.halfside - hw2c(W))
         new_xy = xy_rot - np.array([x0, y0])

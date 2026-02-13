@@ -16,16 +16,15 @@ def calculate_num_copies_per_sample(num_tiles, target_mb=1024., num_classes=70, 
     return num_copies_per_sample
 
 def generate_and_save(generator, samples_per_class, num_copies, prefix,
-                      save_xya=True, save_colors=True, save_labels=True, save_indices=False):
+                      save_xyac=True, save_labels=True, save_indices=False):
     num_tiles = generator.num_tiles
     num_classes = generator.imageset.num_classes
     total_samples = num_classes * samples_per_class * num_copies
     print(f"\nTotal Samples = {num_classes} classes * {samples_per_class} samples * {num_copies} copies = {total_samples}.")
 
-    if save_xya:
+    if save_xyac:
         print(f"xya: ({total_samples}, {num_tiles}, 3) [float32]")
         xya = np.zeros((total_samples, num_tiles, 3), dtype=np.float32)
-    if save_colors:
         print(f"colors: ({total_samples}, {num_tiles}) [uint8]")
         colors = np.zeros((total_samples, num_tiles), dtype=np.uint8)
     if save_labels:
@@ -43,9 +42,8 @@ def generate_and_save(generator, samples_per_class, num_copies, prefix,
             for c_id in range(num_classes):
                 sample_data = generator.get_sample(c_id, s_id, rotate_mask=False)
 
-                if save_xya:
+                if save_xyac:
                     xya[i] = sample_data['xya']             # type: ignore
-                if save_colors:
                     colors[i] = sample_data['colors']       # type: ignore           
                 if save_labels:
                     labels[i] = sample_data['label']        # type: ignore
@@ -60,15 +58,15 @@ def generate_and_save(generator, samples_per_class, num_copies, prefix,
     print(f"Saving file: {filename} ")
 
     data = {}
-    if save_xya:
+    if save_xyac:
         data['xya'] = xya               # type: ignore
-    if save_colors:
         data['colors'] = colors         # type: ignore
     if save_labels:
         data['labels'] = labels         # type: ignore
     if save_indices:
         data['indices'] = indices       # type: ignore
         data['canvas_xyac'] = generator.canvas_xyac
+        data['vocab_size'] = indices.max() + 1 # type: ignore
     
     np.savez(filename,
             symmetry=generator.symmetry,

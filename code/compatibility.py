@@ -185,6 +185,7 @@ def local_save(data, local_path):
 #--------------------------------------------------
 # Float32
 #--------------------------------------------------
+
 @contextmanager
 def fp32():
     if IS_TPU:
@@ -209,46 +210,3 @@ def cast_fp32(module, optimizer):
             for k, v in state.items():
                 if isinstance(v, torch.Tensor) and v.dtype != torch.float32:
                     state[k] = v.float()
-
-# -------------------------------------------------
-# XLA Graph Debug — dump HLO and check for bf16
-# -------------------------------------------------
-# -------------------------------------------------
-# XLA Graph Debug — dump HLO and check for bf16
-# -------------------------------------------------
-
-def dump_xla_graph_and_check_bf16(prefix="[xla-graph]", fname=None):
-    if not IS_TPU:
-        return ""
-
-    try:
-        import torch_xla.core.xla_model as xm
-    except Exception as e:
-        print(f"{prefix} failed to import torch_xla:", e)
-        return ""
-
-    try:
-        hlo = xm.get_memory_info  # dummy access to ensure runtime active
-        hlo_text = xm.get_xla_tensors_hlo([])
-    except Exception:
-        try:
-            hlo_text = xm.get_xla_supported_devices()
-            hlo_text = str(hlo_text)
-        except Exception as e:
-            print(f"{prefix} could not retrieve HLO text:", e)
-            return ""
-
-    if fname is not None:
-        try:
-            with open(fname, "w") as f:
-                f.write(hlo_text)
-            print(f"{prefix} wrote HLO graph to {fname}")
-        except Exception as e:
-            print(f"{prefix} failed to write file:", e)
-
-    if "bf16" in hlo_text.lower():
-        print(f"{prefix} ⚠ bf16 FOUND inside XLA graph")
-    else:
-        print(f"{prefix} ✔ graph appears FP32 (no bf16 tokens)")
-
-    return hlo_text

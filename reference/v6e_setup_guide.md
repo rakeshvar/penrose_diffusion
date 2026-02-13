@@ -48,11 +48,11 @@ sudo fuser -v /dev/vfio/*
 
 ### Toys
 ```bash
-python train.py dd32 toy datasets/hex_t096_c01_u18.npz
-python train.py is32 toy datasets/hex_t096_c01_u18.npz
-python train.py ld32 toy datasets/hex_t096_c01_u18.npz
-python train.py ll32 toy datasets/hexqr_t128_c01_u16.npz
-python train.py di32 toy datasets/hexqr_t128_c01_u16.npz
+python train.py dd32 toy datasets/hexxy_t096_c01_u18.npz
+python train.py is32 toy datasets/hexxy_t096_c01_u18.npz
+python train.py ld32 toy datasets/hexxy_t096_c01_u18.npz
+python train.py ll32 toy datasets/hexind_t128_c01_u16.npz
+python train.py di32 toy datasets/hexind_t128_c01_u16.npz
 ```
 
 # Info

@@ -4,7 +4,6 @@ import numpy as np
 import torch
 from torch.utils.data import Dataset
 
-from code.utils.qrs import spiral_sort_qrs
 
 class MyDataset(Dataset):
     def __init__(self, data_path):
@@ -14,12 +13,15 @@ class MyDataset(Dataset):
         with np.load(path, allow_pickle=True) as data:
             xya = torch.from_numpy(data['xya'])       if 'xya' in data else None     # (M, N, xya)
             colors = torch.from_numpy(data['colors']) if 'colors' in data else None  # (M, N)
-            qr = torch.from_numpy(data['qr'])         if 'qr' in data else None      # (M, N, 2)
             labels = torch.from_numpy(data['labels'])                                # (M,)
             self.symmetry = data['symmetry'].item()
             self.side = data['side'].item()
             self.num_classes = data['num_classes'].item()
             self.class_lookup = data['class_lookup'].item()
+
+            indices = torch.from_numpy(data['indices']) if 'indices' in data else None # (M, N)
+            canvas_xyac = torch.from_numpy(data['canvas_xyac']) if 'canvas_xyac' in data else None # (V, 4)
+            vocab_size = data['vocab_size'].item() if 'vocab_size' in data else None
 
         if colors is not None:
             self.colors = colors.long()
@@ -32,9 +34,11 @@ class MyDataset(Dataset):
             self.data = xya.float()
 
         else:
-            assert  qr is not None, "Either xya or qr must be provided."
-            self.data = spiral_sort_qrs(qr).long()
+            assert  indices is not None, "Either xya or tile indices must be provided."
+            self.data = indices.long()
 
+        self.canvas_xyac = canvas_xyac
+        self.vocab_size = vocab_size
         self.labels = labels.long()
         self.n_samples = len(self.labels)
         self.num_tiles = self.data.shape[1]
