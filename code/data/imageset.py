@@ -74,4 +74,19 @@ class ImageSet:
             print(f"Could not find sample {class_id}-{inclassid+1}")
             raise KeyError
 
+    def print_scaled_hw(self, num_tiles, density):
+        def chw(sample):
+            H, W = sample.mask.shape
+            scaling = np.sqrt(num_tiles / (sample.on * density))
+            return H * scaling, W * scaling
+        
+        chw = np.array([chw(sample) for sample in self.samples], dtype=float) # type: ignore
+        minh, minw = np.min(chw, axis=0) # type: ignore
+        maxh, maxw = np.max(chw, axis=0) # type: ignore
+        avgh, avgw = np.mean(chw, axis=0) # type: ignore
 
+        print(f"  H: Min: {minh:.2f} Avg: {avgh:.2f} Max: {maxh:.2f} (±{maxh/2:.2f})")
+        print(f"  W: Min: {minw:.2f} Avg: {avgw:.2f} Max: {maxw:.2f} (±{maxw/2:.2f})")
+
+        min_canvas_radius = max(maxh/2, maxw/2)
+        print(f"  Min Need Canvas Radius: {min_canvas_radius:.2f}")

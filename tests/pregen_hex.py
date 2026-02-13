@@ -1,5 +1,5 @@
 import sys
-from code.hex.pregen import get_hex_mother_tiles
+from code.polygons.hex.mother import get_hex_mother_tiles
 
 try:
     halfside = float(sys.argv[1])
@@ -15,5 +15,5 @@ print(f"\thex_side: {hex_side}")
 
 mtiles = get_hex_mother_tiles(halfside, hex_side)
 
-from code.hex.svg import save_svg
+from code.polygons.hex.svg import save_svg
 save_svg(mtiles, f"library/tiles/hex_mother_tiles_{len(mtiles)}.svg")

@@ -1,6 +1,6 @@
 from pathlib import Path
-from code.pen.shapes import triangle_tiling, star_tiling, circle_tiling
-from code.pen.svg import save_svg
+from code.polygons.pen.shapes import triangle_tiling, star_tiling, circle_tiling
+from code.polygons.pen.svg import save_svg
 
 
 #----------------------------------------

@@ -64,18 +64,29 @@ class TablePrinter:
                 print(f"{arg:>{self.max_name_len}}│", end="")
         print()
 
-
 def npz_stats(npz_name):
-    print("\nFile: ", npz_name)
+    print("\nFile:", npz_name)
 
     with np.load(npz_name) as data:
-        xya = data['xya']
-        x = xya[..., 0].astype(np.float64)
-        y = xya[..., 1].astype(np.float64)
-        angle = xya[..., 2].astype(np.float64)
-        sin = np.sin(angle).astype(np.float64)
-        cos = np.cos(angle).astype(np.float64)
-        colors = data['colors'].astype(np.float64)
+        keys = set(data.keys())
+        print(f"Keys: {sorted(keys)}")
+
+        x = y = angle = sin = cos = colors = None
+        indices = None
+
+        if 'xya' in keys:
+            xya = data['xya'].astype(np.float64)
+            x = xya[..., 0]
+            y = xya[..., 1]
+            angle = xya[..., 2]
+            sin = np.sin(angle)
+            cos = np.cos(angle)
+        
+        if 'indices' in keys:
+            indices = data['indices'].astype(np.int64)
+
+        if 'colors' in keys:
+            colors = data['colors'].astype(np.float64)
 
     tp = TablePrinter(7, 11)
     tp.top_line()
@@ -83,27 +94,40 @@ def npz_stats(npz_name):
 
     def stats(v, name):
         tp.mid_line()
-        tp.line(name, "global", np.min(v), np.mean(v), np.max(v), np.std(v), np.max(v) - np.min(v))
+        tp.line(name, "global",
+                np.min(v), np.mean(v), np.max(v), np.std(v),
+                np.max(v) - np.min(v))
+
+        vmin = np.min(v, axis=-1)
+        vmean = np.mean(v, axis=-1)
+        vmax = np.max(v, axis=-1)
+        vstd = np.std(v, axis=-1)
+        vrng = vmax - vmin
+
         tp.line(name, "indiv. avg",
-                np.min(v, axis=-1).mean(), np.mean(v, axis=-1).mean(),
-                np.max(v, axis=-1).mean(), np.std(v, axis=-1).mean(),
-                (np.max(v, axis=-1) - np.min(v, axis=-1)).mean())
+                vmin.mean(), vmean.mean(), vmax.mean(), vstd.mean(), vrng.mean())
+
         tp.line(name, "indiv. max",
-                np.min(v, axis=-1).max(), np.mean(v, axis=-1).max(),
-                np.max(v, axis=-1).max(), np.std(v, axis=-1).max(),
-                (np.max(v, axis=-1) - np.min(v, axis=-1)).max())
+                vmin.max(), vmean.max(), vmax.max(), vstd.max(), vrng.max())
+
         tp.line(name, "indiv. min",
-                np.min(v, axis=-1).min(), np.mean(v, axis=-1).min(),
-                np.max(v, axis=-1).min(), np.std(v, axis=-1).min(),
-                (np.max(v, axis=-1) - np.min(v, axis=-1)).min())
+                vmin.min(), vmean.min(), vmax.min(), vstd.min(), vrng.min())
 
+    if x is not None:
+        stats(x, "x")
+        stats(y, "y")
+        stats(sin, "sin")
+        stats(cos, "cos")
+        stats(angle, "angle")
 
-    stats(x, "x")
-    stats(y, "y")
-    stats(sin, "sin")
-    stats(cos, "cos")
-    stats(angle, "angle")
-    stats(colors, "color")
+    if colors is not None:
+        stats(colors, "color")
+    
+    if indices is not None:
+        stats(indices, "indices")
+    
+    # TODO: add stats for other variables if present
+
     tp.bot_line()
 
 def pairwise_compare(vals, names, title, diag="both"):

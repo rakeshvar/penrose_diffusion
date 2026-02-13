@@ -1,7 +1,7 @@
 import math
 from cmath import exp
 
-from code.pen.base import Fatt, Thin, TriangleGrid, psi
+from .triangle import Fatt, Thin, TriangleGrid, psi
 
 two_piby5 = 2 * math.pi / 5
 ej2piby5 = exp(1j * two_piby5)

@@ -1,9 +1,10 @@
 import numpy as np
 from abc import ABC
 
-from code.pen.pregen import get_pen_mother_tiles
-from code.hex.pregen import get_hex_mother_tiles
-from code.utils.geom import inscribed_square_halfside
+from ..utils.geom import inscribed_square_halfside
+from ..polygons.hex.mother import get_hex_mother_tiles
+from ..polygons.pen.mother import get_pen_mother_tiles
+from ..polygons.pen.triangle import psi, psi2
 
 class Generator(ABC):
     area_with_unit_side:float = 1.0
@@ -19,6 +20,7 @@ class Generator(ABC):
         self.colors = np.array([h.color for h in self.canvas])
         self.angles = np.array([h.angle for h in self.canvas])
         self.sides = np.array([h.side for h in self.canvas])
+        self.indices = np.array([h.index for h in self.canvas])
 
         self.imageset = imageset
         self.halfside = inscribed_square_halfside(self.canvas)
@@ -29,6 +31,7 @@ class Generator(ABC):
         print(f"  CanvasHalfSide: {self.halfside:.2f} (vs. {target_halfside})")
         print(f"  Density: {self.density:.3f}")
         print(f"  Sampling Size: {self.num_tiles}")
+        imageset.print_scaled_hw(num_tiles, self.density)
 
         self.imagesetiter = iter(self.imageset)
 
@@ -40,37 +43,54 @@ class Generator(ABC):
     def density(self):
         return 1./self.area_of_one_polygon
 
+    @property
+    def canvas_xyac(self):    
+        return np.array([(h.x, h.y, h.angle, h.color) for h in self.canvas], dtype=float)
+
     def get_sample(self, class_id=None, inclassid=None, rotate_mask=True):
+        #---------------------
+        # Pick an Image
+        #---------------------
         if class_id is None:
             sample = next(self.imagesetiter)
         else:
             sample = self.imageset.get_particular_sample(class_id, inclassid)
 
         H, W = sample.mask.shape
-
         scaling = np.sqrt(self.num_tiles / (sample.on * self.density))
         c2hw = lambda x: x / scaling
         hw2c = lambda u: u * scaling
         eqsqhfsd = c2hw(np.sqrt(self.area_of_one_polygon)) / 2.0  # Equivalent square half side
 
-
+        #---------------------
         # Rotate Canvas
+        #---------------------
         θ = np.random.uniform(-self.rot_range, self.rot_range)
         cosθ, sinθ = np.cos(θ), np.sin(θ)
         rot_mat = np.array([[cosθ, sinθ], [-sinθ, cosθ]])  # important minus goes here
         xy_rot = self.canvas_xy @ rot_mat
 
+        #---------------------
         # Translate Canvas
+        #---------------------
+        if hw2c(H) > 2*self.halfside or hw2c(W) > 2*self.halfside:
+            print(f"  Sample too big: {sample.classname}-{sample.inclassid}"
+                  f"  {H}({hw2c(H):.2f}) x {W}({hw2c(W):.2f}) vs. {c2hw(2*self.halfside):.2f}({2*self.halfside:.2f})")
         x0 = np.random.uniform(-self.halfside, self.halfside - hw2c(H))
         y0 = np.random.uniform(-self.halfside, self.halfside - hw2c(W))
         new_xy = xy_rot - np.array([x0, y0])
 
+        #---------------------
         # Rotate Mask
+        #---------------------
         if rotate_mask:
             θmask = np.random.uniform(-self.rot_range/6, self.rot_range/6)
             cosθ, sinθ = np.cos(θmask), np.sin(θmask)
             rot_mask_mat = np.array([[cosθ, -sinθ], [sinθ, cosθ]])
 
+        #---------------------
+        # Coverage Calculator
+        #---------------------
         coverage = np.zeros(self.canvas_xy.shape[0], dtype=int)
         def update_coverage(uu, vv):
             uuvv = np.stack([uu, vv], axis=1) - np.array([H/2, W/2])
@@ -81,7 +101,9 @@ class Generator(ABC):
             is_in_bounds = (uu >= 0) & (uu < H) & (vv >= 0) & (vv < W)
             coverage[is_in_bounds] += sample.mask[uu[is_in_bounds], vv[is_in_bounds]]
 
+        #---------------------
         # half-square corners in float coords
+        #---------------------
         uv = c2hw(new_xy)
         u, v = uv[:, 0], uv[:, 1]
         update_coverage(u - eqsqhfsd, v - eqsqhfsd)
@@ -89,11 +111,22 @@ class Generator(ABC):
         update_coverage(u + eqsqhfsd, v - eqsqhfsd)
         update_coverage(u + eqsqhfsd, v + eqsqhfsd)
 
+        #---------------------
+        # Tile classes/sets
+        #---------------------        
         sets_idx = {val: np.flatnonzero(coverage == val) for val in (1, 2, 3, 4)}
-        xyac = np.zeros((self.num_tiles, 4), dtype=float)
+        offset = np.array([hw2c(H) / 2., hw2c(W) / 2.])
+        new_xy = new_xy - offset
+        new_angles = self.angles + θ
+
+        #---------------------
+        # Take from sets
+        #---------------------
         taken = 0
         take_now = 5
-        offset = np.array([hw2c(H) / 2., hw2c(W) / 2.])
+        xya = np.zeros((self.num_tiles, 3), dtype=float)
+        indices = np.zeros(self.num_tiles, dtype=int)
+        colors = np.zeros(self.num_tiles, dtype=int)
 
         for val in (4, 3, 2, 1):
             if taken >= self.num_tiles:
@@ -102,13 +135,17 @@ class Generator(ABC):
             idxs = sets_idx[val]
             take = idxs[:self.num_tiles - taken]
             if len(take) > 0:
-                xyac[taken:taken + len(take), :2] = new_xy[take] - offset
-                xyac[taken:taken + len(take), 2] = self.angles[take] + θ
-                xyac[taken:taken + len(take), 3] = self.colors[take]
+                xya[taken:taken + len(take), :2] = new_xy[take]
+                xya[taken:taken + len(take), 2] = new_angles[take]
+                colors[taken:taken + len(take)] = self.colors[take]
+                indices[taken:taken + len(take)] = self.indices[take]
                 taken += len(take)
 
         name = f"{sample.classname}-{sample.inclassid:02d}"
-        # diagnostics printout
+
+        #---------------------
+        # Diagnostics
+        #---------------------
         if take_now < 2 or taken < self.num_tiles:
             sets_idx = [np.where(coverage == val)[0] for val in range(5)]  # 0..4
             print(f"{sample.classid:02d} {name:20s} ({H:3d}, {W:3d}) {sample.on/(H*W):.0%}"
@@ -116,8 +153,10 @@ class Generator(ABC):
               f"\tmapped_to: ({x0:+.2f}, {y0:+.2f}) to ({x0+hw2c(H):+.2f}, {y0+hw2c(W):+.2f}) rot={θ:+.2f}({θ*180/np.pi:+.0f}°)"
               f"\tsets: ({len(sets_idx[4]):3d}, {len(sets_idx[3]):3d}, {len(sets_idx[2]):3d}, {len(sets_idx[1]):3d}) ⇒ {taken:3d} {take_now}")
 
-        # return the actual canvas objects in the same order as original code
-        return {'xyac':xyac, 'label':sample.classid, 'name':name}
+        #---------------------
+        # return 
+        #---------------------
+        return {'xya':xya, 'indices':indices, 'colors':colors, 'label':sample.classid, 'name':name}
 
 
 class Generator6(Generator):
@@ -129,7 +168,6 @@ class Generator6(Generator):
         return get_hex_mother_tiles(tothalfside, unit_side)
 
 
-from code.pen.base import psi, psi2
 class Generator5(Generator):
     area_with_unit_side = np.sin(np.pi/5) * psi2 + np.sin(2*np.pi/5) * psi # Weighted average of areas of rhombuses with side 1
     rot_range = np.pi

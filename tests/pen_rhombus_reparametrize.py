@@ -4,9 +4,10 @@ import copy
 from collections import Counter
 from code.utils.geom import deg, TOL
 
-from code.pen.base import Triangle, TriangleGrid, Rhombus
-from code.pen.svg import save_svg
-from code.pen.shapes import circle_tiling
+from code.polygons.pen.triangle import Triangle, TriangleGrid
+from code.polygons.pen.xya import Rhombus
+from code.polygons.pen.svg import save_svg
+from code.polygons.pen.shapes import circle_tiling
 
 def get_copy():
     return copy.deepcopy(circle_tiling)

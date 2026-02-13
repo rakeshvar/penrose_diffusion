@@ -1,6 +1,6 @@
 import sys
-from code.pen.shapes import circle_tiling
-from code.pen.pregen import get_pen_mother_tiles
+from code.polygons.pen.shapes import circle_tiling
+from code.polygons.pen.mother import get_pen_mother_tiles
 import copy
 
 try:
@@ -17,7 +17,7 @@ print(f"\tpen_side: {pen_side}")
 
 mtiles = get_pen_mother_tiles(halfside, pen_side)
 
-from code.pen.svg import save_svg
+from code.polygons.pen.svg import save_svg
 save_svg(mtiles, f"pen_mother_tiles_{len(mtiles)}.svg")
 
 # Save original tiling for comparison

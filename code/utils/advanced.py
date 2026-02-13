@@ -1,11 +1,10 @@
 from itertools import repeat
 import torch
 
-from code.hex.base import HexGrid
-from code.hex.svg import save_svg as hex_save_svg
-from code.pen.base import PenGrid
-from code.pen.svg import save_svg as pen_save_svg
-
+from code.polygons.hex.xya import HexGrid
+from code.polygons.pen.xya import PenGrid
+from code.polygons.hex.svg import save_svg as hex_save_svg
+from code.polygons.pen.svg import save_svg as pen_save_svg
 
 #------------------------------------------------------------------------------
 # Save

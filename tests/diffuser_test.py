@@ -13,11 +13,10 @@ sys.path.append(str(parent_dir))
 from code.data.load import MyDataset
 from code.augment import GeometryAugment
 from code.models.diffuser import Diffuser
-from code.utils.advanced import xysc_to_xyac
-from code.hex.base import HexGrid
-from code.pen.base import PenGrid
-from code.hex.svg import save_svg as hex_save_svg
-from code.pen.svg import save_svg as pen_save_svg
+from code.polygons.hex.xya import HexGrid
+from code.polygons.pen.xya import PenGrid
+from code.polygons.hex.svg import save_svg as hex_save_svg
+from code.polygons.pen.svg import save_svg as pen_save_svg
 from code.utils.basic import TablePrinter
 
 # Table Printer
@@ -92,8 +91,8 @@ def main():
                       orig_file_name, "orig")
 
         # Augmented
-        xysc_aug = augmenter(xya_0)
-        xyac_aug = xysc_to_xyac(xysc_aug, colors[..., np.newaxis])[0]
+        xya_aug = augmenter(xya_0)
+        xyac_aug = np.column_stack([xya_aug.cpu().numpy()[0], colors_np])
 
         save_grid_svg(xyac_aug, dataset.symmetry, dataset.side,
                       out_dir / f"{idx:2d}_{label}_01_augmented.svg", "augm")
@@ -107,9 +106,9 @@ def main():
 
         for t_val in steps:
             t_tensor = torch.tensor([t_val], device=device).long()
-            xysc_t, _ = diffuser.q_sample(xysc_aug, t_tensor)
+            xya_t, _ = diffuser.q_sample(xya_aug, t_tensor)
 
-            xyac_t = xysc_to_xyac(xysc_t, colors[..., np.newaxis])[0]
+            xyac_t = np.column_stack([xya_t.cpu().numpy()[0], colors_np])
             filename = out_dir / f"{idx:2d}_{label}_02_diff_t{t_val:03d}.svg"
             save_grid_svg(xyac_t, dataset.symmetry, dataset.side, filename, t_val)
 
