@@ -43,6 +43,10 @@ class LLModel(AbstractModel):
     @property
     def descriptor(self):
         return f"llm{self.d_model}x{self.n_layers}"
+    
+    @property
+    def aux_loss_names(self):
+        return ['accuracy']
 
     def _forward(self, tokens, labels):
         """
@@ -75,43 +79,59 @@ class LLModel(AbstractModel):
         assert tokens.ndim == 2, "Expecting only one columns, did you pass xya?"
 
         logits = self._forward(tokens, labels)                      # B, N+1, V
-        preds = logits[:, :-1, :]                                   # B, N, V
+        logits = logits[:, :-1, :]                                  # B, N, V
         loss = F.cross_entropy(
-                    preds.reshape(-1, preds.shape[-1]),   # (B*N, V)
-                    tokens.reshape(-1),                   # (B*N,)
+                    logits.reshape(-1, logits.shape[-1]),   # (B*N, V)
+                    tokens.reshape(-1),                     # (B*N,)
                     reduction='mean'
             )
-        aux_losses = torch.tensor([], device=self.device)
-        return loss, aux_losses
+        
+        # Accuracy
+        with torch.no_grad():
+            preds = torch.argmax(logits, dim=-1)
+            correct_tokens = preds == tokens
+            acc = correct_tokens.mean().item()
+
+        return loss, torch.tensor([acc], device=self.device)
 
     @torch.no_grad()
     def sample(self, colors, labels, num_steps=None):
         self.eval()
 
-        curr_seq = self.class_embed(labels).unsqueeze(1) + self.pos_embed[:, :1, :]  # B, 1, D
-        generated = []
+        B = labels.shape[0]
+        N = self.num_tiles
+        V = self.vocab_size
+        D = self.d_model
+        d = self.device
 
-        for i in range(self.num_tiles):
-            L = curr_seq.shape[1]
-            neginf = torch.full((L, L), float('-inf'), device=curr_seq.device)
-            mask = torch.triu(neginf, diagonal=1)
-            out = self.transformer(curr_seq, mask=mask)         # B, i, D
-            logits = self.out_head(out[:, -1, :])               # B, D -> B, V
-            probs = F.softmax(logits, dim=-1)                   # B, V
-            next_tok = torch.multinomial(probs, 1).squeeze(1)   # B,
-            generated.append(next_tok)
+        # init to a `NULL` token, so that shapes don't change
+        NULL = V
+        generated = torch.full((B, N), NULL, dtype=torch.long, device=d)      # B, N
+        embed = torch.zeros(B, N + 1, D, device=d)                            # B, N+1, D
+        embed[:, 0, :] = self.class_embed(labels) + self.pos_embed[:, 0, :]
+        mask = torch.full((N+1, N+1), float('-inf'), device=d)
+        mask = torch.triu(mask, diagonal=1) # N+1, N+1
 
-            # append embedding + position
-            next_emb = (
-                self.token_embed(next_tok).unsqueeze(1)
-                + self.pos_embed[:, i + 1 : i + 2, :]
-            )                                                   # B, 1, D
+        for i in range(N):
+            L = i + 1
 
-            curr_seq = torch.cat([curr_seq, next_emb], dim=1)
+            out = self.transformer(embed, mask=mask)                          # B, N+1, D
+            logits = self.out_head(out[:, i, :])                              # B, D → B, V
+
+            # logits[b, g[b, :]] = -inf (we use forbid to handle V≡NULL)        
+            forbid = torch.zeros(B, V + 1, dtype=torch.bool, device=d)        # B, V+1
+            forbid.scatter_(1, generated, True)
+            logits = logits.masked_fill(forbid[:, :V], float('-inf'))         # B, V
+
+            probs = F.softmax(logits, dim=-1)                                 # B, V
+            next_tok = torch.multinomial(probs, 1).squeeze(1)                 # B
+            generated[:, i] = next_tok                                        # B, N
+            embed[:, L, :] = self.token_embed(next_tok) + self.pos_embed[:, L, :]
+
             maybe_mark_step()
 
-        seq = torch.stack(generated, dim=1)                     # B, N
-        xyac = self.canvas_xyac[seq.long()]
+        seq = generated                                                       # B, N
+        xyac = self.canvas_xyac[seq.long()]                                   # B, N, 4
         return xyac
 
     def passthrough(self, tokens, colors, labels):
@@ -121,7 +141,3 @@ class LLModel(AbstractModel):
         next_token = torch.argmax(logits, dim=-1)                    # B, N
         xyac = self.canvas_xyac[next_token.long()]
         return xyac
-
-    @property
-    def aux_loss_names(self):
-        return []

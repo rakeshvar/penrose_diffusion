@@ -134,13 +134,15 @@ class MaskedDiscreteModel(AbstractModel):
         self.eval()
         B = labels.shape[0]
         N = self.num_tiles
-        V = self.vocab_size
+        V = self.vocab_size  # ≡ self.mask_token_id
         d = self.device
 
-        xₜ = torch.full((B, N), self.mask_token_id, dtype=torch.long, device=d)
+        # all mask
+        xₜ = torch.full((B, N), V, dtype=torch.long, device=d)        # B, N
 
-        # lower-triangular duplicate filter
-        trl = torch.tril(torch.ones(N, N, device=d, dtype=torch.bool), diagonal=-1)
+        # duplicate filter
+        ones = torch.ones(N, N, device=d, dtype=torch.bool)           # N, N
+        trl = torch.tril(ones, diagonal=-1)
 
         for i in range(num_steps):
             # schedule
@@ -151,18 +153,19 @@ class MaskedDiscreteModel(AbstractModel):
             tt = torch.full((B,), t, device=d)
 
             # forward
-            logits = self._forward(xₜ, tt, labels)          # B, N, V
+            logits = self._forward(xₜ, tt, labels)                      # B, N, V
 
             # forbid resampling already-fixed tokens
-            unmasked = (xₜ != self.mask_token_id)                     # B, N
-            forbidden = torch.zeros(B, V, dtype=torch.bool, device=d) # B, V
-            forbidden.scatter_(1, xₜ.clamp_max(V-1), unmasked)
-            logits = logits.masked_fill(forbidden.unsqueeze(1), float('-inf'))
+            unmasked = (xₜ != V)                     # B, N
+            forbidden = torch.zeros(B, V+1, dtype=torch.bool, device=d) # B, V+1
+            # f[b, xₜ[b, n]] = unm[b, n]
+            forbidden.scatter_(1, xₜ, unmasked)
+            forbidden = forbidden[:, :V].unsqueeze(1)                   # B, 1, V
+            logits = logits.masked_fill(forbidden, float('-inf'))
 
             # sample
-            probs = torch.softmax(logits, dim=-1)            # B, N, V
-            probs = torch.nan_to_num(probs, nan=0.0)
-            xₜ_new = torch.multinomial(probs.view(-1, V), 1).view(B, N)
+            probs = torch.softmax(logits, dim=-1)                       # B, N, V
+            xₜ_new = torch.multinomial(probs.view(-1, V), 1).view(B, N) # B, N
 
             # freeze previous tokens
             xₜ_new = torch.where(unmasked, xₜ, xₜ_new)
@@ -177,7 +180,7 @@ class MaskedDiscreteModel(AbstractModel):
             confidence = confidence.masked_fill(is_dup, 0.0)
 
             # masking target (for next round)
-            n_mask = int(r1 * N)
+            num_to_mask = int(r1 * N)
 
             # nice print diagnostics (last few steps only)
             if False and i > num_steps - 5:
@@ -188,18 +191,17 @@ class MaskedDiscreteModel(AbstractModel):
                     f"Mask Rate: {r:.2%}→{r1:.2%} | "
                     f"Fixed: {n_fixed:3d} | "
                     f"New Dups: {n_dups:3d} | "
-                    f"Target #Masked: {n_mask:3d}"
+                    f"Target #Masked: {num_to_mask:3d}"
                 )
 
-
-            if n_mask == 0:
+            if num_to_mask == 0:
                 xₜ = xₜ_new
                 break
 
             # small noise to break ties
-            confidence = confidence + torch.rand_like(confidence) * 1e-4
+            confidence = confidence + torch.rand_like(confidence) * 1e-5
             # threshold
-            threshold = torch.kthvalue(confidence, n_mask, dim=1).values.unsqueeze(1)
+            threshold = torch.kthvalue(confidence, num_to_mask, dim=1).values.unsqueeze(1)
             # remask
             mask_next = confidence < threshold
             xₜ = torch.where(mask_next, self.mask_token_id, xₜ_new)
