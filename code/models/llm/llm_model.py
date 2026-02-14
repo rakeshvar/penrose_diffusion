@@ -130,9 +130,8 @@ class LLModel(AbstractModel):
             embed[:, L, :] = self.token_embed(next_tok) + self.pos_embed[:, L, :]
 
             maybe_mark_step()
-            print(next_tok[0].item(), end=", ")
+            _ = next_tok[0].cpu().item()
 
-        print()
         seq = generated                                                       # B, N
         xyac = self.canvas_xyac[seq.long()]                                   # B, N, 4
         return xyac
