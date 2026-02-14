@@ -107,7 +107,7 @@ def is_master():
 
 from torch.utils.data.distributed import DistributedSampler
 
-def get_maybe_distributed_sampler(dataset):
+def get_maybe_distributed_sampler(dataset): # For TPU 
     if IS_TPU:
         return DistributedSampler(
             dataset,
@@ -118,6 +118,9 @@ def get_maybe_distributed_sampler(dataset):
     else:
         return None
 
+#---
+# Use the following only if not moving data to device
+#---
 
 class MyDeviceLoader:
     """GPU / CPU equivalent of MpDeviceLoader."""

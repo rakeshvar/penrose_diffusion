@@ -42,10 +42,10 @@ def train_fn(rank:int, config:Config):
         mprint = lambda *args, **kwargs: None
 
     #--------------------------------------------
-    # Load Data
+    # Load Data (dataset -> distributed_sampler -> data_loader -> device_loader)
     #--------------------------------------------
     mprint(f"Loading data from {config.data_path}...")
-    dataset = MyDataset(Path(config.data_path))         # CPU
+    dataset = MyDataset(Path(config.data_path)).to(device)
     distributed_sampler = compat.get_maybe_distributed_sampler(dataset)   # Split data for TPU cores
 
     loader_args = {
@@ -56,8 +56,9 @@ def train_fn(rank:int, config:Config):
         'drop_last': True
     }
     raw_loader = DataLoader(dataset, **loader_args)
-    train_loader = compat.get_loader(raw_loader, device)  # Pre-fetch to device
-
+    # train_loader = compat.get_loader(raw_loader, device)  # Pre-fetch to device
+    train_loader = raw_loader
+    
     mprint(dataset) # type: ignore
     mprint(f"Batches/Core:  {len(raw_loader)}")
 
