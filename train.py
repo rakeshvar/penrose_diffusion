@@ -42,10 +42,10 @@ def train_fn(rank:int, config:Config):
         mprint = lambda *args, **kwargs: None
 
     #--------------------------------------------
-    # Load Data (dataset -> distributed_sampler -> data_loader -> device_loader)
+    # Load Data
     #--------------------------------------------
     mprint(f"Loading data from {config.data_path}...")
-    dataset = MyDataset(Path(config.data_path)).to(device)
+    dataset = MyDataset(Path(config.data_path))         # CPU
     distributed_sampler = compat.get_maybe_distributed_sampler(dataset)   # Split data for TPU cores
 
     loader_args = {
@@ -55,12 +55,11 @@ def train_fn(rank:int, config:Config):
         'num_workers': 0 if distributed_sampler else 4,   # distributed_sampler handles multi-threading
         'drop_last': True
     }
-    raw_loader = DataLoader(dataset, **loader_args)
-    # train_loader = compat.get_loader(raw_loader, device)  # Pre-fetch to device
-    train_loader = raw_loader
-    
+    data_loader = DataLoader(dataset, **loader_args)
+    device_data_loader = compat.get_loader(data_loader, device)  # Pre-fetch to device
+
     mprint(dataset) # type: ignore
-    mprint(f"Batches/Core:  {len(raw_loader)}")
+    mprint(f"Batches/Core:  {len(data_loader)}")
 
     #--------------------------------------------
     # Model Initialization
@@ -134,7 +133,7 @@ def train_fn(rank:int, config:Config):
         count = 0
 
         # Enable progress bar only on master process
-        progressbar = tqdm(train_loader, disable = not is_master)
+        progressbar = tqdm(device_data_loader, disable = not is_master)
 
         for batch in progressbar:
             xya, colors, labels = batch

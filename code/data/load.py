@@ -10,52 +10,38 @@ class MyDataset(Dataset):
         path = Path(data_path)
         self.data_path_name = path.name
 
-        # Load
         with np.load(path, allow_pickle=True) as data:
             xya = torch.from_numpy(data['xya'])       if 'xya' in data else None     # (M, N, xya)
             colors = torch.from_numpy(data['colors']) if 'colors' in data else None  # (M, N)
             labels = torch.from_numpy(data['labels'])                                # (M,)
-            
-            # Metadata
             self.symmetry = data['symmetry'].item()
             self.side = data['side'].item()
             self.num_classes = data['num_classes'].item()
             self.class_lookup = data['class_lookup'].item()
 
-            # Discrete data
             indices = torch.from_numpy(data['indices']) if 'indices' in data else None # (M, N)
-            self.canvas_xyac = torch.from_numpy(data['canvas_xyac']) if 'canvas_xyac' in data else None # (V, 4)
-            self.vocab_size = data['vocab_size'].item() if 'vocab_size' in data else None
+            canvas_xyac = torch.from_numpy(data['canvas_xyac']) if 'canvas_xyac' in data else None # (V, 4)
+            vocab_size = data['vocab_size'].item() if 'vocab_size' in data else None
 
-        # Assign
-        self.empty_tensor = torch.tensor([]).contiguous()
-        self.labels = labels.long().contiguous()
-        
         if colors is not None:
-            self.colors = colors.long().contiguous()
+            self.colors = colors.long()
         else:
             self.colors = None
 
         if xya is not None:
             xy_means = xya[..., :2].mean(dim=1, keepdim=True) # (M, 1, 2)
             xya[..., :2] -= xy_means
-            self.data = xya.float().contiguous()
+            self.data = xya.float()
 
         else:
             assert  indices is not None, "Either xya or tile indices must be provided."
-            self.data = indices.long().contiguous()
+            self.data = indices.long()
 
-        # Meta data
+        self.canvas_xyac = canvas_xyac
+        self.vocab_size = vocab_size
+        self.labels = labels.long()
         self.n_samples = len(self.labels)
         self.num_tiles = self.data.shape[1]
-
-    def to(self, device):
-        self.data = self.data.to(device)
-        self.labels = self.labels.to(device)
-        if self.colors is not None:
-            self.colors = self.colors.to(device)
-        self.empty_tensor = self.empty_tensor.to(device)
-        return self
 
     def __len__(self):
         return self.n_samples
@@ -64,7 +50,7 @@ class MyDataset(Dataset):
         if self.colors is not None:
             return self.data[idx], self.colors[idx], self.labels[idx]
         else:
-            return self.data[idx], self.empty_tensor, self.labels[idx]
+            return self.data[idx], torch.tensor([]), self.labels[idx]
 
     def __str__(self):
         """Pretty-print dataloader status."""
