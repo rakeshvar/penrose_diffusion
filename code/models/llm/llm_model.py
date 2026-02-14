@@ -111,6 +111,7 @@ class LLModel(AbstractModel):
         embed[:, 0, :] = self.class_embed(labels) + self.pos_embed[:, 0, :]
         mask = torch.full((N+1, N+1), float('-inf'), device=d)
         mask = torch.triu(mask, diagonal=1) # N+1, N+1
+        forbid = torch.zeros(B, V + 1, dtype=torch.bool, device=d)        # B, V+1
 
         for i in range(N):
             L = i + 1
@@ -118,8 +119,8 @@ class LLModel(AbstractModel):
             out = self.transformer(embed, mask=mask)                          # B, N+1, D
             logits = self.out_head(out[:, i, :])                              # B, D → B, V
 
-            # logits[b, g[b, :]] = -inf (we use forbid to handle V≡NULL)        
-            forbid = torch.zeros(B, V + 1, dtype=torch.bool, device=d)        # B, V+1
+            # logits[b, g[b, :]] = -inf (we use forbid to handle V≡NULL)
+            forbid.zero_()        
             forbid.scatter_(1, generated, True)
             logits = logits.masked_fill(forbid[:, :V], float('-inf'))         # B, V
 
@@ -129,7 +130,9 @@ class LLModel(AbstractModel):
             embed[:, L, :] = self.token_embed(next_tok) + self.pos_embed[:, L, :]
 
             maybe_mark_step()
+            print(next_tok[0].item(), end=", ")
 
+        print()
         seq = generated                                                       # B, N
         xyac = self.canvas_xyac[seq.long()]                                   # B, N, 4
         return xyac
