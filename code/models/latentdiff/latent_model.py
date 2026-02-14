@@ -99,9 +99,10 @@ class LatentDiffusionModel(AbstractModel):
     @property
     def descriptor(self):
         D = self.config['latent_dim']
-        K = self.config['num_latent_blocks']
+        Kl = self.config['num_latent_blocks']
+        Kv = self.config['num_vae_blocks']
         denoi = self.config['denoiser'][0]
-        return f"lat{D}x{K}{denoi}_{self.recons_loss_fn.abbr}"
+        return f"lat{D}x{Kv}x{Kl}{denoi}_{self.recons_loss_fn.abbr}"
     
     def runtime_setup(self, optimizer):
         compat.cast_fp32(self, optimizer)
