@@ -4,6 +4,7 @@ _lmcommon: &lmcommon
   beta_kl: .001
   beta_dl: 1.
   beta_ll: 1.
+  denoiser: "mlp"
 
 _latent_common: &latent_common
   train:

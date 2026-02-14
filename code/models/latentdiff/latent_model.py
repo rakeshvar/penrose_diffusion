@@ -64,7 +64,6 @@ def check_tensor(name, x):
 #------------------------------------------------------------
 # Model
 # ------------------------------------------------------------
-LatentDenoiser = FiLMLatentDenoiser
 
 class LatentDiffusionModel(AbstractModel):
     def __init__(self, config, dataset):
@@ -82,6 +81,13 @@ class LatentDiffusionModel(AbstractModel):
         self.p_uncond = 1/7.
         self.config = config
 
+        if config['denoiser'] == 'mlp':
+            LatentDenoiser = MLPLatentDenoiser  
+        elif config['denoiser'] == 'film': 
+            LatentDenoiser = FiLMLatentDenoiser
+        else:
+            raise ValueError(f"Unknown latent denoiser: {config['denoiser']}")
+
         self.augmenter = GeometryAugment()
         self.encoder = SetEncoder(C, L, P, Kv, 2)
         self.denoiser = LatentDenoiser(C, L, Kl)
@@ -94,7 +100,7 @@ class LatentDiffusionModel(AbstractModel):
     def descriptor(self):
         D = self.config['latent_dim']
         K = self.config['num_latent_blocks']
-        return f"lat{D}x{K}_{self.recons_loss_fn.abbr}"
+        return f"ld{D}x{K}{self.config['denoiser'][0]}_{self.recons_loss_fn.abbr}"
     
     def runtime_setup(self, optimizer):
         compat.cast_fp32(self, optimizer)

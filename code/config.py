@@ -160,8 +160,9 @@ class Config:
             raise ValueError(f"Key '{key}' not found in config {subconfig}: {subconfig_dict}")
 
         val = infer_type(val)
-        print(f"Overriding config.{subconfig}.{key} = {val} (type = {type(val).__name__})"
-              f"\toverrides {subconfig_dict[key]}")
+        print(f'Overriding config.{subconfig}.{key} = "{val}" '
+              f'  (type "{type(val).__name__}", '
+              f' old value = "{subconfig_dict[key]}")')
         subconfig_dict[key] = val
 
 
