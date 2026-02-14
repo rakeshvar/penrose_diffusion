@@ -169,7 +169,7 @@ def train_fn(rank:int, config:Config):
             to_log["loss/"+name] = float(value)
             mprint(f"{name} = {value:.4f}")
 
-        if is_master:
+        if is_master and (epoch % config.train['save_interval'] == 0 or epoch == total_epochs - 1):
           ckptr.save_checkpoint(epoch, model, optimizer, scheduler, avg_loss) # type: ignore
 
           if config.train['save_samples']:

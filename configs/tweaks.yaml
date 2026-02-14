@@ -2,52 +2,89 @@ toy:
   train:
     num_epochs: 3
     save_samples: false
+    save_interval: 1
   wandb:
     enable: false
     project: 'penrose-toy'
 
+#----------
+# batch size
+#----------
+bs16:
+  train:
+    batch_size: 16
+
+bs32:
+  train:
+    batch_size: 32
+
+bs64:
+  train:
+    batch_size: 64
+
+bs128:
+  train:
+    batch_size: 128
+
+bs256:
+  train:
+    batch_size: 256
+
+bs1400:
+  train:
+    batch_size: 1400
 #----------
 # Epochs
 #----------
 ne1:
   train:
     num_epochs: 1
+    save_interval: 1
 
 ne3:
   train:
     num_epochs: 3
+    save_interval: 1
 
 ne9:
   train:
     num_epochs: 9
+    save_interval: 1
 
 ne10:
   train:
     num_epochs: 10
+    save_interval: 1
 
 ne99:
   train:
     num_epochs: 99
+    save_interval: 10
 
 ne100:
   train:
     num_epochs: 100
+    save_interval: 10
 
 ne200:
   train:
     num_epochs: 200
+    save_interval: 10
     
 ne300:
   train:
     num_epochs: 300
+    save_interval: 10
 
 ne333:
   train:
     num_epochs: 333
+    save_interval: 10
 
 ne999:
   train:
     num_epochs: 999
+    save_interval: 10
 
 #----------
 # WandB
@@ -59,6 +96,29 @@ w0:
 w1:
   wandb:
     enable: true
+
+#----------
+# save interval
+#----------
+si1:
+  train:
+    save_interval: 1
+
+si5:  
+  train:
+    save_interval: 5
+
+si10:
+  train:
+    save_interval: 10
+
+si50:  
+  train:
+    save_interval: 50
+
+si100:
+  train:
+    save_interval: 100
 
 #----------
 # Samples
