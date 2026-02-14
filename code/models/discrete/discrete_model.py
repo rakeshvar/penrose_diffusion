@@ -8,24 +8,23 @@ from code.models.base_model import AbstractModel
 from code.models.sinusoidal import SinusoidalPositionalEmbedding
 
 class MaskedDiscreteModel(AbstractModel):
-    def __init__(self, config):
+    def __init__(self, config, dataset):
         super().__init__()
 
         # Hyperparameters
         self.config = config
-        self.num_tiles = config['num_tiles']
         self.d_model = config['d_model']
         self.num_layers = config['num_layers']
         self.num_heads = config['num_heads']
         self.dropout = config['dropout']
-        self.num_classes = config['num_classes']
-        self.canvas_xyac = config['canvas_xyac']
+        self.num_tiles = dataset.num_tiles
+        self.num_classes = dataset.num_classes
 
-        # Vocabulary
-        assert config['vocab_size'] is not None, "Vocab size is None, dataset might be xya."
-        self.vocab_size = config['vocab_size']
+        assert hasattr(dataset, "vocab_size"), "Expected token dataset; got xya?"
+        self.vocab_size = dataset.vocab_size
         self.mask_token_id = self.vocab_size
         self.total_tokens = self.vocab_size + 1
+        self.canvas_xyac = dataset.canvas_xyac
 
         # Embeddings
         self.coord_embed = nn.Embedding(self.total_tokens, self.d_model)
@@ -134,11 +133,12 @@ class MaskedDiscreteModel(AbstractModel):
         self.eval()
         B = labels.shape[0]
         N = self.num_tiles
-        V = self.vocab_size  # ≡ self.mask_token_id
+        V = self.vocab_size 
+        M = self.mask_token_id
         d = self.device
 
         # all mask
-        xₜ = torch.full((B, N), V, dtype=torch.long, device=d)        # B, N
+        xₜ = torch.full((B, N), M, dtype=torch.long, device=d)        # B, N
 
         # duplicate filter
         ones = torch.ones(N, N, device=d, dtype=torch.bool)           # N, N
@@ -156,7 +156,7 @@ class MaskedDiscreteModel(AbstractModel):
             logits = self._forward(xₜ, tt, labels)                      # B, N, V
 
             # forbid resampling already-fixed tokens
-            unmasked = (xₜ != V)                     # B, N
+            unmasked = (xₜ != M)                                        # B, N
             forbidden = torch.zeros(B, V+1, dtype=torch.bool, device=d) # B, V+1
             # f[b, xₜ[b, n]] = unm[b, n]
             forbidden.scatter_(1, xₜ, unmasked)
@@ -204,7 +204,7 @@ class MaskedDiscreteModel(AbstractModel):
             threshold = torch.kthvalue(confidence, num_to_mask, dim=1).values.unsqueeze(1)
             # remask
             mask_next = confidence < threshold
-            xₜ = torch.where(mask_next, self.mask_token_id, xₜ_new)
+            xₜ = torch.where(mask_next, M, xₜ_new)
 
             maybe_mark_step()
 

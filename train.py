@@ -60,18 +60,12 @@ def train_fn(rank:int, config:Config):
 
     mprint(dataset) # type: ignore
     mprint(f"Batches/Core:  {len(raw_loader)}")
-    config.model['num_tiles'] = dataset.num_tiles
-    config.model['num_classes'] = dataset.num_classes
-    config.model['side'] = dataset.side
-    config.model['symmetry'] = dataset.symmetry
-    config.model['vocab_size'] = dataset.vocab_size
-    config.model['canvas_xyac'] = dataset.canvas_xyac
 
     #--------------------------------------------
     # Model Initialization
     #--------------------------------------------
     Model = get_model_class(config.model['model'])
-    model = Model(config.model).to(device)
+    model = Model(config.model, dataset).to(device)
     optimizer = torch.optim.AdamW(model.parameters(), lr=config.train['lr'])
     model.runtime_setup(optimizer)
 

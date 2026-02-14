@@ -67,16 +67,18 @@ def check_tensor(name, x):
 LatentDenoiser = FiLMLatentDenoiser
 
 class LatentDiffusionModel(AbstractModel):
-    def __init__(self, config):
+    def __init__(self, config, dataset):
         super().__init__()
 
         L = config['latent_dim']
-        C = config['num_classes']
         H = config['num_heads']
         P = config['num_pools']
-        N = config['num_tiles']
         Kl = config['num_latent_blocks']
         Kv = config['num_vae_blocks']
+        N = dataset.num_tiles
+        C = dataset.num_classes
+        self.symmetry = dataset.symmetry
+        self.side = dataset.side
         self.p_uncond = 1/7.
         self.config = config
 
@@ -143,7 +145,7 @@ class LatentDiffusionModel(AbstractModel):
             check_tensor("loss_recons", loss_recons)
 
             # Lattice
-            loss_lattice = lattice_loss(self.config['symmetry'], x_hat, self.config['side'])
+            loss_lattice = lattice_loss(self.symmetry, x_hat, self.side)
             check_tensor("loss_lattice", loss_lattice)
 
             # Angle Variance

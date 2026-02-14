@@ -35,16 +35,16 @@ class DirectDiffuser(Diffuser):
 # Diffusion Model
 #------------------------------------------------------------------------------
 class DirectDiffusionModel(AbstractModel):
-    def __init__(self, model_config, **ignore):
+    def __init__(self, model_config, dataset):
         super().__init__()
         self.config = model_config
         self.augmenter = GeometryAugment()
         self.diffuser = DirectDiffuser(2)
 
         if model_config['model'] == 'direct':
-            self.denoiser = TransformerDenoiser(**model_config) # type: ignore
+            self.denoiser = TransformerDenoiser(**model_config, num_classes=dataset.num_classes) # type: ignore
         elif model_config['model'] == 'isab':
-            self.denoiser = ISABDenoiser(**model_config) # type: ignore
+            self.denoiser = ISABDenoiser(**model_config, num_classes=dataset.num_classes) # type: ignore
         else:
             raise NotImplementedError(f"Unknown model: {model_config['model']}")
         Loss = loss_registry[model_config['loss']]

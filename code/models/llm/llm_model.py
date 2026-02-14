@@ -6,19 +6,19 @@ from code.compatibility import maybe_mark_step
 from code.models.base_model import AbstractModel
 
 class LLModel(AbstractModel):
-    def __init__(self, config):
+    def __init__(self, config, dataset):
         super().__init__()
 
         # Configuration
         self.config = config
-        self.num_tiles = config["num_tiles"]
         self.d_model = config['d_model']
         self.n_layers = config['num_layers']
         self.n_heads = config['num_heads']
         self.dropout = config['dropout']
-        self.num_classes = config['num_classes']
-        self.vocab_size = config['vocab_size']
-        self.canvas_xyac = config['canvas_xyac']
+        self.num_tiles = dataset.num_tiles
+        self.num_classes = dataset.num_classes
+        self.vocab_size = dataset.vocab_size
+        self.canvas_xyac = dataset.canvas_xyac
 
         self.token_embed = nn.Embedding(self.vocab_size, self.d_model)
         self.class_embed = nn.Embedding(self.num_classes, self.d_model)
