@@ -39,7 +39,7 @@ def analyze_dataset(data_path):
 
     # 4. Diffusion Process Check (Variance Preserving?)
     # ---------------------------------------------------------
-    diffuser = Diffuser(num_timesteps=1000)
+    diffuser = Diffuser(ndims=2, num_timesteps=1000)
 
     for i in range(5):
         print("\n" + "="*50)

@@ -1,4 +1,4 @@
-
+import sys
 from pathlib import Path
 import numpy as np
 from tqdm import tqdm
@@ -19,7 +19,7 @@ imageset = ImageSet(folder)
 
 num_classes = 70
 samples_per_class = 20
-num_tiles = 1024
+num_tiles = int(sys.argv[1])
 target_halfside = 5.
 hex_unit_side = .05
 pen_unit_side = .1
