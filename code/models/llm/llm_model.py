@@ -90,7 +90,7 @@ class LLModel(AbstractModel):
         with torch.no_grad():
             preds = torch.argmax(logits, dim=-1)
             correct_tokens = preds == tokens
-            acc = correct_tokens.mean().item()
+            acc = correct_tokens.float().mean().item()
 
         return loss, torch.tensor([acc], device=self.device)
 
