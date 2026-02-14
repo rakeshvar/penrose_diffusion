@@ -1,3 +1,4 @@
+import os
 import warnings
 from typing import Optional, Dict
 
@@ -23,6 +24,10 @@ class WandBLog:
 
         if not wbconfig['enable']:
             print("WandB logging disabled by config.")
+            return
+        
+        if not os.getenv("WANDB_API_KEY"):
+            print("############ Warning: WandB logging disabled: WANDB_API_KEY not found.")
             return
 
         init_args = {

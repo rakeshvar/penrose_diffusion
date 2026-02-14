@@ -146,6 +146,7 @@ def train_fn(rank:int, config:Config):
             # Backpropagate
             optimizer.zero_grad()
             loss.backward()
+            nn_utils.clip_grad_norm_(model.parameters(), max_norm=1.)
             compat.optimizer_step(optimizer)
 
             total_loss += loss.item()

@@ -67,8 +67,12 @@ for symmetry in [6, 5]:
                 xya = sample['xya']
                 colors = sample['colors']
                 xyac = np.concatenate([xya, colors[:, None]], axis=1)
-                grid = HexGrid(xyac, gen.unit_side)
-                hex_save_svg(grid, out_folder / f"classes_hex/{sample['name']}.svg", print_ok=False)
+                path = out_folder / f"classes_{sym}/{sample['name']}.svg"
+                if symmetry == 6:
+                    grid = HexGrid(xyac, gen.unit_side)
+                else:
+                    grid = PenGrid(xyac, from_np=True, side=gen.unit_side)
+                save_svg(grid, path, print_ok=False)
                 
-                pbar.set_description(f"Saved {sample['name']:20s}")
+                pbar.set_description(f"Saved {str(path)[-20:]:20s}")
                 pbar.update(1)
