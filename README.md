@@ -102,6 +102,7 @@ In additon to the *array* of models above, the model supports multiple training 
 
 Variance Preserving Transformation. The signal $x_0$ and noise $\epsilon$ are combined so that the variance of $x_t$ is preserved across $t$.
 
+
 $$
 \begin{bmatrix}
 x_t \\
@@ -117,6 +118,8 @@ x_0 \\
 \epsilon
 \end{bmatrix}
 $$
+
+.
 
 ### Standard Losses
 
