@@ -107,8 +107,7 @@ $$
 \begin{bmatrix}
 x_t \\
 v
-\end{bmatrix}
-=
+\end{bmatrix} =
 \begin{bmatrix}
 \sqrt{\alpha_t} & \sqrt{1-\alpha_t} \\
 -\sqrt{1-\alpha_t} & \sqrt{\alpha_t}
@@ -118,8 +117,6 @@ x_0 \\
 \epsilon
 \end{bmatrix}
 $$
-
-.
 
 ### Standard Losses
 
