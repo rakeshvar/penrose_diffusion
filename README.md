@@ -1,16 +1,16 @@
 # Penrose Diffusion
 
-We probe the limits of class-conditioned structure discovery using Permutation-Invariant DDPM/DDIM models on sets. Operating on continuous spaces or fixed grids, we aim to train Deep Neural Networks to learn to sample chaotic, aperiodic tilings on zero-measure fractal manifolds without repetition.
+We probe the limits of class-conditioned structure discovery using *Permutation-Invariant DDPM/DDIM models on Sets*. We train Deep Neural Networks to learn to sample chaotic, aperiodic tilings on zero-measure fractal manifolds without repetition.
 
 A Unified "Plug-and-Play" Architecture for the latest generative frameworks in Gen AI:
 - Transformer Denoisers: self-attention to manage long-range spatial dependencies.
 - Latent Space Learning: cross-attention and VAE information bottlenecks to compress complex geometric structures.
-- Discrete Diffusion: on the categorical nature of tile slots and orientations.
-- Auto-regressive GPTs: tilings through a sequential, LLM-style generation
+- Discrete Diffusion: on the categorical realm of tile slots.
+- Auto-regressive GPTs: LLM-style generation of a sequence of tokenized tiles.
 
-Symmetry and Structure: two distinct spatial regimes:
-- Periodic Hexagonal Tilings: predictable 6-fold symmetry and translational invariance that repeats.
-- Aperiodic Penrose (P3) Rhombus Tilings: chaotic/fractal 5-fold symmetry and "forbidden" quasi-crystalline structures that never repeat globally.
+We experiment with two distinct spatial regimes:
+- Periodic Hexagonal Tilings that have a predictable 6-fold symmetry and translational invariance that repeats.
+- Aperiodic Penrose (P3) Rhombus Tilings, which obey a chaotic/fractal 5-fold symmetry and a "forbidden" quasi-crystalline structures that never repeat globally.
 
 ## Data Generation
 
@@ -50,17 +50,17 @@ Each polygon also has a **binary** color property that has to follow a strict pa
 
 - For *5-fold* symmetry
 
-  * $\phi-1 = \frac{1}{\phi} = \frac{\sqrt{5}-1}{2} = 61.8%$ `Fat` tiles
-  * $2 - \phi = 1- \frac{1}{\phi} = \frac{3-\sqrt{5}}{2} = 38.2%$ `Thin` tiles
+  * $\phi-1 = \frac{1}{\phi} = \frac{\sqrt{5}-1}{2} = 61.8$% `Fat` tiles
+  * $2 - \phi = 1- \frac{1}{\phi} = \frac{3-\sqrt{5}}{2} = 38.2$% `Thin` tiles
   * Together they should obey the Penrose P3 rules
 ![Pentagonal Bird](reference/images/bird-15.svg)
 
 ## Architectures
 
 
-The project is designed as a highly modular code base, allowing one to plug-in a wide variety of Generative AI models. The Diffusion models contain two main components: (plus additional components based on the specific architecture)
+The project is designed as a highly modular code base, allowing one to plug-in a wide variety of Generative AI models. The Diffusion models contain two main components, the forward and the reverse processes. In general, we have:
 
-- Data *Augmenter*: Perturbs the data a bit by translation and rotation during training
+- **Data Augmenter**: Perturbs the data a bit by translation and rotation during training
 -  Forward process adds noise to `x, y, angle` via the *Diffuser*, a DDIM/DDPM diffusion process manager (1000 timesteps)
 - Reverse process denoises using the *Denoiser*: Usually a Transformer based model that predicts added noise by conditiontioning on: `class`, `time` and `colors`
 
@@ -78,7 +78,12 @@ Encodes the geometry into a compressed latent space before diffusion. It has thr
 - *Latent Diffuser*: Performs DDIM diffusion in the latent space.
 - *Perceiver Decoder*: Reconstructs the set of tiles from the noisy latent $z$, conditioned on tile colors using cross-attention.
 
-### 4. Auto-Regressigve Language Model (`llm`)
+### 4. Masked Discrete Diffusion (`discrete`)
+Here the mother canvas from which the shapes are cut is known and fixed. Each sample is then specified as a set of $N$ indices from the mother canvas. 
+- Forward diffusion masks more and more of these indices 
+- Reverse process trains a Neural Network to predict the index of the masked tokens 
+
+### 5. Auto-Regressigve Language Model (`llm`)
 This does not employ diffusion. Instead it treats the data as integer indicies on a discrete grid.
 - The hexagons are naturally converted into a *q, r, s* space on the hexagonal grid
 - The rhombuses have a hierarchical representation based on the generating tesselation process.
@@ -94,7 +99,9 @@ In additon to the *array* of models above, the model supports multiple training 
 
 
 #### Diffusion Equations
+
 Variance Preserving Transformation. The signal $x_0$ and noise $\epsilon$ are combined so that the variance of $x_t$ is preserved across $t$.
+
 $$
 \begin{bmatrix}
 x_t \\
@@ -110,6 +117,7 @@ x_0 \\
 \epsilon
 \end{bmatrix}
 $$
+
 ### Standard Losses
 
 - **Noise Prediction Loss (`npl`)**: Standard DDIM, predicts added noise $\epsilon$
@@ -124,15 +132,20 @@ The above loss functions do not take into account the permutation invariance for
 - **Permutation Invariant Loss (`pil`)**: Computes a soft-assignment between predicted tiles and ground truth to calculate loss. The soft-assignement matrix is row-stochastic. It is simple, but there is a risk of all tiles wanting to collapse to a single target tile.
 - **Sinkhorn Loss (`shl`)**: Uses the Sinkhorn-Knopp algorithm to enforce a doubly-stochastic match (permutation matrix) between prediction and truth. This is still a soft-assignment.
 
-- **LSA Parallel Loss (`lpl`)**: Advanced `Linear Sum Assignment (LSA)` losses handle permuation-invariance more head on using the Hungarian Algorithm to find the optimal matching $\Pi^*$ between *noised* tiles $x_t$ and ground truth tiles $x_0$ before calculating loss. This permutation $\Pi^*$  can be calculated in parallel on the CPU, while the `Denoiser` is prediction $\hat\epsilon$.
+- **LSA Parallel Loss (`lpl`)**: Advanced `Linear Sum Assignment (LSA)` losses handle permuation-invariance more head on using the Hungarian Algorithm to find the optimal matching $\Pi^\star$ between *noised* tiles $x_t$ and ground truth tiles $x_0$ before calculating loss. This permutation $\Pi^\star$  can be calculated in parallel on the CPU, while the `Denoiser` is prediction $\hat\epsilon$.
+
+
 $$
-L = \| \Pi^*(x_o) - (x_t - \hatϵ) \| \\
-\Pi^* = \argmin_\Pi \| \Pi(x_o) - x_t \|
+L = \| \Pi^\star(x_o) - (x_t - \hatϵ) \|^2 \\
+\Pi^* = \argmin_\Pi \| \Pi(x_o) - x_t \|^2
 $$
 
+
 - **LSA Serial Loss (`lsl`)**: Sample is predicted and the minimum loss to any permutation of the original sample is considered.
+
+
 $$
-L = \min_\Pi \| \Pi(x_o) - (x_t - \hatϵ) \| \\
+L = \min_\Pi \| \Pi(x_o) - (x_t - \hatϵ) \|^2 \\
 $$
 
 ### Auxillary Losses
@@ -142,9 +155,10 @@ In addition to set level permutation invariance, there are additional constraint
   - exactly $\sqrt{3}$ unit side of the hexagon, or
   - within a given range for the P3 Rhombuses.
 
-Overlaps can be penalized heavily using Itakura-Saito loss over the distance to the nearest neighbour $d^*$.
+Overlaps can be penalized heavily using Itakura-Saito loss over the distance to the nearest neighbour $d^\star$.
+
 $$
-L_{lattice} = \sum_i d^*_i - 1 -\log d^*_i
+L_{lattice} = \sum_i d^\star_i - 1 -\log d^\star_i
 $$
 
 ## Output
@@ -194,7 +208,7 @@ This creates an `.npz` file in `datasets/` containing:
   - `class_lookup_table`
 
 where:
- - `B` = 70 * 20 * num_copies
+ - `B` = 70 × 20 × num_copies
  - `N` = number of tiles in each sample
 
 ### 2. Train Model
@@ -349,7 +363,7 @@ This is well-vectorized, but we do it only once on the CPU apriori and save it t
 - **Apply geometric augmentation** each epoch add additional rotation + translation to $(x, y, θ)$
 - **Convert angles**, to get unit variance on the orientation dimension, depending on the model, we either
   - Convert θ → (sin θ, cos θ)
-  - Scale θ → θ * $\sqrt{3}/\pi$
+  - Scale θ →  $\frac{\sqrt{3}}{\pi}$ θ
 - **Forward diffusion**: Gradually add Gaussian noise to the sample. In diffusion lingo uncorrupted data is represented as $x_0$, which in our case is the `N x 3` matrix of $(x, y, θ)$. And $x_t$ is the forward diffused value with noise variance, $var(ϵ)$ is monotonic in $t$. The variance preserving transform is:
 
 $$x_t = \sqrtᾱ_t ~ x_0 + \sqrt{1-ᾱ_t} ~ ε $$

@@ -69,17 +69,17 @@ XLA_FLAGS="--xla_dump_to=/tmp/xla_dump" XLA_USE_BF16=0 XLA_DOWNCAST_BF16=0  pyth
 ```
 
 ## tmux
-| Action | Command / Key Stroke |
-| :--- | :--- |
-| **Start Named Session** | `tmux new -s <name>` |
-| **Detach from Session** | `Ctrl + b` then `d` |
-| **List Active Sessions** | `tmux ls` |
-| **Reattach to Session** | `tmux attach -t <name>` |
-| **Kill/Close Session** | `tmux kill-session -t <name>` |
-| **Split Vertically** | `Ctrl + b` then `%` |
-| **Split Horizontally** | `Ctrl + b` then `"` |
-| **Switch Panes** | `Ctrl + b` then `Arrow Keys` |
-| **Scroll/Copy Mode** | `Ctrl + b` then `[` (Press `q` to exit) |
+| Action                  | Command / Key Stroke                    |
+| :---                    | :---                                    |
+| **Start Named Session** | `tmux new -s <name>`                    |
+| **Detach from Session** | `Ctrl + b` then `d`                     |
+| **List Active Sessions**| `tmux ls`                               |
+| **Reattach to Session** | `tmux attach -t <name>`                 |
+| **Kill/Close Session**  | `tmux kill-session -t <name>`           |
+| **Split Vertically**    | `Ctrl + b` then `%`                     |
+| **Split Horizontally**  | `Ctrl + b` then `"`                     |
+| **Switch Panes**        | `Ctrl + b` then `Arrow Keys`            |
+| **Scroll/Copy Mode**    | `Ctrl + b` then `[` (Press `q` to exit) |
 
 ## Monitor
 
