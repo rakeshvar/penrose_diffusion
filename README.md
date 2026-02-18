@@ -142,7 +142,7 @@ $$
 where
 
 $$
-\Pi^* = \argmin_\Pi \| \Pi(x_o) - x_t \|^2
+\Pi^* = \arg\min_\Pi \| \Pi(x_o) - x_t \|^2
 $$
 
 
