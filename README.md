@@ -136,7 +136,12 @@ The above loss functions do not take into account the permutation invariance for
 
 
 $$
-L = \| \Pi^\star(x_o) - (x_t - \hatϵ) \|^2 \\
+L = \| \Pi^\star(x_o) - (x_t - \hatϵ) \|^2 
+$$
+
+where
+
+$$
 \Pi^* = \argmin_\Pi \| \Pi(x_o) - x_t \|^2
 $$
 
