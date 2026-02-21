@@ -67,7 +67,7 @@ def _lattice_loss_logarithmic(xy_hat, min_dist_to_nearest, max_dist_to_nearest, 
     r_ij = dist / min_dist_to_nearest
     lap_loss = r_ij - 1.0 - torch.log(r_ij + eps2)  # (B, N, N)
     lap_mask = (r_ij < 1.0).to(lap_loss.dtype)
-    lap_loss = (lap_loss * lap_mask).mean()
+    lap_loss = (lap_loss * lap_mask).sum(dim=-1).mean()
 
     return (gap_loss + lap_loss) / 2.
 
