@@ -8,7 +8,7 @@ from code.models.sinusoidal import SinusoidalPositionalEmbedding
 class MLPLatentDenoiser(nn.Module):
     def __init__(self, num_classes, latent_dim, num_blocks, T=1000):
         super().__init__()
-        self.D = latent_dim
+        self.dim = latent_dim
 
         self.time_embed = nn.Embedding(T, latent_dim)
         self.class_embed = nn.Embedding(num_classes + 1, latent_dim) # CFG
