@@ -12,6 +12,7 @@ _isabcommon: &isabcommon
 
 _ismc: &ismc
   model: "isab"
+  diffuser: "ddpm"
   loss: "shl"
 
 is32:

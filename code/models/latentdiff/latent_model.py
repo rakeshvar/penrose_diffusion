@@ -3,10 +3,12 @@ import torch
 import torch.nn.functional as F
 
 import code.compatibility as compat
+from code.compatibility import maybe_mark_step
 from code.augment import GeometryAugment
 from code.models.base_model import AbstractModel
 from code.models.latentdiff.latent_denoiser import FiLMLatentDenoiser, MLPLatentDenoiser
 from code.utils.lossy import lattice_loss
+from code.models.diffuser import diffuser_registry
 
 from .set_decoder import PerceiverDecoder
 from .set_encoder import SetEncoder
@@ -24,32 +26,6 @@ def reparameterize(mu, logvar):
 
 def kl_loss(mu, logvar):
     return torch.mean(mu.pow(2) + logvar.exp() - 1 - logvar)/2.
-
-#------------------------------------------------------------
-# Diffuser
-# ------------------------------------------------------------
-from code.models.diffuser import Diffuser
-
-class LatentDiffuser(Diffuser):
-    @torch.no_grad()
-    def sample(self, denoiser, labels, num_steps=50, guidance_scale=2.0):
-        B = labels.shape[0]
-        D = denoiser.dim
-        device = next(denoiser.parameters()).device
-        NULL = denoiser.class_embed.num_embeddings - 1
-        nulls = torch.full_like(labels, NULL)
-
-        z = torch.randn((B, D), device=device)
-        times = torch.linspace(self.num_timesteps-1, 0, num_steps+1, device=device).long()
-
-        for i in range(num_steps):
-            t = torch.full((B,), times[i], device=device, dtype=torch.long) # type: ignore
-            ε_cond = denoiser(z, t, labels)
-            ε_null = denoiser(z, t, nulls)
-            ε_hatt = (1 + guidance_scale) * ε_cond - guidance_scale * ε_null
-            z = self.p_sample(z, ε_hatt, t)
-
-        return z
 
 
 def check_tensor(name, x):
@@ -92,7 +68,12 @@ class LatentDiffusionModel(AbstractModel):
         self.encoder = SetEncoder(C, L, P, Kv, 2)
         self.denoiser = LatentDenoiser(C, L, Kl)
         self.decoder = PerceiverDecoder(N, L, Kv, H)
-        self.diffuser = LatentDiffuser(1)
+        
+        # Independently select the diffuser/flowmatcher
+        diffuser_name = config.get('diffuser', 'ddpm')
+        DiffuserClass = diffuser_registry[diffuser_name]
+        self.diffuser = DiffuserClass(ndims=1)
+        
         self.recons_loss_fn = loss_registry[config['loss']]
         self.null_class = C
 
@@ -126,11 +107,11 @@ class LatentDiffusionModel(AbstractModel):
             z0 = reparameterize(mu, logvar)                             # (B, D)
             check_tensor("z0", z0)
 
-            # Latent Diffusion
+            # Latent Diffusion/Flow
             t = torch.randint(0, self.diffuser.num_timesteps, (B,), device=self.device) # (B,)
-            zt, ε = self.diffuser.q_sample(z0, t)                       # zt: (B, D), ε: (B, D)
+            zt, target = self.diffuser.q_sample(z0, t)                  # zt: (B, D), target: (B, D)
             check_tensor("zt", zt)
-            check_tensor("ε", ε)
+            check_tensor("target", target)
 
             # Drop some classes for Classifier Free Guidance
             cls_cond = cls.clone()
@@ -139,10 +120,10 @@ class LatentDiffusionModel(AbstractModel):
             cls_cond = torch.where(drop, nulls, cls_cond)
 
             # Denoiser
-            εhat = self.denoiser(zt, t, cls_cond)                       # (B, D)
-            check_tensor("εhat", εhat)
+            target_hat = self.denoiser(zt, t, cls_cond)                 # (B, D)
+            check_tensor("target_hat", target_hat)
 
-            loss_diffusion = F.mse_loss(εhat, ε)                        # (1,)
+            loss_diffusion = F.mse_loss(target_hat, target)             # (1,)
             check_tensor("loss_diffusion", loss_diffusion)
 
             # Decoder
@@ -193,12 +174,31 @@ class LatentDiffusionModel(AbstractModel):
         xyac = torch.cat([x_hat, color.unsqueeze(-1)], dim=-1)
         return xyac
 
-    def sample(self, colors, classes, num_steps):
-        z = self.diffuser.sample(
-            self.denoiser,
-            classes,
-            num_steps
-        )
+    def sample(self, colors, classes, num_steps, guidance_scale=2.0):
+        B = classes.shape[0]
+        D = self.denoiser.dim
+        device = self.device
+        NULL = self.denoiser.class_embed.num_embeddings - 1
+        nulls = torch.full_like(classes, NULL)
+
+        z = torch.randn((B, D), device=device)
+        times = torch.linspace(self.diffuser.num_timesteps - 1, 0, num_steps + 1, device=device)
+
+        for i in range(num_steps):
+            t_current = times[i]
+            t_next = times[i+1]
+            dt = t_current - t_next
+            
+            t = torch.full((B,), t_current.long(), device=device, dtype=torch.long)
+            v_cond = self.denoiser(z, t, classes)
+            v_null = self.denoiser(z, t, nulls)
+            v_hatt = (1 + guidance_scale) * v_cond - guidance_scale * v_null
+            
+            # Pass both dt and ddpm as optional kwargs to self.diffuser.p_sample
+            dt_tensor = torch.full_like(t, dt, dtype=torch.float)
+            z = self.diffuser.p_sample(z, v_hatt, t, dt=dt_tensor)
+            maybe_mark_step()
+
         self.eval()
         xya = self.decoder(z, colors)
 

@@ -152,3 +152,39 @@ def lsa_ordering_scipy(cost_np, colors_np):
     p_flat = np.concatenate(preds_ix)
 
     return b_flat, t_flat, p_flat
+
+
+#---------------------------
+# Soft Assignment & LSA Abstractions
+#---------------------------
+def soft_assignment_matrix(x_query, x_key, colors, variance, method='softmax'):
+    """
+    Computes soft permutation matrix between query and key point sets.
+    """
+    from code.utils.advanced import pairwise_sq_dist
+    sq_dist = pairwise_sq_dist(x_query, x_key, colors, variance)
+    logits = -sq_dist / (2.0 * variance)
+    
+    if method == 'sinkhorn':
+        return sinkhorn_permutation(logits)
+    elif method == 'softmax':
+        return torch.softmax(logits, dim=-1)
+    else:
+        raise ValueError(f"Unknown assignment method: {method}")
+
+
+def get_lsa_indices(x_query, x_key, colors):
+    """
+    Computes optimal bipartite matching between query and key point sets.
+    """
+    diff = x_query.unsqueeze(2) - x_key.unsqueeze(1)
+    cost_matrix = (diff ** 2).sum(dim=-1)
+    cost_np = cost_matrix.detach().cpu().numpy()
+    colors_np = colors.detach().cpu().numpy()
+
+    bi, ti, pi = lsa_ordering_scipy(cost_np, colors_np)
+    device = x_query.device
+    bi = torch.from_numpy(bi).to(device, non_blocking=True)
+    ti = torch.from_numpy(ti).to(device, non_blocking=True)
+    pi = torch.from_numpy(pi).to(device, non_blocking=True)
+    return bi, ti, pi

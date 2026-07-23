@@ -1,25 +1,20 @@
 # pyright: reportIndexIssue=false
 import torch
 import torch.nn as nn
+from code.utils.registry import Registry
+from code.compatibility import maybe_mark_step
 
-"""
-Variance Preserving Transformations for Diffusion
+# Registry for different types of Diffusers/FlowMatchers
+diffuser_registry = Registry("Diffuser")
+register_diffuser = diffuser_registry.register
 
-⎡ xₜ ⎤ = ⎡  √αₜ        √(1−αₜ) ⎤ ⎡ x₀ ⎤
-⎣ v  ⎦   ⎣ −√(1−αₜ)     √αₜ    ⎦ ⎣ ε  ⎦
-
-
-⎡ x₀ ⎤ = ⎡  √αₜ       −√(1−αₜ) ⎤ ⎡ xₜ ⎤
-⎣ ε  ⎦   ⎣  √(1−αₜ)     √αₜ    ⎦ ⎣ v  ⎦
-
-x̂₀ = √αₜ · xₜ − √(1−αₜ) · v̂
-̂ε  = √(1−αₜ) · xₜ + √αₜ · v̂
-
-"""
-
+#------------------------------------------------------------------------------
+# DDPM / DDIM Diffuser
+#------------------------------------------------------------------------------
+@register_diffuser('ddpm', 'ddim')
 class Diffuser(nn.Module):
-    """DDIM diffusion process manager"""
-    def __init__(self, ndims, num_timesteps=1000): # Add ndims argument
+    """DDIM/DDPM diffusion process manager"""
+    def __init__(self, ndims, num_timesteps=1000):
         super().__init__()
         self.num_timesteps = num_timesteps
 
@@ -36,7 +31,6 @@ class Diffuser(nn.Module):
         ᾱtm1 = torch.cat([one, ᾱ[:-1]])
 
         # Variance and Standard Deviation
-        # Move them to the right device for GPU/TPU
         self.register_buffer('ᾱ', ᾱ)
         self.register_buffer('onemᾱ', onemᾱ)
         self.register_buffer('rᾱ', torch.sqrt(ᾱ))
@@ -46,29 +40,36 @@ class Diffuser(nn.Module):
         self.register_buffer('ᾱtm1', ᾱtm1)
 
     def q_sample(self, x0, t, ϵ=None):
-        if ϵ is None:   ϵ = torch.randn_like(x0)
+        """Forward diffusion process (adds noise)"""
+        if ϵ is None:
+            ϵ = torch.randn_like(x0)
         xₜ = self.rᾱ[t] * x0 + self.r1mᾱ[t] * ϵ
         return xₜ, ϵ
 
-    def recover_x(self, xₜ, t, ϵ):
-        return (xₜ - self.r1mᾱ[t] * ϵ) / self.rᾱ[t]
+    def get_sigmas(self, t):
+        """Returns (sigma_x, sigma_e_sq)"""
+        return self.rᾱ[t], self.onemᾱ[t]
 
-    def recover_ϵ(self, xₜ, t, x0):
-        return (xₜ - self.rᾱ[t] * x0) / self.r1mᾱ[t]
+    def recover_target(self, xt, t, x0):
+        """Recover target noise given xt and x0"""
+        rᾱ = self.rᾱ[t]
+        r1mᾱ = self.r1mᾱ[t]
+        return (xt - rᾱ * x0) / r1mᾱ
 
-    def calculate_v(self, x0, t, ϵ):
-        return -self.r1mᾱ[t] * x0 + self.rᾱ[t] * ϵ
-
+    def recover_x0(self, xt, t, target_hat):
+        """Recover x0 given xt and predicted noise"""
+        rᾱ = self.rᾱ[t]
+        r1mᾱ = self.r1mᾱ[t]
+        return (xt - r1mᾱ * target_hat) / rᾱ
 
     @torch.no_grad()
-    def p_sample(self, xₜ, ϵhat, t, ddpm=0.0):
+    def p_sample(self, xₜ, ϵhat, t, ddpm=0.0, **kwargs):
         """
-        Reverse diffusion process (DDIM sampling)
+        Reverse diffusion process (DDIM/DDPM sampling)
         """
-        x0hat = self.recover_x(xₜ, t, ϵhat)
+        x0hat = self.recover_x0(xₜ, t, ϵhat)
 
-
-        if t[0] == 0:               # All t's are same in a prediction batch
+        if t[0] == 0:  # All t's are same in a prediction batch
             return x0hat
 
         # xₜ₋₁ = √(ᾱₜ₋₁) x̂₀ + √(1 − ᾱₜ₋₁ − σₜ²) ̂ε(xₜ) + σₜεₜ
@@ -80,6 +81,105 @@ class Diffuser(nn.Module):
             σₜεₜ = σₜ * torch.randn_like(xₜ)
 
         x_new = torch.sqrt(self.ᾱtm1[t]) * x0hat + \
-                   torch.sqrt(1 - self.ᾱtm1[t] - σₜ**2) * ϵhat + σₜεₜ
+                torch.sqrt(1 - self.ᾱtm1[t] - σₜ**2) * ϵhat + σₜεₜ
 
         return x_new
+
+    @torch.no_grad()
+    def sample(self, denoiser, colors, labels, num_steps=50, ddpm=0.0, **kwargs):
+        device = next(denoiser.parameters()).device
+        B, N = colors.shape
+        D = denoiser.io_dim
+        x = torch.randn((B, N, D), device=device)
+        times = torch.linspace(self.num_timesteps - 1, 0, num_steps + 1, device=device).long()
+
+        for i in range(num_steps):
+            t = torch.full((B,), times[i], device=device, dtype=torch.long)
+            ϵhat = denoiser(x, colors, t, labels)
+            x = self.p_sample(x, ϵhat, t, ddpm)
+            maybe_mark_step()
+
+        return x
+
+
+#------------------------------------------------------------------------------
+# Optimal Transport Flow Matcher
+#------------------------------------------------------------------------------
+@register_diffuser('flow', 'otfm')
+class FlowMatcher(nn.Module):
+    """Optimal Transport Flow Matching (OT-FM) process manager"""
+    def __init__(self, ndims, num_timesteps=1000):
+        super().__init__()
+        self.num_timesteps = num_timesteps
+        self.ndims = ndims
+
+    def q_sample(self, x0, t, ϵ=None):
+        """Forward process: linear interpolation between x0 (data) and noise"""
+        if ϵ is None:
+            ϵ = torch.randn_like(x0)
+        
+        # s in [0, 1]. t=0 -> s=0 (data), t=T -> s=1 (noise)
+        s = t.float() / (self.num_timesteps - 1)
+        
+        # Reshape s to match x0 dimensions
+        s_view = s.view(-1, *([1] * self.ndims))
+        
+        # Clamp s to prevent exact 0 variance at s=0
+        s_clamped = torch.clamp(s_view, min=1e-4)
+        
+        xt = (1. - s_clamped) * x0 + s_clamped * ϵ
+        target = ϵ - x0
+        return xt, target
+
+    def get_sigmas(self, t):
+        """Returns (sigma_x, sigma_e_sq)"""
+        s = t.float() / (self.num_timesteps - 1)
+        s_view = s.view(-1, *([1] * self.ndims))
+        s_clamped = torch.clamp(s_view, min=1e-4)
+        return (1. - s_clamped), s_clamped**2
+
+    def recover_target(self, xt, t, x0):
+        """Recover target velocity given xt and x0"""
+        s = t.float() / (self.num_timesteps - 1)
+        s_view = s.view(-1, *([1] * self.ndims))
+        s_clamped = torch.clamp(s_view, min=1e-4)
+        return (xt - (1. - s_clamped) * x0) / s_clamped
+
+    def recover_x0(self, xt, t, target_hat):
+        """Recover x0 given xt and predicted velocity"""
+        s = t.float() / (self.num_timesteps - 1)
+        s_view = s.view(-1, *([1] * self.ndims))
+        s_clamped = torch.clamp(s_view, min=1e-4)
+        return xt - s_clamped * target_hat
+
+    @torch.no_grad()
+    def p_sample(self, xt, target_hat, t, dt=1.0, **kwargs):
+        """Reverse Flow Matching step (Euler integration)"""
+        # ds is the step size in s-space
+        ds = dt / (self.num_timesteps - 1)
+        ds_view = ds.view(-1, *([1] * self.ndims))
+        # x_{s - ds} = x_s - ds * target_hat
+        return xt - ds_view * target_hat
+
+    @torch.no_grad()
+    def sample(self, denoiser, colors, labels, num_steps=50, **kwargs):
+        device = next(denoiser.parameters()).device
+        B, N = colors.shape
+        D = denoiser.io_dim
+        x = torch.randn((B, N, D), device=device)
+        times = torch.linspace(self.num_timesteps - 1, 0, num_steps + 1, device=device)
+
+        for i in range(num_steps):
+            t_current = times[i]
+            t_next = times[i+1]
+            dt = t_current - t_next
+            
+            t = torch.full((B,), t_current.long(), device=device, dtype=torch.long)
+            v_hat = denoiser(x, colors, t, labels)
+            
+            # Euler integration step
+            dt_tensor = torch.full_like(t, dt, dtype=torch.float)
+            x = self.p_sample(x, v_hat, t, dt=dt_tensor)
+            maybe_mark_step()
+
+        return x

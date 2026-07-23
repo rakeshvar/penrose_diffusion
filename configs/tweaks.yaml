@@ -153,3 +153,18 @@ lpl:
 lsa:
   model:
     loss: "lpl"
+
+#----------
+# Diffusers
+#----------
+ddpm:
+  model:
+    diffuser: "ddpm"
+
+flow:
+  model:
+    diffuser: "flow"
+
+otfm:
+  model:
+    diffuser: "flow"

@@ -1,12 +1,16 @@
 import math
 import torch
 import torch.nn.functional as F
-from code.utils.advanced import pairwise_sq_dist
-from code.utils.lossy import sinkhorn_permutation
+from ...utils.lossy import soft_assignment_matrix, get_lsa_indices
 from ...utils.registry import Registry
 
 loss_registry = Registry(name="LatentLoss")
 register_loss = loss_registry.register
+
+def t_from_s(s=.18, R=100):                 # .18 is unit_side of polygon
+    d = math.sqrt(3) * s                    # distance to nearest neighbor
+    t = d/math.sqrt(2 * math.log(R))        # first one is R factor more than second
+    return t
 
 # ------------------------------------------------------------
 # Reconstruction losses
@@ -19,6 +23,7 @@ def sample_loss(x, y, colors):
 
 @register_loss('cfl', 'cham', 'chamfer')
 def chamfer_loss(x, y, colors):
+    from code.utils.advanced import pairwise_sq_dist
     sq_dist = pairwise_sq_dist(x, y, colors)                # B, N, N
     loss_xy = sq_dist.min(dim=2).values.mean()
     loss_yx = sq_dist.min(dim=1).values.mean()
@@ -27,27 +32,21 @@ def chamfer_loss(x, y, colors):
 
 @register_loss('shl', 'sink', 'sinkhorn')
 def sinkhorn_loss(x, y, colors):
-    t = t_from_s()
-    sq_dist = pairwise_sq_dist(x, y, colors, t**2)
-    logits = -sq_dist/(2*(t**2))
-    # logits = torch.clamp(logits, min=-50., max=50.)
-    P = sinkhorn_permutation(logits)
+    variance = t_from_s()**2
+    P = soft_assignment_matrix(x, y, colors, variance, 'sinkhorn')
     y_post = torch.bmm(P, y)
     return F.mse_loss(x, y_post)
 
 
 @register_loss('pil', 'pinv', 'perminv')
 def pinv_loss(x, y, colors):
-    t = t_from_s()
-    sq_dist = pairwise_sq_dist(x, y, colors, t**2)         # B, N, N
-    logits = -sq_dist/(2* t**2)                     # .15 is unit_side of polygon
-    P = torch.softmax(logits, dim=-1)
+    variance = t_from_s()**2
+    P = soft_assignment_matrix(x, y, colors, variance, 'softmax')
     y_post = torch.bmm(P, y)
     return F.mse_loss(x, y_post)
 
 
-def t_from_s(s=.18, R=100):                 # .18 is unit_side of polygon
-    d = math.sqrt(3) * s                    # distance to nearest neighbor
-    t = d/math.sqrt(2 * math.log(R))        # first one is R factor more than second
-    return t
-
+@register_loss('lsl', 'lsas', 'lsaserial', 'lpl', 'lsap', 'lsaparallel')
+def lsa_loss(x, y, colors):
+    bi, ti, pi = get_lsa_indices(y, x, colors)
+    return F.mse_loss(x[bi, ti], y[bi, pi])

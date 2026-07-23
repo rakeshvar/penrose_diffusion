@@ -14,6 +14,7 @@ _directcommon: &directcommon
 #---------------
 _dmc: &dmc
   model: "direct"
+  diffuser: "ddpm"
   loss: "shl"
 
 _dm32: &dm32

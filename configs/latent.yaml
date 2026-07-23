@@ -1,5 +1,6 @@
 _lmcommon: &lmcommon
   model: "latent"
+  diffuser: "ddpm"
   loss: "shl"
   beta_kl: .001
   beta_dl: 1.
