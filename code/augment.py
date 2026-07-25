@@ -18,7 +18,7 @@ class GeometryAugment(nn.Module):
         self.translate_range = translate_range
 
     @torch.no_grad()
-    def forward(self, xya):
+    def forward(self, xya, generator=None):
         B, N, THREE = xya.shape
         device = xya.device
         x = xya[..., 0]
@@ -26,7 +26,9 @@ class GeometryAugment(nn.Module):
         a = xya[..., 2]
 
         # Random Rotation
-        θ = (torch.rand(B, 1, device=device) * 2 - 1) * self.rot_range
+        θ = (
+            torch.rand(B, 1, device=device, generator=generator) * 2 - 1
+        ) * self.rot_range
         cos_θ = torch.cos(θ)
         sin_θ = torch.sin(θ)
         x_rot = x * cos_θ - y * sin_θ
@@ -35,8 +37,12 @@ class GeometryAugment(nn.Module):
         a_rot = ((a_rot + π) % (2*π)) - π
 
         # Random Translation
-        dx = (torch.rand(B, 1, device=device) * 2 - 1) * self.translate_range
-        dy = (torch.rand(B, 1, device=device) * 2 - 1) * self.translate_range
+        dx = (
+            torch.rand(B, 1, device=device, generator=generator) * 2 - 1
+        ) * self.translate_range
+        dy = (
+            torch.rand(B, 1, device=device, generator=generator) * 2 - 1
+        ) * self.translate_range
         x_rot = x_rot + dx
         y_rot = y_rot + dy
 

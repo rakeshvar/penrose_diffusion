@@ -35,3 +35,6 @@ class AbstractModel(nn.Module, ABC):
 
     def runtime_setup(self, *args, **kwargs):
         return
+
+    def runtime_teardown(self):
+        return

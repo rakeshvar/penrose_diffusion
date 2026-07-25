@@ -167,4 +167,10 @@ flow:
 
 otfm:
   model:
-    diffuser: "flow"
+    diffuser: "otfm"
+    loss: "npl"
+    io_dim: 3
+    representation: "scaled_xya"
+    ot_async_prefetch: true
+    ot_workers: 8
+    ot_seed: null

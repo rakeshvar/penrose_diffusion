@@ -1,3 +1,4 @@
+import math
 from itertools import repeat
 import torch
 
@@ -27,6 +28,64 @@ def xyac_to_svgs(xyac, symmetry, side, save_paths=repeat(None), print_ok=False):
 #------------------------------------------------------------------------------
 # Tensor Ops
 #------------------------------------------------------------------------------
+
+ANGLE_SCALE = math.sqrt(3.) / math.pi
+
+
+def wrap_angle(angle):
+    """Wrap angles in radians to [-π, π)."""
+    return torch.remainder(angle + math.pi, 2. * math.pi) - math.pi
+
+
+def xya_to_scaled(xya):
+    """
+    Convert (x, y, angle) to unit-variance (x, y, scaled_angle).
+
+    A uniform angle on [-π, π) has variance π²/3, so multiplying by
+    √3/π maps it to Uniform(-√3, √3), which has unit variance.
+    """
+    scaled = torch.stack(
+        (xya[..., 0], xya[..., 1], wrap_angle(xya[..., 2]) * ANGLE_SCALE),
+        dim=-1,
+    )
+    colors = xya[..., 3] if xya.shape[-1] > 3 else None
+    return scaled, colors
+
+
+def scaled_to_xyac(scaled_xya, colors=None):
+    """Convert (x, y, scaled_angle) to radians, optionally appending color."""
+    angle = wrap_angle(scaled_xya[..., 2] / ANGLE_SCALE)
+    if colors is None:
+        return torch.stack(
+            (scaled_xya[..., 0], scaled_xya[..., 1], angle),
+            dim=-1,
+        )
+    return torch.stack(
+        (scaled_xya[..., 0], scaled_xya[..., 1], angle, colors),
+        dim=-1,
+    )
+
+
+def sample_ot_noise(shape, device, dtype=torch.float32, generator=None):
+    """Sample `(x, y, scaled_angle)` from N(0,I₂) × U(-√3,√3)."""
+    if len(shape) != 3 or shape[-1] != 3:
+        raise ValueError(f"Expected a (B, N, 3) shape, got {shape}")
+    xy = torch.randn(
+        (*shape[:-1], 2),
+        device=device,
+        dtype=dtype,
+        generator=generator,
+    )
+    angle = (
+        torch.rand(
+            (*shape[:-1], 1),
+            device=device,
+            dtype=dtype,
+            generator=generator,
+        ) * 2. - 1.
+    ) * math.sqrt(3.)
+    return torch.cat((xy, angle), dim=-1)
+
 
 def get_random_colors(symmetry, batch_size, num_tiles, device):
     prob = {6: 1/3, 5: (3-5**0.5)/2}[symmetry]

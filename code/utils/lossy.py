@@ -1,4 +1,7 @@
 import math
+import os
+from concurrent.futures import ThreadPoolExecutor
+
 import numpy as np
 from scipy.optimize import linear_sum_assignment
 import torch
@@ -120,6 +123,75 @@ def sinkhorn_permutation_onestep(log_P: torch.Tensor) -> torch.Tensor:
 #---------------------------
 # LSA Loss (Scipy)
 #---------------------------
+def _solve_unconstrained_lsa(cost):
+    """Return column index assigned to every row of one square cost matrix."""
+    row_ind, col_ind = linear_sum_assignment(cost)
+    permutation = np.empty(cost.shape[0], dtype=np.int64)
+    permutation[row_ind] = col_ind
+    return permutation
+
+
+class ScipyBatchedLSA:
+    """Persistent threaded solver for independent dense assignment problems."""
+    def __init__(self, max_workers=None):
+        available = os.cpu_count() or 1
+        self.max_workers = max(1, min(int(max_workers or available), available))
+        self._executor = (
+            ThreadPoolExecutor(max_workers=self.max_workers)
+            if self.max_workers > 1
+            else None
+        )
+        self._closed = False
+
+    def solve_numpy(self, cost):
+        """Solve a `(B, N, N)` NumPy cost array and return `(B, N)` indices."""
+        if self._closed:
+            raise RuntimeError("ScipyBatchedLSA is closed")
+        if cost.ndim != 3 or cost.shape[1] != cost.shape[2]:
+            raise ValueError(f"Expected square batched costs, got shape {cost.shape}")
+
+        if self._executor is None:
+            permutations = [_solve_unconstrained_lsa(matrix) for matrix in cost]
+        else:
+            permutations = list(self._executor.map(_solve_unconstrained_lsa, cost))
+        return np.stack(permutations)
+
+    def solve(self, cost):
+        """Synchronously solve a tensor cost batch and return indices on its device."""
+        permutation = self.solve_numpy(cost.detach().cpu().numpy())
+        return torch.from_numpy(permutation).to(cost.device, non_blocking=True)
+
+    def close(self):
+        if not self._closed:
+            if self._executor is not None:
+                self._executor.shutdown(wait=True)
+            self._closed = True
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc_value, traceback):
+        self.close()
+
+
+def ot_cost_matrix(x0, noise):
+    """Squared Euclidean tile costs with shape `(B, N, N)`."""
+    if x0.shape != noise.shape or x0.ndim != 3:
+        raise ValueError(f"Expected matching (B, N, D) tensors, got {x0.shape} and {noise.shape}")
+    return torch.cdist(x0, noise).square()
+
+
+def gather_by_permutation(values, permutation):
+    """Gather `(B, N, D)` values according to a `(B, N)` permutation."""
+    if values.ndim != 3 or permutation.shape != values.shape[:2]:
+        raise ValueError(
+            f"Expected values (B, N, D) and permutation (B, N), got "
+            f"{values.shape} and {permutation.shape}"
+        )
+    indices = permutation.unsqueeze(-1).expand(-1, -1, values.shape[-1])
+    return values.gather(1, indices)
+
+
 def lsa_ordering_scipy(cost_np, colors_np):
     """
     Computes optimal assignment indices using scipy's linear_sum_assignment.

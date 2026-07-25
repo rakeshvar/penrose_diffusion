@@ -1,6 +1,8 @@
 # pyright: reportIndexIssue=false
 import torch
 import torch.nn as nn
+from code.utils.advanced import sample_ot_noise
+from code.utils.lossy import gather_by_permutation, ot_cost_matrix
 from code.utils.registry import Registry
 from code.compatibility import maybe_mark_step
 
@@ -105,9 +107,9 @@ class Diffuser(nn.Module):
 #------------------------------------------------------------------------------
 # Optimal Transport Flow Matcher
 #------------------------------------------------------------------------------
-@register_diffuser('flow', 'otfm')
+@register_diffuser('flow')
 class FlowMatcher(nn.Module):
-    """Optimal Transport Flow Matching (OT-FM) process manager"""
+    """Linear flow-matching process manager."""
     def __init__(self, ndims, num_timesteps=1000):
         super().__init__()
         self.num_timesteps = num_timesteps
@@ -182,4 +184,61 @@ class FlowMatcher(nn.Module):
             x = self.p_sample(x, v_hat, t, dt=dt_tensor)
             maybe_mark_step()
 
+        return x
+
+
+@register_diffuser('otfm')
+class OTFlowMatcher(FlowMatcher):
+    """Tile-level OT flow matching with a structured three-dimensional base."""
+
+    def q_sample(self, x0, t, ϵ=None, matcher=None):
+        if x0.shape[-1] != 3:
+            raise ValueError(f"OTFM expects scaled (x, y, angle), got {x0.shape}")
+        if ϵ is None:
+            ϵ = sample_ot_noise(x0.shape, x0.device, x0.dtype)
+            if matcher is None:
+                raise ValueError("OTFM requires matched noise or an assignment matcher")
+            permutation = matcher.solve(ot_cost_matrix(x0, ϵ))
+            ϵ = gather_by_permutation(ϵ, permutation)
+
+        s = t.to(dtype=x0.dtype) / (self.num_timesteps - 1)
+        s_view = s.view(-1, *([1] * self.ndims))
+        xt = (1. - s_view) * x0 + s_view * ϵ
+        return xt, ϵ - x0
+
+    def get_sigmas(self, t):
+        s = t.float() / (self.num_timesteps - 1)
+        s_view = s.view(-1, *([1] * self.ndims))
+        return (1. - s_view), s_view.square()
+
+    def recover_target(self, xt, t, x0):
+        s = t.to(dtype=xt.dtype) / (self.num_timesteps - 1)
+        s_view = s.view(-1, *([1] * self.ndims))
+        if torch.any(s_view == 0):
+            raise ValueError("Velocity cannot be recovered from x_t at t=0")
+        return (xt - (1. - s_view) * x0) / s_view
+
+    def recover_x0(self, xt, t, target_hat):
+        s = t.to(dtype=xt.dtype) / (self.num_timesteps - 1)
+        s_view = s.view(-1, *([1] * self.ndims))
+        return xt - s_view * target_hat
+
+    @torch.no_grad()
+    def sample(self, denoiser, colors, labels, num_steps=50, **kwargs):
+        device = next(denoiser.parameters()).device
+        B, N = colors.shape
+        if denoiser.io_dim != 3:
+            raise ValueError(f"OTFM denoiser must use io_dim=3, got {denoiser.io_dim}")
+        x = sample_ot_noise((B, N, 3), device=device)
+        times = torch.linspace(self.num_timesteps - 1, 0, num_steps + 1, device=device)
+
+        for i in range(num_steps):
+            t_current = times[i]
+            t_next = times[i + 1]
+            dt = t_current - t_next
+            t = torch.full((B,), t_current.long(), device=device, dtype=torch.long)
+            velocity = denoiser(x, colors, t, labels)
+            dt_tensor = torch.full_like(t, dt, dtype=torch.float)
+            x = self.p_sample(x, velocity, t, dt=dt_tensor)
+            maybe_mark_step()
         return x

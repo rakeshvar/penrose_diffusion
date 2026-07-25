@@ -53,7 +53,8 @@ def train_fn(rank:int, config:Config):
         'sampler': distributed_sampler,
         'shuffle': distributed_sampler is None,           # distributed_sampler handles shuffling
         'num_workers': 0 if distributed_sampler else 4,   # distributed_sampler handles multi-threading
-        'drop_last': True
+        'drop_last': True,
+        'pin_memory': config.model.get('diffuser') == 'otfm' and device.type == 'cuda',
     }
     data_loader = DataLoader(dataset, **loader_args)
     device_data_loader = compat.get_loader(data_loader, device)  # Pre-fetch to device
@@ -132,13 +133,30 @@ def train_fn(rank:int, config:Config):
         aux_loss_sums = torch.zeros(num_aux_losses, device=device)
         count = 0
 
-        # Enable progress bar only on master process
-        progressbar = tqdm(device_data_loader, disable = not is_master)
+        # OTFM owns device prefetch so batch k+1 can match while batch k trains.
+        uses_prepared_batches = getattr(model, 'uses_prepared_batches', False)
+        if uses_prepared_batches:
+            raw_loader = (
+                data_loader
+                if device.type == 'cuda' and config.model.get('ot_async_prefetch', True)
+                else device_data_loader
+            )
+            training_batches = model.iter_training_batches(raw_loader)
+            progressbar = tqdm(
+                training_batches,
+                total=len(data_loader),
+                disable=not is_master,
+            )
+        else:
+            progressbar = tqdm(device_data_loader, disable=not is_master)
 
         for batch in progressbar:
-            xya, colors, labels = batch
             try:
-                loss, aux_losses = model.train_step(xya, colors, labels)
+                if uses_prepared_batches:
+                    loss, aux_losses = model.train_prepared_step(batch)
+                else:
+                    xya, colors, labels = batch
+                    loss, aux_losses = model.train_step(xya, colors, labels)
             except RuntimeError as e:
                 print(f"RuntimeError in Epoch {epoch} at Batch {count}. Total Loss: {total_loss:.4f}")
                 raise e
@@ -163,6 +181,9 @@ def train_fn(rank:int, config:Config):
             'grad_norm': nn_utils.clip_grad_norm_(model.parameters(), float('inf')),
             'learning_rate': optimizer.param_groups[0]['lr'],
         }
+        if uses_prepared_batches:
+            to_log['performance/ot_wait_ms'] = model.ot_mean_wait_ms
+            mprint(f"OT prefetch exposed wait: {model.ot_mean_wait_ms:.3f} ms/batch")
         # Add averaged aux losses
         aux_loss_avgs = (aux_loss_sums / count).cpu().numpy()
         for name, value in zip(model.aux_loss_names, aux_loss_avgs):
@@ -185,6 +206,7 @@ def train_fn(rank:int, config:Config):
         wandblog.log_step(to_log, step=epoch)
         mprint(f"Epoch {epoch} done. Average Loss: {avg_loss:.4f}\n")
 
+    model.runtime_teardown()
     wandblog.finish()
     mprint("\n======\nDone!\n======")
 
