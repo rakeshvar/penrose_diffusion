@@ -14,6 +14,7 @@ from ..base_model import AbstractModel
 from .direct_denoiser import TransformerDenoiser
 from .isab_denoiser import ISABDenoiser
 from .direct_losses import loss_registry
+from .margin_prior import AttentionPriorMargin
 from .ot_prefetch import OTBatchPrefetcher, PreparedOTBatch
 
 
@@ -54,10 +55,29 @@ class DirectDiffusionModel(AbstractModel):
         LossClass = loss_registry[model_config['loss']]
         self.loss_functor = LossClass()
 
+        # Stability-margin regularizer (attention prior, arXiv:2602.22271)
+        self.margin_lambda = float(model_config.get('margin_lambda') or 0.)
+        self.margin_prior = None
+        if self.margin_lambda > 0.:
+            self.margin_prior = AttentionPriorMargin(
+                model_config['d_model'],
+                prior_dim=model_config.get('margin_prior_dim') or 8,
+            )
+
     @property
     def descriptor(self):
         name = 'dir' if self.config['model'] == 'direct' else 'isa'
-        return f"{name}{self.denoiser.d_model}x{self.config['num_layers']}_{self.loss_functor.abbr}"
+        desc = f"{name}{self.denoiser.d_model}x{self.config['num_layers']}_{self.loss_functor.abbr}"
+        if self.margin_prior is not None:
+            desc += f"_mrg{self.margin_lambda:g}"
+        return desc
+
+    def _apply_margin(self, loss, xt, colors, t, cls):
+        """Add the stability-margin penalty; returns (loss, aux_losses)."""
+        if self.margin_prior is None:
+            return loss, torch.tensor([], device=self.device)
+        margin = self.margin_prior(self.denoiser.embed(xt, colors, t.float(), cls))
+        return loss + self.margin_lambda * margin, margin.detach().reshape(1)
 
     def _train_from_endpoints(self, x0, noise, colors, cls):
         self.train()
@@ -74,8 +94,7 @@ class DirectDiffusionModel(AbstractModel):
             t,
             diffuser=self.diffuser,
         )
-        aux_losses = torch.tensor([], device=self.device)
-        return loss, aux_losses
+        return self._apply_margin(loss, xt, colors, t, cls)
 
     def train_prepared_step(self, batch: PreparedOTBatch):
         if not self.is_otfm:
@@ -108,8 +127,7 @@ class DirectDiffusionModel(AbstractModel):
         # Compute loss
         loss = self.loss_functor(xysc, xysc_t, target, target_hat, colors, t, diffuser=self.diffuser)
 
-        aux_losses = torch.tensor([], device=self.device)
-        return loss, aux_losses
+        return self._apply_margin(loss, xysc_t, colors, t, cls)
 
     def passthrough(self, xya, colors, cls):
         self.denoiser.eval()
@@ -128,7 +146,7 @@ class DirectDiffusionModel(AbstractModel):
 
     @property
     def aux_loss_names(self):
-        return []
+        return ['margin'] if self.margin_prior is not None else []
 
     def sample(self, colors, labels, num_steps):
         sample = self.diffuser.sample(

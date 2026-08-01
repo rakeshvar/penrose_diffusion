@@ -166,6 +166,26 @@ $$
 L_{lattice} = \sum_i d^\star_i - 1 -\log d^\star_i
 $$
 
+- **Stability-Margin Loss (`margin_lambda`)**: A port of the attention-prior regularizer from [*Support Tokens, Stability Margins, and a New Foundation for Robust LLMs*](https://arxiv.org/abs/2602.22271) to the set-diffusion setting. Viewing set attention over the noisy tiles as a latent-noise generator $u_i = \mu_i(u) + \epsilon_i$, the exact log-density contains a log-Jacobian term for the residual map $e_i = u_i - \mu_i(u)$. Because attention weights depend on $u_i$ through the query, the diagonal Jacobian block is
+
+$$
+\frac{\partial e_i}{\partial u_i} = I - \Sigma_i A, \qquad A = W_K^\top W_Q / \sqrt{p},
+$$
+
+  where $\Sigma_i$ is the attention-weighted covariance of the attended tile embeddings. The penalty is the log-barrier
+
+$$
+L_{margin} = -\frac{1}{N}\sum_i \log\left|\det\left(I - \Sigma_i A\right)\right|,
+$$
+
+  which diverges as any tile's attention geometry approaches the degeneracy boundary $\det(I - \Sigma_i A) = 0$. In diffusion terms, each reverse step $x_{t-1} = \mu_\theta(x_t) + \sigma_t \epsilon$ is exactly the latent-noise generative rule analyzed in the paper, so the barrier keeps the per-step denoising map well-conditioned. The prior is a single lightweight attention stage over the denoiser's input embeddings (projected to `margin_prior_dim` dimensions) and is enabled via `margin_lambda` (paper suggests 0.02–0.05):
+
+```bash
+python train.py is128 datasets/hex.npz -m margin_lambda=0.05
+```
+
+  Tiles with the largest barrier contribution are the *support tiles* — the set elements whose local context geometry constrains stability, analogous to support vectors in SVMs.
+
 ## Output
 
 We provide a comprehensive **SVG** engine to visualize outputs. Unlike pixel plots, our scripts generate resolution-independent `svg` files, allowing us to inspect individual tile placements, angles, and types. This keeps the view scalable and customizable.

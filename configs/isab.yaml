@@ -14,6 +14,8 @@ _ismc: &ismc
   model: "isab"
   diffuser: "ddpm"
   loss: "shl"
+  margin_lambda: 0.0     # Stability-margin penalty weight (0 = off); paper suggests 0.02-0.05
+  margin_prior_dim: 8    # Dimension of the attention-prior space
 
 is32:
   <<: *isabcommon

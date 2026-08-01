@@ -110,13 +110,8 @@ class ISABDenoiser(nn.Module):
             nn.Linear(d_model, io_dim)
         )
 
-    def forward(self, xysc, colors, t, class_labels):
-        """
-        xysc: (B, N, 4)
-        colors: (B, N)
-        t: (B,)
-        class_labels: (B,)
-        """
+    def embed(self, xysc, colors, t, class_labels):
+        """Conditioned tile-token embeddings (B, N, D), before the ISAB stack."""
         # project to d_model
         h = self.input_proj(xysc)                           # B, N, D
 
@@ -129,7 +124,16 @@ class ISABDenoiser(nn.Module):
         time_emb = self.time_embed(t).unsqueeze(1)
         class_emb = self.class_embed(class_labels)
         class_emb = self.class_proj(class_emb).unsqueeze(1)
-        h = h + time_emb + class_emb
+        return h + time_emb + class_emb
+
+    def forward(self, xysc, colors, t, class_labels):
+        """
+        xysc: (B, N, 4)
+        colors: (B, N)
+        t: (B,)
+        class_labels: (B,)
+        """
+        h = self.embed(xysc, colors, t, class_labels)
 
         # Process through ISAB layers (Permutation Invariant)
         for layer in self.layers:
