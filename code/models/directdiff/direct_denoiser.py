@@ -73,6 +73,17 @@ class TransformerDenoiser(nn.Module):
         )
 
 
+    def _context(self, t, class_labels):
+        time_emb = self.time_embed(t).unsqueeze(1)          # B, 1, D
+        class_emb = self.class_embed(class_labels)          # B, class_embed_dim
+        class_emb = self.class_proj(class_emb).unsqueeze(1) # B, 1, D
+        return time_emb + class_emb
+
+    def embed(self, xysc, colors, t, class_labels):
+        """Conditioned tile-token embeddings (B, N, D), before the trunk."""
+        h = self.input_proj(xysc) + self.color_embed(colors)
+        return h + self._context(t, class_labels)
+
     def forward(self, xysc, colors, t, class_labels):
         """
         Args:
@@ -99,10 +110,7 @@ class TransformerDenoiser(nn.Module):
         h = torch.cat([global_tokens, h], dim=1)            # B, G+N, D
 
         # time & class
-        time_emb = self.time_embed(t).unsqueeze(1)          # B, 1, D
-        class_emb = self.class_embed(class_labels)          # B, class_embed_dim
-        class_emb = self.class_proj(class_emb).unsqueeze(1) # B, 1, D
-        h = h + time_emb + class_emb
+        h = h + self._context(t, class_labels)
 
         # process
         h = self.transformer(h)                             # B, G+N, D
