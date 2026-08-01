@@ -199,9 +199,13 @@ def train_fn(rank:int, config:Config):
             svg_fname = f"sv{config.timestamp}_e{epoch:03d}_{sample_name}.svg"
             ckptr.save_svg(svg, svg_fname)                                    # type: ignore
             wandblog.lsvg(epoch, svg, sample_label, sample_name)
-            loss_lattice = lattice_loss(dataset.symmetry, samples, dataset.side)
-            to_log['loss/lattice_sample'] = loss_lattice
-            mprint(f"Lattice loss: {loss_lattice:.4f}")
+            try:
+                loss_lattice = lattice_loss(dataset.symmetry, samples, dataset.side)
+            except NotImplementedError:
+                mprint(f"Lattice loss is not implemented for symmetry {dataset.symmetry}; skipping.")
+            else:
+                to_log['loss/lattice_sample'] = loss_lattice
+                mprint(f"Lattice loss: {loss_lattice:.4f}")
 
         wandblog.log_step(to_log, step=epoch)
         mprint(f"Epoch {epoch} done. Average Loss: {avg_loss:.4f}\n")

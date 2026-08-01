@@ -191,14 +191,16 @@ class FlowMatcher(nn.Module):
 class OTFlowMatcher(FlowMatcher):
     """Tile-level OT flow matching with a structured three-dimensional base."""
 
-    def q_sample(self, x0, t, ϵ=None, matcher=None):
+    def q_sample(self, x0, t, ϵ=None, matcher=None, colors=None):
         if x0.shape[-1] != 3:
             raise ValueError(f"OTFM expects scaled (x, y, angle), got {x0.shape}")
         if ϵ is None:
             ϵ = sample_ot_noise(x0.shape, x0.device, x0.dtype)
             if matcher is None:
                 raise ValueError("OTFM requires matched noise or an assignment matcher")
-            permutation = matcher.solve(ot_cost_matrix(x0, ϵ))
+            if colors is None:
+                raise ValueError("OTFM assignment requires tile colors")
+            permutation = matcher.solve(ot_cost_matrix(x0, ϵ), colors)
             ϵ = gather_by_permutation(ϵ, permutation)
 
         s = t.to(dtype=x0.dtype) / (self.num_timesteps - 1)

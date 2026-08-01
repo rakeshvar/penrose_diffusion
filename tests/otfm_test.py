@@ -4,6 +4,7 @@ from types import SimpleNamespace
 
 import numpy as np
 import torch
+from scipy.optimize import linear_sum_assignment
 from torch import nn
 
 from code.augment import GeometryAugment
@@ -62,6 +63,8 @@ class ScipyBatchedLSATest(unittest.TestCase):
         self.x0 = torch.randn((4, 12, 3), generator=generator)
         self.noise = torch.randn((4, 12, 3), generator=generator)
         self.cost = ot_cost_matrix(self.x0, self.noise)
+        # Alternating colors so unconstrained OT often wants to cross classes.
+        self.colors = torch.tensor([[i % 2 for i in range(12)]] * 4)
 
     def test_threaded_solver_returns_optimal_permutations(self):
         with ScipyBatchedLSA(max_workers=1) as serial:
@@ -77,9 +80,36 @@ class ScipyBatchedLSATest(unittest.TestCase):
                 np.sort(permutation.numpy()), np.arange(self.noise.shape[1])
             )
 
+    def test_color_constrained_assignment_stays_within_color(self):
+        with ScipyBatchedLSA(max_workers=4) as solver:
+            unconstrained = solver.solve(self.cost)
+            constrained = solver.solve(self.cost, self.colors)
+
+        # Unconstrained OT on this fixture crosses colors; color LSA must not.
+        crossed = False
+        for batch in range(len(self.colors)):
+            src = self.colors[batch]
+            dst = self.colors[batch, unconstrained[batch]]
+            crossed = crossed or bool((src != dst).any())
+            torch.testing.assert_close(
+                self.colors[batch],
+                self.colors[batch, constrained[batch]],
+            )
+            for color in (0, 1):
+                select = (self.colors[batch] == color).nonzero(as_tuple=False).squeeze(-1)
+                sub = self.cost[batch].index_select(0, select).index_select(1, select)
+                local = constrained[batch, select]
+                # Map global column indices back into the color block.
+                inverse = torch.empty_like(constrained[batch])
+                inverse[select] = torch.arange(len(select))
+                local_cols = inverse[local]
+                _, expected_cols = linear_sum_assignment(sub.numpy())
+                np.testing.assert_array_equal(local_cols.numpy(), expected_cols)
+        self.assertTrue(crossed, "fixture should exercise cross-color unconstrained OT")
+
     def test_gather_preserves_each_noise_multiset(self):
         with ScipyBatchedLSA(max_workers=2) as solver:
-            permutation = solver.solve(self.cost)
+            permutation = solver.solve(self.cost, self.colors)
         matched = gather_by_permutation(self.noise, permutation)
 
         for batch in range(len(self.noise)):
@@ -123,11 +153,15 @@ class OTBatchPrefetcherTest(unittest.TestCase):
             self.assertEqual(batch.x0.shape, (4, 10, 3))
             self.assertEqual(batch.noise.shape, (4, 10, 3))
             with ScipyBatchedLSA(max_workers=1) as solver:
-                rematch = solver.solve(ot_cost_matrix(batch.x0, batch.noise))
+                rematch = solver.solve(
+                    ot_cost_matrix(batch.x0, batch.noise),
+                    batch.colors,
+                )
             identity = torch.arange(10).expand(4, -1)
             cost = ot_cost_matrix(batch.x0, batch.noise)
             identity_cost = cost.gather(2, identity.unsqueeze(-1)).sum()
             optimal_cost = cost.gather(2, rematch.unsqueeze(-1)).sum()
+            # Color-constrained rematch: identity must already be optimal within colors.
             torch.testing.assert_close(identity_cost, optimal_cost)
 
     def test_cpu_fallback_is_deterministic_with_dedicated_seed(self):

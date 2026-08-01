@@ -148,14 +148,12 @@ class CheckPointer:
 
     def _keep_only_last_n(self, saved_paths, path: str, loss=None):
         saved_paths.append((path, loss))
-        if loss is not None:
-            saved_paths.sort(key=lambda x: x[1])
 
         while len(saved_paths) > self.keep_last_n:
-            to_remove, loss_max = saved_paths.pop()
+            to_remove, removed_loss = saved_paths.pop(0)
             self._delete_resource(to_remove)
-            print(f" - Deleted      : {to_remove}"
-                  f"   -(Loss: {loss_max:.4f})" if loss_max is not None else "")
+            loss_suffix = f"   -(Loss: {removed_loss:.4f})" if removed_loss is not None else ""
+            print(f" - Deleted      : {to_remove}{loss_suffix}")
 
     def _delete_resource(self, path: str):
         if self.is_local:

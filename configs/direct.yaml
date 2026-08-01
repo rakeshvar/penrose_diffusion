@@ -49,6 +49,14 @@ _dm256: &dm256
   num_layers: 6
   dropout: 0.2
 
+_dm512: &dm512
+  class_embed_dim: 128
+  time_embed_dim: 256
+  d_model: 512
+  num_heads: 16
+  num_layers: 8
+  dropout: 0.2
+
 #---------------
 # Configs
 #---------------
@@ -75,3 +83,9 @@ dd256:
   model:
     <<: *dmc
     <<: *dm256
+
+dd512:
+  <<: *directcommon
+  model:
+    <<: *dmc
+    <<: *dm512

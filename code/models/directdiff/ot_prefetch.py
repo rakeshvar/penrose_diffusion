@@ -22,6 +22,7 @@ class PreparedOTBatch:
 class _BufferSlot:
     in_use: bool = False
     cost_cpu: torch.Tensor | None = None
+    colors_cpu: torch.Tensor | None = None
     permutation_cpu: torch.Tensor | None = None
     release_event: torch.cuda.Event | None = None
 
@@ -70,13 +71,25 @@ class OTBatchPrefetcher:
             self._stream = None
             self._coordinator = None
 
-    def _allocate_slot(self, slot, batch, tiles, dtype):
+    def _allocate_slot(self, slot, batch, tiles, dtype, colors_dtype):
         cost_shape = (batch, tiles, tiles)
+        colors_shape = (batch, tiles)
         permutation_shape = (batch, tiles)
         if slot.cost_cpu is None or slot.cost_cpu.shape != cost_shape or slot.cost_cpu.dtype != dtype:
             slot.cost_cpu = torch.empty(
                 cost_shape,
                 dtype=dtype,
+                device="cpu",
+                pin_memory=True,
+            )
+        if (
+            slot.colors_cpu is None
+            or slot.colors_cpu.shape != colors_shape
+            or slot.colors_cpu.dtype != colors_dtype
+        ):
+            slot.colors_cpu = torch.empty(
+                colors_shape,
+                dtype=colors_dtype,
                 device="cpu",
                 pin_memory=True,
             )
@@ -90,7 +103,7 @@ class OTBatchPrefetcher:
         if slot.release_event is None:
             slot.release_event = torch.cuda.Event()
 
-    def _acquire_slot(self, batch, tiles, dtype):
+    def _acquire_slot(self, batch, tiles, dtype, colors_dtype):
         for offset in range(len(self._slots)):
             index = (self._next_slot + offset) % len(self._slots)
             slot = self._slots[index]
@@ -98,7 +111,7 @@ class OTBatchPrefetcher:
                 continue
             if slot.release_event is not None:
                 slot.release_event.synchronize()
-            self._allocate_slot(slot, batch, tiles, dtype)
+            self._allocate_slot(slot, batch, tiles, dtype, colors_dtype)
             slot.in_use = True
             self._next_slot = (index + 1) % len(self._slots)
             return slot
@@ -107,16 +120,21 @@ class OTBatchPrefetcher:
     def _solve_after_copy(self, event, slot):
         event.synchronize()
         assert slot.cost_cpu is not None
+        assert slot.colors_cpu is not None
         assert slot.permutation_cpu is not None
-        permutation = self.solver.solve_numpy(slot.cost_cpu.numpy())
+        permutation = self.solver.solve_numpy(
+            slot.cost_cpu.numpy(),
+            slot.colors_cpu.numpy(),
+        )
         slot.permutation_cpu.copy_(torch.from_numpy(permutation))
 
     def _prepare_async(self, xya, colors, labels):
         batch, tiles, _ = xya.shape
-        slot = self._acquire_slot(batch, tiles, xya.dtype)
+        slot = self._acquire_slot(batch, tiles, xya.dtype, colors.dtype)
         assert self._stream is not None
         assert self._coordinator is not None
         assert slot.cost_cpu is not None
+        assert slot.colors_cpu is not None
 
         with torch.cuda.stream(self._stream):
             xya_device = xya.to(self.device, non_blocking=True)
@@ -132,6 +150,7 @@ class OTBatchPrefetcher:
             )
             cost = ot_cost_matrix(x0, noise)
             slot.cost_cpu.copy_(cost, non_blocking=True)
+            slot.colors_cpu.copy_(colors_device, non_blocking=True)
             ready_event = torch.cuda.Event()
             ready_event.record(self._stream)
 
@@ -158,7 +177,7 @@ class OTBatchPrefetcher:
             dtype=x0.dtype,
             generator=self.generator,
         )
-        permutation = self.solver.solve(ot_cost_matrix(x0, noise))
+        permutation = self.solver.solve(ot_cost_matrix(x0, noise), colors_device)
         prepared = PreparedOTBatch(
             x0=x0,
             noise=gather_by_permutation(noise, permutation),

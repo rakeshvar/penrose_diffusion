@@ -53,11 +53,11 @@ def _lattice_loss_quadratic(xy_hat, min_dist_to_nearest, max_dist_to_nearest, ep
 #---------------------------
 # Lattice Loss (NN attract + global log-repel)
 #---------------------------
-def _lattice_loss_logarithmic(xy_hat, min_dist_to_nearest, max_dist_to_nearest, eps=1e-6):
+def _lattice_loss_logarithmic(xy_hat, min_dist_to_nearest, max_dist_to_nearest, eps=1e-6, eps2=1e-6):
     sq_dist = sq_dists(xy_hat)
     dist = torch.sqrt(sq_dist+eps)
 
-    eps2 = 1e-2 # To be safe on TPUs with bp16
+    # eps2 is to be safe on TPUs with bp16
 
     # nearest-neighbor attraction
     d_nn = dist.min(dim=-1)[0]
@@ -99,6 +99,8 @@ def lattice_loss(symmetry, xy_hat, unit_side, algo="logarithmic"):
 def sinkhorn_permutation(log_K: torch.Tensor, n_iters: int = 7) -> torch.Tensor:
     """
     Batched Sinkhorn in log-space.
+    This is just iterative row and column normalization. (u, v) are row and column sums.
+    Args:
         log_K: [B, N, N] : - ||xi - xj||^2 / 2*σ^2
     Returns:
         P: [B, N, N] doubly-stochastic matrices
@@ -116,8 +118,8 @@ def sinkhorn_permutation(log_K: torch.Tensor, n_iters: int = 7) -> torch.Tensor:
     return torch.exp(log_P)
 
 def sinkhorn_permutation_onestep(log_P: torch.Tensor) -> torch.Tensor:
-    log_P = log_P - torch.logsumexp(log_P, dim=2, keepdim=True)  # rows
-    log_P = log_P - torch.logsumexp(log_P, dim=1, keepdim=True)  # cols
+    log_P = log_P - torch.logsumexp(log_P, dim=2, keepdim=True)  # normalize rows
+    log_P = log_P - torch.logsumexp(log_P, dim=1, keepdim=True)  # normalize cols
     return torch.exp(log_P)
 
 #---------------------------
@@ -129,6 +131,31 @@ def _solve_unconstrained_lsa(cost):
     permutation = np.empty(cost.shape[0], dtype=np.int64)
     permutation[row_ind] = col_ind
     return permutation
+
+
+def _solve_color_constrained_lsa(cost, colors):
+    """
+    Exact LSA within each color class (same contract as `lsa_ordering_scipy`).
+
+    Cross-color matches are forbidden: each color block is solved independently
+    on the submatrix indexed by that color on both axes.
+    """
+    permutation = np.empty(cost.shape[0], dtype=np.int64)
+    for color in np.unique(colors):
+        select = np.where(colors == color)[0]
+        if select.size == 0:
+            continue
+        sub_cost = cost[np.ix_(select, select)]
+        row_ind, col_ind = linear_sum_assignment(sub_cost)
+        permutation[select[row_ind]] = select[col_ind]
+    return permutation
+
+
+def _solve_lsa_pair(args):
+    cost, colors = args
+    if colors is None:
+        return _solve_unconstrained_lsa(cost)
+    return _solve_color_constrained_lsa(cost, colors)
 
 
 class ScipyBatchedLSA:
@@ -143,22 +170,36 @@ class ScipyBatchedLSA:
         )
         self._closed = False
 
-    def solve_numpy(self, cost):
-        """Solve a `(B, N, N)` NumPy cost array and return `(B, N)` indices."""
+    def solve_numpy(self, cost, colors=None):
+        """Solve a `(B, N, N)` NumPy cost array and return `(B, N)` indices.
+
+        When `colors` is provided as `(B, N)`, assignment is solved independently
+        within each color class (Sinkhorn / LSA convention).
+        """
         if self._closed:
             raise RuntimeError("ScipyBatchedLSA is closed")
         if cost.ndim != 3 or cost.shape[1] != cost.shape[2]:
             raise ValueError(f"Expected square batched costs, got shape {cost.shape}")
-
-        if self._executor is None:
-            permutations = [_solve_unconstrained_lsa(matrix) for matrix in cost]
+        if colors is not None:
+            if colors.shape != cost.shape[:2]:
+                raise ValueError(
+                    f"Expected colors shape {cost.shape[:2]}, got {colors.shape}"
+                )
+            color_rows = list(colors)
         else:
-            permutations = list(self._executor.map(_solve_unconstrained_lsa, cost))
+            color_rows = [None] * len(cost)
+
+        work = zip(cost, color_rows)
+        if self._executor is None:
+            permutations = [_solve_lsa_pair(item) for item in work]
+        else:
+            permutations = list(self._executor.map(_solve_lsa_pair, work))
         return np.stack(permutations)
 
-    def solve(self, cost):
+    def solve(self, cost, colors=None):
         """Synchronously solve a tensor cost batch and return indices on its device."""
-        permutation = self.solve_numpy(cost.detach().cpu().numpy())
+        colors_np = None if colors is None else colors.detach().cpu().numpy()
+        permutation = self.solve_numpy(cost.detach().cpu().numpy(), colors_np)
         return torch.from_numpy(permutation).to(cost.device, non_blocking=True)
 
     def close(self):
