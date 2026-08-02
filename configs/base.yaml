@@ -6,7 +6,8 @@ _default_train: &default_train
   batch_size: 64
   num_epochs: 101
   save_samples: true
-  save_interval: 10
+  save_interval: 1
+  keep_best_n: 5
 
 #---------------------------------------------------------
 # WandB

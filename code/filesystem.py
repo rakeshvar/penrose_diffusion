@@ -60,10 +60,10 @@ def load_checkpoint(checkpoint_path, model, optimizer, scheduler, mprint):
 # Checkpoint and SVG Output Manager
 #--------------------------------------------
 class CheckPointer:
-    def __init__(self, folder:str, identifier:str, keep_last_n:int=2):
+    def __init__(self, folder:str, identifier:str, keep_best_n:int=5):
         self.folder = folder.rstrip("/")
         self.name_format = identifier
-        self.keep_last_n = keep_last_n
+        self.keep_best_n = keep_best_n
 
         self.is_gcs = self.folder.startswith("gs://")
         self.is_local = not self.is_gcs
@@ -98,7 +98,15 @@ class CheckPointer:
         self.fixed_ckpt_data['wandb_run_id'] = wandb_run_id
 
 
-    def save_checkpoint(self, epoch, model, optimizer, scheduler, loss):
+    def save_checkpoint(
+        self,
+        epoch,
+        model,
+        optimizer,
+        scheduler,
+        loss,
+        is_final=False,
+    ):
         data = {
             'epoch': epoch,
             'model_state_dict': model.state_dict(),
@@ -119,10 +127,15 @@ class CheckPointer:
 
         print(f"Saved Checkpoint: {path}"
               f"   +(Loss: {loss:.4f})")
-        self._keep_only_last_n(self.saved_checkpoints, path, loss)
+        self._keep_only_best_n(
+            self.saved_checkpoints,
+            path,
+            loss,
+            is_final=is_final,
+        )
 
 
-    def save_svg(self, svg, file_name: str):
+    def save_svg(self, svg, file_name: str, loss, is_final=False):
         path = self.svg_folder + f"/{file_name}"
 
         if self.is_local:
@@ -135,7 +148,12 @@ class CheckPointer:
             self._upload_to_gcs(local_tmp_path, path)
 
         print(f"Saved SVG       : {path}")
-        self._keep_only_last_n(self.saved_svgs, path)
+        self._keep_only_best_n(
+            self.saved_svgs,
+            path,
+            loss,
+            is_final=is_final,
+        )
 
 
     def _upload_to_gcs(self, local_tmp_path: str, path: str):
@@ -146,14 +164,31 @@ class CheckPointer:
         Path(local_tmp_path).unlink()
 
 
-    def _keep_only_last_n(self, saved_paths, path: str, loss=None):
-        saved_paths.append((path, loss))
+    def _keep_only_best_n(
+        self,
+        saved_paths,
+        path: str,
+        loss,
+        *,
+        is_final=False,
+    ):
+        saved_paths.append((path, loss, is_final))
+        ranked = sorted(saved_paths, key=lambda item: item[1])
+        retained = ranked[:self.keep_best_n]
+        retained_paths = {item[0] for item in retained}
 
-        while len(saved_paths) > self.keep_last_n:
-            to_remove, removed_loss = saved_paths.pop(0)
+        for item in saved_paths:
+            if item[2] and item[0] not in retained_paths:
+                retained.append(item)
+                retained_paths.add(item[0])
+
+        for to_remove, removed_loss, _ in saved_paths:
+            if to_remove in retained_paths:
+                continue
             self._delete_resource(to_remove)
-            loss_suffix = f"   -(Loss: {removed_loss:.4f})" if removed_loss is not None else ""
-            print(f" - Deleted      : {to_remove}{loss_suffix}")
+            print(f" - Deleted      : {to_remove}   -(Loss: {removed_loss:.4f})")
+
+        saved_paths[:] = retained
 
     def _delete_resource(self, path: str):
         if self.is_local:

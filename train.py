@@ -130,7 +130,11 @@ def train_fn(rank:int, config:Config):
     # Initialize Checkpointer
     #--------------------------------------------
     if is_master:
-        ckptr = CheckPointer(config.output_base_dir, identifier)
+        ckptr = CheckPointer(
+            config.output_base_dir,
+            identifier,
+            keep_best_n=config.train['keep_best_n'],
+        )
         ckptr.add_fixed_ckpt_data(dataset, config.config, config.data_path_orig, wandblog.get_run_id())
 
     #--------------------------------------------
@@ -212,14 +216,27 @@ def train_fn(rank:int, config:Config):
             to_log["loss/"+name] = float(value)
             mprint(f"{name} = {value:.4f}")
 
-        if is_master and (epoch % config.train['save_interval'] == 0 or epoch == total_epochs - 1):
-          ckptr.save_checkpoint(epoch, model, optimizer, scheduler, avg_loss) # type: ignore
+        is_final_epoch = epoch == total_epochs - 1
+        if is_master and (epoch % config.train['save_interval'] == 0 or is_final_epoch):
+          ckptr.save_checkpoint(
+              epoch,
+              model,
+              optimizer,
+              scheduler,
+              avg_loss,
+              is_final=is_final_epoch,
+          ) # type: ignore
 
           if config.train['save_samples']:
             samples = model.sample(sample_colors, sample_label_tr, 50)
             svg = xyac_to_svgs(samples, dataset.symmetry, dataset.side)[0]
             svg_fname = f"sv{config.timestamp}_e{epoch:03d}_{sample_name}.svg"
-            ckptr.save_svg(svg, svg_fname)                                    # type: ignore
+            ckptr.save_svg(
+                svg,
+                svg_fname,
+                avg_loss,
+                is_final=is_final_epoch,
+            ) # type: ignore
             wandblog.lsvg(epoch, svg, sample_label, sample_name)
             try:
                 loss_lattice = lattice_loss(dataset.symmetry, samples, dataset.side)
