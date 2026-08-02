@@ -4,7 +4,12 @@ from pathlib import Path
 from tqdm import tqdm
 
 from torch.utils.data import DataLoader
-from torch.optim.lr_scheduler import LinearLR, CosineAnnealingLR, SequentialLR
+from torch.optim.lr_scheduler import (
+    CosineAnnealingLR,
+    LambdaLR,
+    LinearLR,
+    SequentialLR,
+)
 import torch.nn.utils as nn_utils
 
 import code.compatibility as compat
@@ -21,6 +26,23 @@ from code.models import get_model_class
 import warnings
 warnings.filterwarnings("ignore", message="enable_nested_tensor is True")
 warnings.filterwarnings("ignore", category=FutureWarning)
+
+
+def build_lr_scheduler(optimizer, peak_lr, num_epochs, *, min_lr_factor=0.1):
+    warmup_epochs = min(10, int(num_epochs * 0.05))
+    decay_epochs = num_epochs - warmup_epochs
+    scheduler1 = LinearLR(optimizer, start_factor=0.01, total_iters=warmup_epochs)
+    scheduler2 = CosineAnnealingLR(
+        optimizer,
+        T_max=decay_epochs,
+        eta_min=min_lr_factor * peak_lr,
+    )
+    scheduler3 = LambdaLR(optimizer, lr_lambda=lambda _: min_lr_factor)
+    return SequentialLR(
+        optimizer,
+        schedulers=[scheduler1, scheduler2, scheduler3],
+        milestones=[warmup_epochs, num_epochs],
+    )
 
 
 def train_fn(rank:int, config:Config):
@@ -71,11 +93,11 @@ def train_fn(rank:int, config:Config):
     model.runtime_setup(optimizer)
 
     # Scheduler (Create it NOW, before loading state)
-    warmup_epochs = min(10, int(config.train['num_epochs'] * 0.05))
-    decay_epochs = config.train['num_epochs'] - warmup_epochs
-    scheduler1 = LinearLR(optimizer, start_factor=0.01, total_iters=warmup_epochs)
-    scheduler2 = CosineAnnealingLR(optimizer, T_max=decay_epochs)
-    scheduler = SequentialLR(optimizer, schedulers=[scheduler1, scheduler2], milestones=[warmup_epochs])
+    scheduler = build_lr_scheduler(
+        optimizer,
+        config.train['lr'],
+        config.train['num_epochs'],
+    )
 
     load_checkpoint(config.checkpoint_path, model, optimizer, scheduler, mprint)
 

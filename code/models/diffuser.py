@@ -1,4 +1,6 @@
 # pyright: reportIndexIssue=false
+import math
+
 import torch
 import torch.nn as nn
 from code.utils.advanced import sample_ot_noise
@@ -191,6 +193,54 @@ class FlowMatcher(nn.Module):
 class OTFlowMatcher(FlowMatcher):
     """Tile-level OT flow matching with a structured three-dimensional base."""
 
+    TIME_SCHEDULES = (
+        'linear',
+        'sin',
+        'one_minus_cos',
+        'one_minus_sq',
+        'sqrt',
+        'smoothstep',
+        'exp_flip_k3',
+    )
+
+    def __init__(self, ndims, num_timesteps=1000, time_schedule='linear'):
+        super().__init__(ndims, num_timesteps)
+        if time_schedule not in self.TIME_SCHEDULES:
+            choices = ', '.join(self.TIME_SCHEDULES)
+            raise ValueError(
+                f"Unknown OTFM time schedule '{time_schedule}'; choose from: {choices}"
+            )
+        self.time_schedule = time_schedule
+
+    def warp_time(self, u):
+        """Warp unit-interval values according to the configured schedule."""
+        u = torch.as_tensor(u)
+        if self.time_schedule == 'linear':
+            return u
+        if self.time_schedule == 'sin':
+            return torch.sin(math.pi * u / 2.)
+        if self.time_schedule == 'one_minus_cos':
+            return 1. - torch.cos(math.pi * u / 2.)
+        if self.time_schedule == 'one_minus_sq':
+            return 1. - (1. - u).square()
+        if self.time_schedule == 'sqrt':
+            return torch.sqrt(u)
+        if self.time_schedule == 'smoothstep':
+            return 3. * u.square() - 2. * u.pow(3)
+        if self.time_schedule == 'exp_flip_k3':
+            return (1. - torch.exp(-3. * u)) / (1. - math.exp(-3.))
+        raise AssertionError(f"Unhandled OTFM time schedule: {self.time_schedule}")
+
+    def sample_training_times(self, batch_size, device, generator=None):
+        """Draw warped continuous model times for OTFM training."""
+        u = torch.rand(batch_size, device=device, generator=generator)
+        return self.warp_time(u) * (self.num_timesteps - 1)
+
+    def sampling_times(self, num_steps, device):
+        """Build the configured noise-to-data integration grid."""
+        u = torch.linspace(0., 1., num_steps + 1, device=device)
+        return self.warp_time(u) * (self.num_timesteps - 1)
+
     def q_sample(self, x0, t, ϵ=None, matcher=None, colors=None):
         if x0.shape[-1] != 3:
             raise ValueError(f"OTFM expects scaled (x, y, angle), got {x0.shape}")
@@ -205,25 +255,32 @@ class OTFlowMatcher(FlowMatcher):
 
         s = t.to(dtype=x0.dtype) / (self.num_timesteps - 1)
         s_view = s.view(-1, *([1] * self.ndims))
-        xt = (1. - s_view) * x0 + s_view * ϵ
-        return xt, ϵ - x0
+        xt = (1. - s_view) * ϵ + s_view * x0
+        return xt, x0 - ϵ
 
     def get_sigmas(self, t):
         s = t.float() / (self.num_timesteps - 1)
         s_view = s.view(-1, *([1] * self.ndims))
-        return (1. - s_view), s_view.square()
+        return s_view, (1. - s_view).square()
 
     def recover_target(self, xt, t, x0):
         s = t.to(dtype=xt.dtype) / (self.num_timesteps - 1)
         s_view = s.view(-1, *([1] * self.ndims))
-        if torch.any(s_view == 0):
-            raise ValueError("Velocity cannot be recovered from x_t at t=0")
-        return (xt - (1. - s_view) * x0) / s_view
+        if torch.any(s_view == 1):
+            raise ValueError("Velocity cannot be recovered from x_t at the data endpoint")
+        return (x0 - xt) / (1. - s_view)
 
     def recover_x0(self, xt, t, target_hat):
         s = t.to(dtype=xt.dtype) / (self.num_timesteps - 1)
         s_view = s.view(-1, *([1] * self.ndims))
-        return xt - s_view * target_hat
+        return xt + (1. - s_view) * target_hat
+
+    @torch.no_grad()
+    def p_sample(self, xt, target_hat, t, dt=1.0, **kwargs):
+        """Advance the OTFM state toward data by one Euler step."""
+        ds = dt / (self.num_timesteps - 1)
+        ds_view = ds.view(-1, *([1] * self.ndims))
+        return xt + ds_view * target_hat
 
     @torch.no_grad()
     def sample(self, denoiser, colors, labels, num_steps=50, **kwargs):
@@ -232,15 +289,15 @@ class OTFlowMatcher(FlowMatcher):
         if denoiser.io_dim != 3:
             raise ValueError(f"OTFM denoiser must use io_dim=3, got {denoiser.io_dim}")
         x = sample_ot_noise((B, N, 3), device=device)
-        times = torch.linspace(self.num_timesteps - 1, 0, num_steps + 1, device=device)
+        times = self.sampling_times(num_steps, device)
 
         for i in range(num_steps):
             t_current = times[i]
             t_next = times[i + 1]
-            dt = t_current - t_next
-            t = torch.full((B,), t_current.long(), device=device, dtype=torch.long)
+            dt = t_next - t_current
+            t = t_current.expand(B)
             velocity = denoiser(x, colors, t, labels)
-            dt_tensor = torch.full_like(t, dt, dtype=torch.float)
+            dt_tensor = dt.expand(B)
             x = self.p_sample(x, velocity, t, dt=dt_tensor)
             maybe_mark_step()
         return x

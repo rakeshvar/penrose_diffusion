@@ -1,6 +1,9 @@
 import math
+import tempfile
 import unittest
+from pathlib import Path
 from types import SimpleNamespace
+from unittest.mock import patch
 
 import numpy as np
 import torch
@@ -8,6 +11,7 @@ from scipy.optimize import linear_sum_assignment
 from torch import nn
 
 from code.augment import GeometryAugment
+from code.filesystem import CheckPointer, safe_torch_load
 from code.models.diffuser import OTFlowMatcher
 from code.models.directdiff.direct_model import DirectDiffusionModel
 from code.models.directdiff.ot_prefetch import OTBatchPrefetcher
@@ -220,6 +224,92 @@ class OTBatchPrefetcherTest(unittest.TestCase):
 
 
 class OTFlowMatcherTest(unittest.TestCase):
+    def test_time_schedules_match_pushforward_density_maps(self):
+        u = torch.tensor([0., 0.25, 0.5, 0.75, 1.])
+        expected = {
+            "linear": u,
+            "sin": torch.sin(math.pi * u / 2.),
+            "one_minus_cos": 1. - torch.cos(math.pi * u / 2.),
+            "one_minus_sq": 1. - (1. - u).square(),
+            "sqrt": torch.sqrt(u),
+            "smoothstep": 3. * u.square() - 2. * u.pow(3),
+            "exp_flip_k3": (1. - torch.exp(-3. * u)) / (1. - math.exp(-3.)),
+        }
+
+        self.assertEqual(set(expected), set(OTFlowMatcher.TIME_SCHEDULES))
+        for name, expected_values in expected.items():
+            with self.subTest(schedule=name):
+                matcher = OTFlowMatcher(ndims=2, time_schedule=name)
+                actual = matcher.warp_time(u)
+                torch.testing.assert_close(actual, expected_values)
+                self.assertEqual(float(actual[0]), 0.)
+                self.assertAlmostEqual(float(actual[-1]), 1., places=6)
+                self.assertTrue(bool((actual[1:] >= actual[:-1]).all()))
+
+    def test_training_times_use_configured_warp(self):
+        matcher = OTFlowMatcher(
+            ndims=2,
+            num_timesteps=101,
+            time_schedule="smoothstep",
+        )
+        expected_generator = torch.Generator().manual_seed(59)
+        expected_u = torch.rand(8, generator=expected_generator)
+        actual_generator = torch.Generator().manual_seed(59)
+
+        actual = matcher.sample_training_times(
+            8,
+            "cpu",
+            generator=actual_generator,
+        )
+
+        expected = (3. * expected_u.square() - 2. * expected_u.pow(3)) * 100.
+        torch.testing.assert_close(actual, expected)
+
+    def test_sampling_uses_configured_warp_and_actual_step_sizes(self):
+        class UnitVelocityDenoiser(nn.Module):
+            io_dim = 3
+
+            def __init__(self):
+                super().__init__()
+                self.anchor = nn.Parameter(torch.tensor(0.))
+                self.seen_times = []
+
+            def forward(self, x, colors, times, labels):
+                self.seen_times.append(times.detach().clone())
+                return torch.ones_like(x)
+
+        colors = torch.zeros((2, 4), dtype=torch.long)
+        labels = torch.zeros(2, dtype=torch.long)
+        for schedule in OTFlowMatcher.TIME_SCHEDULES:
+            with self.subTest(schedule=schedule):
+                matcher = OTFlowMatcher(
+                    ndims=2,
+                    num_timesteps=101,
+                    time_schedule=schedule,
+                )
+                denoiser = UnitVelocityDenoiser()
+                with patch(
+                    "code.models.diffuser.sample_ot_noise",
+                    return_value=torch.zeros((2, 4, 3)),
+                ):
+                    samples = matcher.sample(
+                        denoiser,
+                        colors,
+                        labels,
+                        num_steps=4,
+                    )
+
+                torch.testing.assert_close(samples, torch.ones_like(samples))
+                seen = torch.stack([times[0] for times in denoiser.seen_times])
+                torch.testing.assert_close(
+                    seen,
+                    matcher.sampling_times(4, "cpu")[:-1],
+                )
+
+    def test_invalid_time_schedule_is_rejected(self):
+        with self.assertRaisesRegex(ValueError, "Unknown OTFM time schedule"):
+            OTFlowMatcher(ndims=2, time_schedule="not-a-schedule")
+
     def test_structured_base_statistics(self):
         generator = torch.Generator().manual_seed(41)
         noise = sample_ot_noise(
@@ -251,10 +341,32 @@ class OTFlowMatcherTest(unittest.TestCase):
 
         xt, velocity = matcher.q_sample(x0, times, ϵ=noise)
 
-        torch.testing.assert_close(xt[0], x0[0])
+        torch.testing.assert_close(xt[0], noise[0])
         torch.testing.assert_close(xt[1], (x0[1] + noise[1]) / 2.)
-        torch.testing.assert_close(xt[2], noise[2])
-        torch.testing.assert_close(velocity, noise - x0)
+        torch.testing.assert_close(xt[2], x0[2])
+        torch.testing.assert_close(velocity, x0 - noise)
+
+    def test_recovery_helpers_follow_noise_to_data_time(self):
+        matcher = OTFlowMatcher(ndims=2, num_timesteps=11)
+        x0 = torch.randn(2, 8, 3)
+        noise = torch.randn(2, 8, 3)
+        times = torch.tensor([0., 5.])
+        xt, velocity = matcher.q_sample(x0, times, ϵ=noise)
+
+        torch.testing.assert_close(
+            matcher.recover_target(xt, times, x0),
+            velocity,
+        )
+        torch.testing.assert_close(
+            matcher.recover_x0(xt, times, velocity),
+            x0,
+        )
+        with self.assertRaisesRegex(ValueError, "data endpoint"):
+            matcher.recover_target(
+                x0[:1],
+                torch.tensor([10.]),
+                x0[:1],
+            )
 
     def test_unmatched_forward_endpoint_is_rejected(self):
         matcher = OTFlowMatcher(ndims=2)
@@ -294,6 +406,7 @@ class DirectOTFMModelTest(unittest.TestCase):
             "loss": "npl",
             "representation": "scaled_xya",
             "io_dim": 3,
+            "time_schedule": "smoothstep",
             "ot_async_prefetch": False,
             "ot_workers": 2,
             "ot_seed": 47,
@@ -319,6 +432,7 @@ class DirectOTFMModelTest(unittest.TestCase):
             self.config(),
             SimpleNamespace(num_classes=3),
         )
+        self.assertEqual(model.diffuser.time_schedule, "smoothstep")
         model.runtime_setup()
         try:
             loss, auxiliary = model.train_step(*self.batch())
@@ -337,6 +451,53 @@ class DirectOTFMModelTest(unittest.TestCase):
             self.assertTrue((samples[..., 2] <= math.pi).all())
         finally:
             model.runtime_teardown()
+
+    def test_checkpoint_config_preserves_default_sampling_schedule(self):
+        model_config = self.config()
+        full_config = {
+            "train": {"lr": 1e-3},
+            "model": model_config,
+            "wandb": {},
+        }
+        dataset = SimpleNamespace(
+            side=1.,
+            symmetry=6,
+            num_tiles=8,
+            num_classes=3,
+            class_lookup={0: "zero", 1: "one", 2: "two"},
+        )
+        model = DirectDiffusionModel(model_config, dataset)
+        optimizer = torch.optim.AdamW(model.parameters(), lr=1e-3)
+        scheduler = torch.optim.lr_scheduler.LambdaLR(optimizer, lambda _: 1.)
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            checkpointer = CheckPointer(tmpdir, "unit")
+            checkpointer.add_fixed_ckpt_data(
+                dataset,
+                full_config,
+                "fixture.npz",
+                None,
+            )
+            checkpointer.save_checkpoint(
+                0,
+                model,
+                optimizer,
+                scheduler,
+                0.,
+            )
+            checkpoint_path = Path(tmpdir) / "checkpoints" / "cpunit_e000.pt"
+            checkpoint = safe_torch_load(checkpoint_path)
+
+        restored_config = checkpoint["config"]["model"]
+        restored = DirectDiffusionModel(restored_config, dataset)
+        self.assertEqual(restored.diffuser.time_schedule, "smoothstep")
+        self.assertEqual(
+            restored.diffuser.sampling_times(4, "cpu").tolist(),
+            OTFlowMatcher(
+                ndims=2,
+                time_schedule="smoothstep",
+            ).sampling_times(4, "cpu").tolist(),
+        )
 
     def test_invalid_otfm_representation_is_rejected(self):
         config = self.config()

@@ -29,8 +29,11 @@ class DirectDiffusionModel(AbstractModel):
         # Independently select the diffuser/flowmatcher
         diffuser_name = model_config.get('diffuser', 'ddpm')
         DiffuserClass = diffuser_registry[diffuser_name]
-        self.diffuser = DiffuserClass(ndims=2)
         self.is_otfm = diffuser_name == 'otfm'
+        diffuser_kwargs = {'ndims': 2}
+        if self.is_otfm:
+            diffuser_kwargs['time_schedule'] = model_config.get('time_schedule', 'linear')
+        self.diffuser = DiffuserClass(**diffuser_kwargs)
         self.representation = model_config.get('representation', 'xysc')
         self.ot_prefetcher = None
 
@@ -62,9 +65,9 @@ class DirectDiffusionModel(AbstractModel):
     def _train_from_endpoints(self, x0, noise, colors, cls):
         self.train()
         B = x0.shape[0]
-        t = torch.randint(0, self.diffuser.num_timesteps, (B,), device=x0.device).long()
+        t = self.diffuser.sample_training_times(B, x0.device)
         xt, target = self.diffuser.q_sample(x0, t, ϵ=noise)
-        target_hat = self.denoiser(xt, colors, t.float(), cls)
+        target_hat = self.denoiser(xt, colors, t, cls)
         loss = self.loss_functor(
             x0,
             xt,
@@ -115,7 +118,10 @@ class DirectDiffusionModel(AbstractModel):
         self.denoiser.eval()
         if self.is_otfm:
             scaled_xya, _ = xya_to_scaled(xya)
-            t = torch.zeros_like(scaled_xya[:, 0, 0])
+            t = torch.full_like(
+                scaled_xya[:, 0, 0],
+                self.diffuser.num_timesteps - 1,
+            )
             velocity = self.denoiser(scaled_xya, colors, t, cls)
             x0 = self.diffuser.recover_x0(scaled_xya, t, velocity)
             return scaled_to_xyac(x0, colors)
